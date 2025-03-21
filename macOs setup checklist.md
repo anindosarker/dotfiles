@@ -1,4 +1,6 @@
 - Xcode
+- Alt tab
+    - https://alt-tab-macos.netlify.app/
 - omz
     - https://gist.github.com/n1snt/454b879b8f0b7995740ae04c5fb5b7df
 - Homebrew
@@ -11,8 +13,9 @@
     - https://github.com/artginzburg/MiddleClick
 - Rectangle
     - https://rectangleapp.com/
+    - Set snap windows shortcut to cmd+arrow keys
 - Doll
     - https://github.com/xiaogdgenuine/Doll
 - Gesture settings
-    - AppExpose        
+    - AppExpose   
     - HotCorner
