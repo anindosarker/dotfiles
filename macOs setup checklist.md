@@ -1,0 +1,18 @@
+- Xcode
+- omz
+    - https://gist.github.com/n1snt/454b879b8f0b7995740ae04c5fb5b7df
+- Homebrew
+    - https://brew.sh/
+- Maccy
+    - https://github.com/p0deje/Maccy
+- Stats
+    - https://github.com/exelban/stats
+- Middleclick
+    - https://github.com/artginzburg/MiddleClick
+- Rectangle
+    - https://rectangleapp.com/
+- Doll
+    - https://github.com/xiaogdgenuine/Doll
+- Gesture settings
+    - AppExpose        
+    - HotCorner
