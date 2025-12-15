@@ -1,0 +1,11 @@
+vim.wo.number = true -- Make the line numbers default
+vim.o.relativenumber = true
+vim.o.clipboard = 'unnamedplus' -- sync clipboard with os
+vim.o.wrap = false -- Display lines as one long line (default: true)
+vim.o.linebreak = true -- Companion to wrap, don't split words (default: false)
+vim.o.mouse = 'a' -- Enable mouse mode (default: '')
+vim.o.autoindent = true -- Copy indent from current line when starting new one (default: true)
+vim.o.ignorecase = true -- Case incensitive searching UNLESS \C or capital in search (default: false)
+vim.o.smartcase = true -- (default: false)
+vim.o.shiftwidth = 4 -- the number of spaces inserted (default: 8)
+vim.o.tabstop = 4
