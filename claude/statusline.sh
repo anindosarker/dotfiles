@@ -26,9 +26,8 @@ is_set() { [ -n "$1" ] && [ "$1" != "-" ] && [ "$1" != "null" ]; }
 folder="${cwd##*/}"
 { [ -z "$folder" ] || [ "$folder" = "-" ]; } && folder="?"
 
-# Git: branch + dirty status (fast combined check)
+# Git: branch name only
 branch=""
-dirty=""
 if git rev-parse --git-dir > /dev/null 2>&1; then
     branch=$(git branch --show-current 2>/dev/null)
     [ -z "$branch" ] && branch=$(git rev-parse --short HEAD 2>/dev/null)
@@ -36,11 +35,6 @@ if git rev-parse --git-dir > /dev/null 2>&1; then
     # Truncate long branches (max 20 chars)
     if [ "${#branch}" -gt 20 ]; then
         branch="${branch:0:19}…"
-    fi
-
-    # Check for uncommitted changes (fast: just check if output exists)
-    if [ -n "$(git status --porcelain 2>/dev/null | head -1)" ]; then
-        dirty="●"
     fi
 fi
 
@@ -52,7 +46,7 @@ GREEN='\033[38;2;166;209;137m'     # Green - limit low
 TEAL='\033[38;2;129;200;190m'      # Teal - folder
 MAUVE='\033[38;2;202;158;230m'     # Mauve - git branch
 LAVENDER='\033[38;2;186;187;241m'  # Lavender - model
-PEACH='\033[38;2;239;159;118m'     # Peach - dirty indicator
+PEACH='\033[38;2;239;159;118m'     # Peach - context bar (danger)
 OVERLAY='\033[38;2;115;121;148m'   # Overlay 0 - separators
 SUBTEXT='\033[38;2;165;173;206m'   # Subtext 0 - secondary text
 RESET='\033[0m'
@@ -150,7 +144,6 @@ output="${output} ${OVERLAY}│${RESET} ${TEAL}󰝰 ${folder}${RESET}"
 
 if [ -n "$branch" ]; then
     output="${output} ${OVERLAY}│${RESET} ${MAUVE} ${branch}${RESET}"
-    [ -n "$dirty" ] && output="${output}${PEACH}${dirty}${RESET}"
 fi
 
 output="${output} ${OVERLAY}│${RESET} ${context_info}"

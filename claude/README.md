@@ -3,7 +3,7 @@
 A single-script status line for [Claude Code](https://claude.com/claude-code), themed with [Catppuccin Frappé](https://catppuccin.com/palette/) colors.
 
 ```
-Fable 5 [High] │ 󰝰 hospice-monorepo │  shan2/db-migration● │ ████░░░░░░ 42% (410K/967K) │ session: 󱎫 8% ↻3h53m │ week: 󰃭 7% ↻5d14h
+Fable 5 [High] │ 󰝰 hospice-monorepo │  shan2/db-migration │ ████░░░░░░ 42% (410K/967K) │ session: 󱎫 8% ↻3h53m │ week: 󰃭 7% ↻5d14h
 ```
 
 ## What it shows
@@ -12,7 +12,7 @@ Fable 5 [High] │ 󰝰 hospice-monorepo │  shan2/db-migration● │ ██�
 | --- | --- |
 | `Fable 5 [High]` | Model name + reasoning effort level |
 | `󰝰 hospice-monorepo` | Current folder |
-| ` shan2/db-migration●` | Git branch; `●` appears when the tree is dirty |
+| ` shan2/db-migration` | Git branch (truncated to 20 chars) |
 | `████░░░░░░ 42% (410K/967K)` | Context usage vs the **effective** window (total minus the 33K autocompact buffer). Green → yellow (≥36%) → peach (≥48%) |
 | `session: 󱎫 8% ↻3h53m` | 5-hour rate-limit usage + time until reset. Green <50%, yellow 50–80%, red >80% |
 | `week: 󰃭 7% ↻5d14h` | Same for the 7-day window |
@@ -77,9 +77,8 @@ is_set() { [ -n "$1" ] && [ "$1" != "-" ] && [ "$1" != "null" ]; }
 folder="${cwd##*/}"
 { [ -z "$folder" ] || [ "$folder" = "-" ]; } && folder="?"
 
-# Git: branch + dirty status (fast combined check)
+# Git: branch name only
 branch=""
-dirty=""
 if git rev-parse --git-dir > /dev/null 2>&1; then
     branch=$(git branch --show-current 2>/dev/null)
     [ -z "$branch" ] && branch=$(git rev-parse --short HEAD 2>/dev/null)
@@ -87,11 +86,6 @@ if git rev-parse --git-dir > /dev/null 2>&1; then
     # Truncate long branches (max 20 chars)
     if [ "${#branch}" -gt 20 ]; then
         branch="${branch:0:19}…"
-    fi
-
-    # Check for uncommitted changes (fast: just check if output exists)
-    if [ -n "$(git status --porcelain 2>/dev/null | head -1)" ]; then
-        dirty="●"
     fi
 fi
 
@@ -103,7 +97,7 @@ GREEN='\033[38;2;166;209;137m'     # Green - limit low
 TEAL='\033[38;2;129;200;190m'      # Teal - folder
 MAUVE='\033[38;2;202;158;230m'     # Mauve - git branch
 LAVENDER='\033[38;2;186;187;241m'  # Lavender - model
-PEACH='\033[38;2;239;159;118m'     # Peach - dirty indicator
+PEACH='\033[38;2;239;159;118m'     # Peach - context bar (danger)
 OVERLAY='\033[38;2;115;121;148m'   # Overlay 0 - separators
 SUBTEXT='\033[38;2;165;173;206m'   # Subtext 0 - secondary text
 RESET='\033[0m'
@@ -201,7 +195,6 @@ output="${output} ${OVERLAY}│${RESET} ${TEAL}󰝰 ${folder}${RESET}"
 
 if [ -n "$branch" ]; then
     output="${output} ${OVERLAY}│${RESET} ${MAUVE} ${branch}${RESET}"
-    [ -n "$dirty" ] && output="${output}${PEACH}${dirty}${RESET}"
 fi
 
 output="${output} ${OVERLAY}│${RESET} ${context_info}"
