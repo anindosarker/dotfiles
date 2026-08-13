@@ -23,8 +23,9 @@ Segments degrade gracefully — anything missing from the status JSON (effort, r
 ## Requirements
 
 - `jq`
-- A [Nerd Font](https://www.nerdfonts.com/) in your terminal for the `󰝰  󱎫 󰃭` glyphs (e.g. `brew install --cask font-jetbrains-mono-nerd-font`).
-  - **VS Code:** also set `"terminal.integrated.fontFamily": "JetBrainsMono Nerd Font Mono"` — the integrated terminal does not inherit your terminal app's font.
+- A [Nerd Font](https://www.nerdfonts.com/) in your terminal, for the `󰝰  󱎫 󰃭` glyphs
+
+The one-prompt install below checks both for you (and wires up VS Code / Cursor), so you can skip straight to it.
 
 ## Manual install
 
@@ -209,7 +210,22 @@ else
 fi
 ````
 
-2. In ~/.claude/settings.json, set "statusLine" to { "type": "command", "command": "~/.claude/statusline.sh" }. Merge it into my existing settings — do NOT overwrite my other keys.
+2. In ~/.claude/settings.json, set "statusLine" to { "type": "command", "command": "~/.claude/statusline.sh" }. Merge it into my existing settings — do NOT overwrite my other keys. Create the file if it does not exist.
 
-3. Render a sample line by piping a small fake status JSON into the script and show me the result. Remind me that the icons need a Nerd Font set in my terminal (and in VS Code's terminal.integrated.fontFamily if I use the integrated terminal).
+3. Check `jq` is installed (`command -v jq`). If it is missing, install it with whatever package manager this machine has (brew / apt / dnf / pacman) and tell me which one you used.
+
+4. Check whether a Nerd Font is installed:
+   - macOS: `ls ~/Library/Fonts /Library/Fonts 2>/dev/null | grep -i nerd`
+   - Linux: `fc-list 2>/dev/null | grep -i nerd`
+   If none is found, install JetBrainsMono Nerd Font (macOS: `brew install --cask font-jetbrains-mono-nerd-font`; Linux: download the JetBrainsMono zip from the ryanoasis/nerd-fonts releases into ~/.local/share/fonts and run `fc-cache -f`). Then tell me I still have to select that font in my terminal app's own settings — you cannot do that part for me.
+
+5. Wire up the integrated terminal for every editor installed here. For each of these paths that exists, set "terminal.integrated.fontFamily" to the Nerd Font name (e.g. "JetBrainsMono Nerd Font Mono"), merging into the existing JSON without touching my other keys:
+   - VS Code: ~/Library/Application Support/Code/User/settings.json (macOS) or ~/.config/Code/User/settings.json (Linux)
+   - Cursor: ~/Library/Application Support/Cursor/User/settings.json (macOS) or ~/.config/Cursor/User/settings.json (Linux)
+   - VS Code Insiders: same paths with "Code - Insiders"
+   These editors do NOT inherit the font from my terminal app, so without this the glyphs render as boxes. Skip any path that does not exist and say which ones you skipped.
+
+6. Render a sample line by piping a small fake status JSON into the script and show me the result.
+
+7. Summarise as a short checklist: script installed, settings.json wired, jq present, Nerd Font present, which editor configs you edited, and anything left for me to do by hand.
 `````
