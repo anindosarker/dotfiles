@@ -139,6 +139,13 @@ caveman_badge=""
 [ -f "$CAVEMAN_SL" ] && caveman_badge=$(bash "$CAVEMAN_SL" 2>/dev/null)
 
 # Build output
+# Account email: read live from Claude's config each render, so /login switches
+# show up on the next refresh. STATUSLINE_EMAIL overrides.
+CLAUDE_JSON="${CLAUDE_CONFIG_DIR:-$HOME}/.claude.json"
+EMAIL="$STATUSLINE_EMAIL"
+[ -z "$EMAIL" ] && [ -f "$CLAUDE_JSON" ] && \
+    EMAIL=$(jq -r '.oauthAccount.emailAddress // empty' "$CLAUDE_JSON" 2>/dev/null)
+
 output="${LAVENDER}${model}${RESET}${effort_seg}"
 output="${output} ${OVERLAY}│${RESET} ${TEAL}󰝰 ${folder}${RESET}"
 
@@ -149,6 +156,7 @@ fi
 output="${output} ${OVERLAY}│${RESET} ${context_info}"
 [ -n "$seg5" ] && output="${output} ${OVERLAY}│${RESET} ${seg5}"
 [ -n "$seg7" ] && output="${output} ${OVERLAY}│${RESET} ${seg7}"
+[ -n "$EMAIL" ] && output="${output} ${OVERLAY}│${RESET} ${OVERLAY}${EMAIL}${RESET}"
 
 # Theme line = row 1; caveman badge on its own row below
 if [ -n "$caveman_badge" ]; then

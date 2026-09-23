@@ -3,7 +3,7 @@
 A single-script status line for [Claude Code](https://claude.com/claude-code), themed with [Catppuccin Frappé](https://catppuccin.com/palette/) colors.
 
 ```
-Fable 5 [High] │ 󰝰 hospice-monorepo │  shan2/db-migration │ ████░░░░░░ 42% (410K/967K) │ session: 󱎫 8% ↻3h53m │ week: 󰃭 7% ↻5d14h
+Fable 5 [High] │ 󰝰 hospice-monorepo │  shan2/db-migration │ ████░░░░░░ 42% (410K/967K) │ session: 󱎫 8% ↻3h53m │ week: 󰃭 7% ↻5d14h │ you@example.com
 ```
 
 ## What it shows
@@ -16,6 +16,7 @@ Fable 5 [High] │ 󰝰 hospice-monorepo │  shan2/db-migration │ ███�
 | `████░░░░░░ 42% (410K/967K)` | Context usage vs the **effective** window (total minus the 33K autocompact buffer). Green → yellow (≥36%) → peach (≥48%) |
 | `session: 󱎫 8% ↻3h53m` | 5-hour rate-limit usage + time until reset. Green <50%, yellow 50–80%, red >80% |
 | `week: 󰃭 7% ↻5d14h` | Same for the 7-day window |
+| `you@example.com` | Logged-in Claude account email, read live from `~/.claude.json` (`.oauthAccount.emailAddress`) on every refresh, so `/login` account switches show up automatically. `STATUSLINE_EMAIL` env var overrides; hidden if neither is available |
 | `[CAVEMAN]` (second row) | Only if you use the [caveman](https://github.com/JuliusBrussee/caveman) plugin; silently skipped otherwise |
 
 Segments degrade gracefully — anything missing from the status JSON (effort, rate limits, git) just disappears.
@@ -191,6 +192,13 @@ caveman_badge=""
 [ -f "$CAVEMAN_SL" ] && caveman_badge=$(bash "$CAVEMAN_SL" 2>/dev/null)
 
 # Build output
+# Account email: read live from Claude's config each render, so /login switches
+# show up on the next refresh. STATUSLINE_EMAIL overrides.
+CLAUDE_JSON="${CLAUDE_CONFIG_DIR:-$HOME}/.claude.json"
+EMAIL="$STATUSLINE_EMAIL"
+[ -z "$EMAIL" ] && [ -f "$CLAUDE_JSON" ] && \
+    EMAIL=$(jq -r '.oauthAccount.emailAddress // empty' "$CLAUDE_JSON" 2>/dev/null)
+
 output="${LAVENDER}${model}${RESET}${effort_seg}"
 output="${output} ${OVERLAY}│${RESET} ${TEAL}󰝰 ${folder}${RESET}"
 
@@ -201,6 +209,7 @@ fi
 output="${output} ${OVERLAY}│${RESET} ${context_info}"
 [ -n "$seg5" ] && output="${output} ${OVERLAY}│${RESET} ${seg5}"
 [ -n "$seg7" ] && output="${output} ${OVERLAY}│${RESET} ${seg7}"
+[ -n "$EMAIL" ] && output="${output} ${OVERLAY}│${RESET} ${OVERLAY}${EMAIL}${RESET}"
 
 # Theme line = row 1; caveman badge on its own row below
 if [ -n "$caveman_badge" ]; then
