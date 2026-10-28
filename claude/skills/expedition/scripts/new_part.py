@@ -49,37 +49,19 @@ def num_key(num):
     return tuple(int(x) for x in num.split("."))
 
 
-def extract_template(guidelines):
-    """Return the ````markdown block under ## Template, or None."""
-    lines = guidelines.read_text(encoding="utf-8").splitlines()
-    in_section = False
-    body = None
-    for line in lines:
-        if body is not None:
-            if line.rstrip() == "````":
-                return "\n".join(body) + "\n"
-            body.append(line)
-        elif line.startswith("## "):
-            in_section = line.strip() == "## Template"
-        elif in_section and line.rstrip() == "````markdown":
-            body = []
-    return None
-
-
 def load_template(root, flag):
-    guidelines = root / "docs" / "code-of-conduct" / "planning-guidelines.md"
-    if guidelines.is_file():
-        text = extract_template(guidelines)
-        if text:
-            return text
+    """Return template text: --template, else repo override, else bundled."""
     if flag:
         p = Path(flag)
         if not p.is_file():
             die(f"template not found: {p}")
         return p.read_text(encoding="utf-8")
+    override = root / ".ai" / "plans" / "part-template.md"
+    if override.is_file():
+        return override.read_text(encoding="utf-8")
     bundled = Path(__file__).resolve().parent.parent / "templates" / "part.md"
     if not bundled.is_file():
-        die(f"no template: {guidelines} has none and {bundled} is missing")
+        die(f"bundled template missing: {bundled}")
     return bundled.read_text(encoding="utf-8")
 
 

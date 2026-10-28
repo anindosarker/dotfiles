@@ -21,6 +21,10 @@ DEC_BARE_RE = re.compile(r"\bdecision (\d+)(?![\d-])")
 RUL_PAREN_RE = re.compile(r"\(rulings? " + LIST + r"\)")
 RUL_BARE_RE = re.compile(r"\bruling (\d+)(?![\d-])")
 TAGS = ("[revert?]", "[blocked]", "[ruling]")
+HEADING_RE = re.compile(r"^#{1,6}\s+(.*)$")
+GATES_LINE_RE = re.compile(r"^\s*-\s*Gates:")
+PHASE_RE = re.compile(r"\bphase\b", re.I)
+LANE_RE = re.compile(r"^Lane:\s*(workflow|agent|inline)\b")
 
 
 def die(msg):
@@ -187,8 +191,29 @@ def main():
     quiet = True
     for p in parts:
         text = read(p)
-        if not re.search(r"^### 2\.2 Gates", text, re.M):
-            print(f"  {p.name}: no ### 2.2 Gates")
+        lines = list(outside_fences(text))
+        has_gates = False
+        phase = None
+        for i, line in lines:
+            h = HEADING_RE.match(line)
+            if h:
+                if phase is not None:
+                    print(f"  {p.name}:{phase}: phase heading without Lane")
+                    quiet = False
+                title = h.group(1)
+                if re.search(r"\bGates\b", title):
+                    has_gates = True
+                phase = i if PHASE_RE.search(title) else None
+                continue
+            if GATES_LINE_RE.match(line):
+                has_gates = True
+            if phase is not None and LANE_RE.match(line):
+                phase = None
+        if phase is not None:
+            print(f"  {p.name}:{phase}: phase heading without Lane")
+            quiet = False
+        if not has_gates:
+            print(f"  {p.name}: no gates")
             quiet = False
         for i, line in outside_fences(text):
             if line.rstrip().endswith("?"):
