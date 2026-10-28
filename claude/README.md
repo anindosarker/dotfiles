@@ -238,3 +238,15 @@ fi
 
 7. Summarise as a short checklist: script installed, settings.json wired, jq present, Nerd Font present, which editor configs you edited, and anything left for me to do by hand.
 `````
+
+## Skills and CLAUDE.md
+
+`skills/` holds my own Claude Code skills (`autopilot`, `write-handoff`, `expedition`). `CLAUDE.md` holds my global instructions. Both are symlinked into `~/.claude`:
+
+```bash
+mkdir -p ~/.claude/skills
+for s in ~/.dotfiles/claude/skills/*; do ln -s "$s" ~/.claude/skills/; done
+ln -s ~/.dotfiles/claude/CLAUDE.md ~/.claude/CLAUDE.md
+```
+
+Skills installed from elsewhere (`~/.agents/skills`, claude.ai synced skills) are not tracked here.
