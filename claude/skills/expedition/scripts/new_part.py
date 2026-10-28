@@ -3,9 +3,13 @@
 
 Usage: python3 -I new_part.py <cycle> <num> <slug> "<Title>" "<scope>"
        [--owner X] [--template PATH]
+
+Template: --template PATH, else a contract stub when the project has planning
+rules (find_rules.py), else the bundled templates/part.md.
 """
 import argparse
 import collections
+import importlib.util
 import re
 import subprocess
 import sys
@@ -49,16 +53,46 @@ def num_key(num):
     return tuple(int(x) for x in num.split("."))
 
 
-def load_template(root, flag):
-    """Return template text: --template, else repo override, else bundled."""
+STUB = """# {heading}
+
+Follow the project planning rules: {paths}. Keep the expedition contract.
+
+## Phases
+
+### Phase 01: [name]
+
+Lane: [workflow | agent | inline]
+
+- [Step]
+- Gates: `[command]`
+
+### Final phase: Cleanup
+
+Lane: [workflow | agent | inline]
+
+- [Step]
+- Gates: `[command]`
+"""
+
+
+def find_rules(root):
+    sys.dont_write_bytecode = True
+    path = Path(__file__).resolve().parent / "find_rules.py"
+    spec = importlib.util.spec_from_file_location("find_rules", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.find_rules(root)
+
+
+def load_template(root, flag, rules):
+    """Return template text: --template, else contract stub, else bundled."""
     if flag:
         p = Path(flag)
         if not p.is_file():
             die(f"template not found: {p}")
         return p.read_text(encoding="utf-8")
-    override = root / ".ai" / "plans" / "part-template.md"
-    if override.is_file():
-        return override.read_text(encoding="utf-8")
+    if rules:
+        return STUB.format(heading="[title]", paths=", ".join(rules))
     bundled = Path(__file__).resolve().parent.parent / "templates" / "part.md"
     if not bundled.is_file():
         die(f"bundled template missing: {bundled}")
@@ -154,7 +188,8 @@ def main():
 
     row = f"| {a.num} | [{a.title}]({part_name}) | {a.scope} |"
     new_index = insert_row(index.read_text(encoding="utf-8"), a.num, row)
-    template = load_template(root, a.template)
+    rules = [] if a.template else find_rules(root)
+    template = load_template(root, a.template, rules)
 
     part.write_text(set_heading(template, f"# {a.num}: {a.title}"), encoding="utf-8")
     print(part)
@@ -166,6 +201,8 @@ def main():
     )
     print(tracker)
     index.write_text(new_index, encoding="utf-8")
+    for r in rules:
+        print(f"Project planning rules: {r}")
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ Usage: python3 -I status.py <cycle> [--owner X]
 """
 import argparse
 import collections
+import importlib.util
 import re
 import subprocess
 import sys
@@ -53,6 +54,15 @@ def detect_owner(root, flag):
     if not counts:
         die("no owner found under .ai/plans/v*.x/*/; pass --owner")
     return counts.most_common(1)[0][0]
+
+
+def find_rules(root):
+    sys.dont_write_bytecode = True
+    path = Path(__file__).resolve().parent / "find_rules.py"
+    spec = importlib.util.spec_from_file_location("find_rules", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.find_rules(root)
 
 
 def num_key(num):
@@ -135,6 +145,8 @@ def main():
     if not folder.is_dir():
         die(f"cycle folder missing: {folder}")
     rel = folder.relative_to(root)
+    rules = find_rules(root)
+    print(f"Planning rules: {', '.join(rules) if rules else 'none, bundled default'}")
     print(f"Cycle {a.cycle} ({rel})")
 
     index = folder / f"{a.cycle}-plan.md"

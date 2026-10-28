@@ -24,15 +24,20 @@ Run from inside the repo. They never overwrite an existing file.
 |---|---|
 | `python3 -I <skill>/scripts/new_cycle.py v0.<n>.x [--owner X]` | creates the cycle folder with the index, decisions and findings stubs, and `handoffs/` |
 | `python3 -I <skill>/scripts/new_part.py v0.<n>.x NN <slug> "<Title>" "<scope>"` | creates the part file and its tracker, adds the row to the parts table in order |
-| `python3 -I <skill>/scripts/status.py v0.<n>.x` | read-only: missing files, uncited decisions, parts without tracker or gates, phase headings without a `Lane:` line, possible open questions, untagged or untriaged ATTENTION bullets, inferred stage |
+| `python3 -I <skill>/scripts/find_rules.py [repo]` | read-only: prints project planning-rules paths, one per line, nothing if none |
+| `python3 -I <skill>/scripts/status.py v0.<n>.x` | read-only: missing files, uncited decisions, parts without tracker or gates, phase headings without a `Lane:` line, possible open questions, untagged or untriaged ATTENTION bullets, inferred stage. First line names the planning rules in use |
 
 `<skill>` is this skill's directory.
 
 ## Template
 
-`new_part.py` uses the bundled template [../templates/part.md](../templates/part.md) by default. A project can override it with `.ai/plans/part-template.md`. `--template PATH` overrides both. Follow the project's planning rules, if it has any.
+Precedence, highest first:
 
-Every phase heading in a part file is followed by a `Lane:` line (see [run.md](run.md)).
+1. `--template PATH` on `new_part.py`.
+2. Project planning rules, found by `find_rules.py`: files named like `*plan*guide*.md` or `planning*.md`, and `CLAUDE.md` or `AGENTS.md` lines that mention plan files. `new_part.py` writes a contract stub and prints each path. The project rules override the bundled guidelines completely: structure, headings, rules, template.
+3. Bundled default, only when no project rules are found: [planning-guidelines.md](planning-guidelines.md), template [../templates/part.md](../templates/part.md).
+
+The contract applies in all three: decision citations, a `Lane:` line under each phase heading (see [run.md](run.md)), gates per phase, no open questions. A project template that lacks one gets it added in that project's style.
 
 ## Conventions
 

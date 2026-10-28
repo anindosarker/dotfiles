@@ -34,9 +34,9 @@ Interactive. The owner decides; you research and propose.
 
 Write the plan per part, not all at once.
 
-1. Write the plan index `v0.<n>.x-plan.md` first: parts table (`#`, `Part`, `Scope`), dependency graph, integration, process rules. It may exist while decisions are still open.
+1. Write the plan index `v0.<n>.x-plan.md` first: parts table (`#`, `Part`, `Scope`), dependency graph, integration, process rules. It may exist while decisions are still open. Example: [reference/example-plan-index.md](reference/example-plan-index.md).
 2. Write a part file only when every decision it cites is accepted. A part waiting on an open decision stays a row in the index.
-3. Create each part with `new_part.py`, then fill in the template. Goals cite decision numbers, for example `(decision 7)`. Parts implement decisions and never re-decide.
+3. Create each part with `new_part.py`. If it printed project planning rules, read them and follow them. They override the bundled guidelines completely. Otherwise follow [reference/planning-guidelines.md](reference/planning-guidelines.md). Either way, keep the contract below. Parts implement decisions and never re-decide.
 4. Each phase names its lane: `workflow`, `agent` or `inline` ([reference/run.md](reference/run.md)). Pick the lightest lane that fits. Merge adjacent small phases.
 5. A decision changed after parts exist: `grep` its number across the part files and rewrite only those parts.
 6. Readiness check before stage 3:
@@ -44,6 +44,15 @@ Write the plan per part, not all at once.
    2. One review agent on the `fable` model, prompted to refute readiness. It checks that no part contradicts a decision, that each phase fits its lane, and that each `workflow` phase fits one Workflow run.
    3. Fix what it finds and repeat from step 1. Proceed only when both pass.
 7. End: invoke the `write-handoff` skill.
+
+The contract. It applies inside any template:
+
+- Decisions cited as `(decision N)`, rulings as `(ruling N)`.
+- A `Lane: workflow|agent|inline` line under each phase heading.
+- Gates per phase.
+- No open questions in plan files.
+
+A project template that lacks one gets it added in that project's style. Nothing else changes.
 
 ## Stage 3: run
 
