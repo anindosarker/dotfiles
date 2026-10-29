@@ -20,7 +20,7 @@ Release and merge sequences (merge commit names, labels, release checks) belong 
 
 ## Each loop fire
 
-The loop prompt must be safe to fire at any time.
+The loop prompt must be safe to fire at any time. Each fire reads this file, about 2k tokens. That is the cost of surviving compaction; keep the loop interval at 20 to 30 minutes.
 
 1. A turn is already working: do nothing.
 2. Find the cycle: the argument, else the cycle this session runs, else the `Next:` line of the newest handoff (`.ai/plans/v*.x/<owner>/handoffs/handoff-*.md`, newest by the date in the file name).
@@ -45,8 +45,8 @@ Rules that keep runs fast:
 - A sub-part (`NN.1`) made only of `inline` and `agent` phases needs no worktree; it runs on the base branch.
 - Review depth matches risk: one `fable` verify for public API, shared state or a cross-part change. Mechanical changes get the gates only.
 - Gates run once. The builder records each gate as one tracker line: command, commit, result.
-- Gates that each need their own base run at the same time.
-- The verifier reruns only the gates that have no line for the current HEAD.
+- Gates that run once per base run the bases concurrently.
+- The verifier reruns only the gates that have no valid line for the current HEAD. A line stays valid when `git diff --name-only <recorded commit>..HEAD` touches only `.ai/plans/` and `CHANGELOG.md`. A project can extend that list in its own rules. Any other changed file means rerun.
 - CI is the second run.
 
 ## Workflow per phase
