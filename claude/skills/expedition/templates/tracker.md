@@ -2,7 +2,9 @@
 
 Status: [planned | running | done (<commit>)]
 Branch `[branch]`, worktree [name], PR #[n]
-Gates: [green at <commit>, CI run <id>]
+Gates:
+- `[command]` at [commit]: [green | red]
+- CI run [id]: [green | red]
 
 - Phase 01 [name]: [planned | running | done (<commit>, <workflow run id>)]
 

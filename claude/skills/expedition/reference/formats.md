@@ -88,7 +88,10 @@ One file per cycle, template [../templates/findings.md](../templates/findings.md
 
 Status: done (3361e3e8)
 Branch `v0.6/examples-per-edition`, worktree 07, PR #49
-Gates: green at 60434a81, CI run 123456
+Gates:
+- `pnpm lint` at 60434a81: green
+- `pnpm check:bases` at 60434a81: green
+- CI run 123456: green
 
 - Phase 01 layout: done (c3bcf345)
 - Phase 02 edition copies: done (8286e7a2, wf_abc123)
@@ -104,6 +107,7 @@ Gates: green at 60434a81, CI run 123456
 
 - `Status:` is `planned`, `running` or `done (<commit>)`.
 - Required: the header lines and one line per phase, with the last commit and the workflow run id for a `workflow` phase.
+- `Gates:` is followed by one bullet per gate: command, commit, result. The CI run gets its own bullet.
 - `## Attention` and `## Notes` are optional. Empty is the normal case. Do not spend tokens on notes.
 - Never: review-round narration, gate output, commit lists.
 - Writers: `new_part.py` creates it with `Status: planned`. In the run, the builder fills it, the fixer and the verifier update it. One worktree per part, so no conflicts. An `inline` phase: the main agent updates it.

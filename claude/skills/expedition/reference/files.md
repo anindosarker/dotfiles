@@ -29,14 +29,14 @@ Run from inside the repo. They never overwrite an existing file.
 
 `<skill>` is this skill's directory.
 
-`status.py` checks only the part files linked from the index Parts table. Other `NN-*.md` files are listed as `supporting:` and not checked. Decision states: `unplanned` (no part cites it), `planned`, `running`, `done` (every citing part done), `deferred` (a `Deferred to` bullet), `superseded`, `unknown` (a citing tracker has no `Status:` line). Stage inference: discuss (no decisions), plan (no part files), triage (untriaged ATTENTION items), else run.
+`status.py` checks only the part files linked from the index Parts table. Other `NN-*.md` files are listed as `supporting:` and not checked. A cycle may mix legacy and new file formats. `status.py` reads both. Decision states: `unplanned` (no part cites it), `planned`, `running`, `done` (every citing part done), `deferred` (a `Deferred to` bullet), `superseded`, `unknown` (a citing tracker has no `Status:` line). Stage inference: discuss (no decisions), plan (no part files), triage (untriaged ATTENTION items), else run.
 
 ## Template
 
 Precedence, highest first:
 
 1. `--template PATH` on `new_part.py`.
-2. Project planning rules, found by `find_rules.py`: files named like `*plan*guide*.md` or `planning*.md`, and `CLAUDE.md` or `AGENTS.md` lines that mention plan files. `new_part.py` writes a contract stub and prints each path. The project rules override the bundled guidelines completely: structure, headings, rules, template.
+2. Project planning rules, found by `find_rules.py`: files named like `*plan*guide*.md` or `planning*.md`, and `CLAUDE.md` or `AGENTS.md` lines that mention plan files. `new_part.py` writes a contract stub and prints each path. The agent then writes the part by hand in the project's template. The project rules override the bundled guidelines completely: structure, headings, rules, template.
 3. Bundled default, only when no project rules are found: [planning-guidelines.md](planning-guidelines.md), template [../templates/part.md](../templates/part.md).
 
 The contract applies in all three: citations, a `Lane:` line under each phase heading (see [run.md](run.md)), gates per phase, no open questions. A project template that lacks one gets it added in that project's style.

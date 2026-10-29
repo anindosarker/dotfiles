@@ -1,6 +1,6 @@
 ---
 name: expedition
-description: Runs long, multi-part work as a cycle of four stages (discuss, plan, run, triage) in a versioned plan folder, with decisions and findings files, part files with phases, one Workflow run per phase, an ATTENTION file, and follow-up parts. Use when the user runs /expedition. Not for small or single-session tasks.
+description: Runs long, multi-part work as a cycle of four stages (discuss, plan, run, triage) in a versioned plan folder, with decisions and findings files, part files with phases in lanes, an ATTENTION file, and follow-up parts. Use when the user runs /expedition. Not for small or single-session tasks.
 argument-hint: "<discuss|plan|run|triage> [cycle, e.g. v0.5.x]"
 disable-model-invocation: true
 ---
@@ -41,12 +41,12 @@ Write the plan per part, not all at once.
 
 1. Write the plan index `v0.<n>.x-plan.md` first: parts table (`#`, `Part`, `Scope`), dependency graph, integration, process rules. It may exist while decisions are still open. Example: [reference/example-plan-index.md](reference/example-plan-index.md).
 2. Write a part file only when every decision it cites is accepted. A part waiting on an open decision stays a row in the index.
-3. Create each part with `new_part.py`. If it printed project planning rules, read them and follow them. They override the bundled guidelines completely. Otherwise follow [reference/planning-guidelines.md](reference/planning-guidelines.md). Either way, keep the contract below. Parts implement decisions and never re-decide.
+3. Create each part with `new_part.py`. If it printed project planning rules, it wrote a contract stub. Read the rules, then write the part by hand in the project's template. The rules override the bundled guidelines completely. Otherwise follow [reference/planning-guidelines.md](reference/planning-guidelines.md). Either way, keep the contract below. Parts implement decisions and never re-decide.
 4. Each phase names its lane: `workflow`, `agent` or `inline` ([reference/run.md](reference/run.md)). Pick the lightest lane that fits. Merge adjacent small phases.
 5. A decision superseded after parts exist: `grep` its citation, for example `(D7)`, across the part files and rewrite only those parts.
 6. Readiness check before stage 3:
    1. Run `status.py`. Fix every gap it reports (unplanned decisions, missing gates or trackers, open questions).
-   2. One review agent on the `fable` model, prompted to refute readiness. It checks that no part contradicts a decision, that each phase fits its lane, and that each `workflow` phase fits one Workflow run.
+   2. One review agent on the `fable` model, prompted to refute readiness. It checks that no part contradicts a decision, that each phase fits its lane, and that each `workflow` phase fits one Workflow run. Skip this agent when every phase of every part is in the `agent` or `inline` lane. `status.py` still runs.
    3. Fix what it finds and repeat from step 1. Proceed only when both pass.
 7. Handoff: only when the owner asks.
 
@@ -61,11 +61,11 @@ A project template that lacks one gets it added in that project's style. Nothing
 
 ## Stage 3: run
 
-Unattended through `/autopilot`. The owner types `/expedition run <cycle>`, then `/autopilot`. The autopilot loop prompt is exactly `Continue the run. Skip if a turn is already working.` Rules: [reference/run.md](reference/run.md). Short form:
+Unattended through `/autopilot`. The owner types `/expedition run <cycle>`, then `/autopilot`. The autopilot loop prompt is exactly `Read ~/.claude/skills/expedition/reference/run.md, then continue the run. Skip if a turn is already working.` Rules: [reference/run.md](reference/run.md). Short form:
 
 - Resume-safe: a turn already working means do nothing. Otherwise find the cycle, run `status.py`, do the next step.
 - Each phase runs in its lane. Independent parts run at the same time.
-- One Workflow run per `workflow` phase, resumable with `resumeFromRunId`.
+- A Workflow run covers one `workflow` phase, or sequential phases of one part in one worktree when no owner decision is needed between them. Resumable with `resumeFromRunId`.
 - `opus` for coder and mechanical stages; `fable` only where a review or verify stage needs judgment.
 - A script branches on facts (gate pass or fail, a count), never on choices. A choice ends the run with a `needs-decision` result.
 - Sub-agents write `<num>-tracker.md`. The main agent writes the ATTENTION file at each phase boundary, and one handoff per run at each part boundary.

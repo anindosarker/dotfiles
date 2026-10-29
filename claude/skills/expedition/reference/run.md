@@ -14,7 +14,7 @@
 1. Run `python3 -I <skill>/scripts/status.py <cycle>` and fix every gap it reports.
 2. Confirm the stage 2 readiness check passed.
 3. The owner types `/expedition run <cycle>`, then `/autopilot`.
-4. The autopilot loop prompt is exactly `Continue the run. Skip if a turn is already working.` Nothing else goes in it. Not `/expedition run`: a loop fire cannot load a skill marked `disable-model-invocation`.
+4. The autopilot loop prompt is exactly `Read ~/.claude/skills/expedition/reference/run.md, then continue the run. Skip if a turn is already working.` Nothing else goes in it. A loop fire cannot load a skill marked `disable-model-invocation`, and after compaction the session may no longer hold the run rules, so the prompt names the file.
 
 Release and merge sequences (merge commit names, labels, release checks) belong in the release part's phases or in the project rules. Never in the loop prompt.
 
@@ -44,10 +44,17 @@ Rules that keep runs fast:
 - Parts with no dependency between them run at the same time, each in its own worktree.
 - A sub-part (`NN.1`) made only of `inline` and `agent` phases needs no worktree; it runs on the base branch.
 - Review depth matches risk: one `fable` verify for public API, shared state or a cross-part change. Mechanical changes get the gates only.
+- Gates run once. The builder records each gate as one tracker line: command, commit, result.
+- Gates that each need their own base run at the same time.
+- The verifier reruns only the gates that have no line for the current HEAD.
+- CI is the second run.
 
 ## Workflow per phase
 
-- One Workflow run per `workflow` phase. Keep its run id on the phase line of the tracker.
+- A Workflow run covers one `workflow` phase. Sequential phases of one part in one worktree may share one run when no owner decision is needed between them. This saves the re-read of plan, decisions and standards at every agent start.
+- A phase whose result needs the owner's judgment before the next phase gets its own run.
+- A choice found mid-run still ends the run early ([Facts and choices](#facts-and-choices)).
+- Keep the run id on the tracker line of each phase it covers.
 - A run that stops (usage limit, crash, edited script): relaunch with `resumeFromRunId`. Finished agents come back from cache.
 - Models: `opus` for coder, fix and mechanical stages. `fable` only for a review or verify stage that needs judgment.
 - Worktrees: one per part, at the project's worktree location. Keep them clean (no build output, no ignore-file churn).
