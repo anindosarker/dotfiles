@@ -3,7 +3,7 @@ Example of a cycle index from a real project. Its relative links point into that
 # v0.6.x plan
 
 Two parts from the 0.5.x attention items, released together as 0.6.0. Decisions:
-[decisions.md](decisions.md) 1 to 3.
+[decisions.md](decisions.md) D1 to D3.
 
 ## Goals
 
@@ -40,9 +40,9 @@ Two parts from the 0.5.x attention items, released together as 0.6.0. Decisions:
   `release:minor`, the version PR `chore: version 0.6.0` merged, `release.yml` run green.
 - 0.6.1 round: branches `v0.6/add-part-deterministic` (worktree 07), `v0.6/edition-selector`
   (worktree 08), `v0.6/st-checkbox` (worktree 09, after 03 merges). Same PR-for-CI then
-  merge-commit procedure; release with `release:patch` (decisions 6 and 7).
+  merge-commit procedure; release with `release:patch` (D6, D7).
 
 ## Process rules
 
-- Trackers `01-tracker.md`, `02-tracker.md`; owner judgment calls in `ATTENTION-2026-10-28.md`.
+- Trackers `01-tracker.md`, `02-tracker.md`; owner items in `ATTENTION-2026-10-28.md`.
 - Halt on: a change to `EDITIONS`, a part edit of any kind, a ruleset or repo setting change.

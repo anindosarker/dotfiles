@@ -240,7 +240,7 @@ Lane: inline
 
 Every part file keeps these four, whatever template it follows:
 
-1. Decisions cited as `(decision N)`, triage rulings as `(ruling N)`.
+1. Decisions cited as `(D7)`, findings as `(F3)`, ATTENTION items as `(A2)`.
 2. A `Lane: workflow`, `Lane: agent` or `Lane: inline` line directly under each phase heading.
 3. Gates per phase.
 4. No open questions in plan files.

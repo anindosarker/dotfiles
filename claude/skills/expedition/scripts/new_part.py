@@ -99,6 +99,26 @@ def load_template(root, flag, rules):
     return bundled.read_text(encoding="utf-8")
 
 
+def tracker_text(num, title):
+    """templates/tracker.md with the header filled in and Status: planned.
+
+    The optional Attention and Notes sections are left out; empty is normal.
+    """
+    path = Path(__file__).resolve().parent.parent / "templates" / "tracker.md"
+    if not path.is_file():
+        die(f"bundled template missing: {path}")
+    out = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("## "):
+            break
+        if line.startswith("# "):
+            line = f"# {num}: {title}, tracker"
+        elif line.startswith("Status:"):
+            line = "Status: planned"
+        out.append(line)
+    return "\n".join(out).rstrip() + "\n"
+
+
 def set_heading(text, heading):
     lines = text.splitlines(keepends=True)
     for i, line in enumerate(lines):
@@ -193,12 +213,7 @@ def main():
 
     part.write_text(set_heading(template, f"# {a.num}: {a.title}"), encoding="utf-8")
     print(part)
-    tracker.write_text(
-        f"# {a.num}: {a.title}, tracker\n\n"
-        f"Deviations only. Plan: [{part_name}]({part_name}).\n\n"
-        "## Phase 01\n",
-        encoding="utf-8",
-    )
+    tracker.write_text(tracker_text(a.num, a.title), encoding="utf-8")
     print(tracker)
     index.write_text(new_index, encoding="utf-8")
     for r in rules:

@@ -14,8 +14,8 @@ disable-model-invocation: true
 
 ## 2. Start (on go)
 1. Run `bash ${CLAUDE_SKILL_DIR}/scripts/start.sh`. Relay each `WARN` line in one line. Keep the `ATTENTION=` path.
-2. Invoke the `loop` skill with interval `30m` and this prompt. Keep the cron job ID it returns.
-   `Resume autopilot: <one-line task>. Plan: <steps>. If a turn is already working, do nothing. Otherwise work out what is left from git log and the working tree, do the next step, verify, continue. All done: run section 4 of the autopilot skill.`
+2. Invoke the `loop` skill with interval `30m`. Keep the cron job ID it returns. Prompt: if a skill or the plan defines the loop prompt, use it as is. Otherwise use
+   `Continue autopilot: <one-line task>. Skip if a turn is already working.`
 3. Say "Autopilot on." and begin.
 
 ## 3. Work (unattended)

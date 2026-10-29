@@ -1,11 +1,31 @@
 # Stage 3: run
 
 ## Contents
+- Starting the run
+- Each loop fire
 - Lanes
 - Workflow per phase
 - Facts and choices
-- Trackers and the ATTENTION file
-- Starting the run
+- Results, trackers and the ATTENTION file
+- Handoff and end of run
+
+## Starting the run
+
+1. Run `python3 -I <skill>/scripts/status.py <cycle>` and fix every gap it reports.
+2. Confirm the stage 2 readiness check passed.
+3. The owner types `/expedition run <cycle>`, then `/autopilot`.
+4. The autopilot loop prompt is exactly `/expedition run`. Nothing else goes in it.
+
+Release and merge sequences (merge commit names, labels, release checks) belong in the release part's phases or in the project rules. Never in the loop prompt.
+
+## Each loop fire
+
+`/expedition run` must be safe to fire at any time.
+
+1. A turn is already working: do nothing.
+2. Find the cycle: the argument, else the cycle this session runs, else the `Next:` line of the newest handoff (`.ai/plans/v*.x/<owner>/handoffs/handoff-*.md`, newest by the date in the file name).
+3. Run `status.py <cycle>`.
+4. Do the next step.
 
 ## Lanes
 
@@ -27,7 +47,7 @@ Rules that keep runs fast:
 
 ## Workflow per phase
 
-- One Workflow run per `workflow` phase. Keep its run id in the part tracker.
+- One Workflow run per `workflow` phase. Keep its run id on the phase line of the tracker.
 - A run that stops (usage limit, crash, edited script): relaunch with `resumeFromRunId`. Finished agents come back from cache.
 - Models: `opus` for coder, fix and mechanical stages. `fable` only for a review or verify stage that needs judgment.
 - Worktrees: one per part, at the project's worktree location. Keep them clean (no build output, no ignore-file churn).
@@ -38,30 +58,35 @@ Rules that keep runs fast:
 A script may branch on facts. It must not branch on choices.
 
 - Fact branches, kept in the script: gate fails, so fix and rerun the gate, at most 3 times; 0 findings, so skip verify; reviewer rejects, so bounce to the coder.
-- Choice branches, which end the run: a finding contradicts `decisions.md`; two valid API shapes and the plan names neither; revert or keep a deviation; a scope change.
+- Choice branches, which end the run: a finding contradicts an accepted decision; two valid API shapes and the plan names neither; revert or keep a deviation; a scope change.
 
 On a choice the script returns early:
 
 ```js
 if (review.contradictsDecision) {
-  return { status: 'needs-decision', phase: '02', item: review.item, options: review.options }
+  return {
+    status: 'needs-decision',
+    phase: '02',
+    notes: [],
+    attention: [`${review.item}: contradicts D7. Options: ${review.options.join('; ')}`],
+  }
 }
 ```
 
-The main session then writes a `[ruling]` bullet in the ATTENTION file and continues with work that does not depend on the choice.
+The main session then adds an ATTENTION item and continues with work that does not depend on the choice.
 
-## Trackers and the ATTENTION file
+## Results, trackers and the ATTENTION file
 
-- `<num>-tracker.md`: per phase, the branch, commits, gate results, deviations from the part file and decisions taken during the run. No progress narration.
-- `ATTENTION-<YYYY-MM-DD>.md`: only when something needs the owner. One short bullet each, starting with one tag:
-  - `[revert?]` a judgment call taken that the owner may want reverted
-  - `[blocked]` an item that could not be finished, and why
-  - `[ruling]` a choice the run stopped on, with the options
+- Every workflow script's result schema has a `notes` array and an `attention` array. A plain `agent` lane returns the same two lists in its final text.
+- `attention`: what needs the owner. `notes`: what a later phase, a resume or the owner would otherwise rediscover. Both are usually empty.
+- Sub-agents write the tracker: the builder fills it and sets `Status: running`, the fixer and the verifier update it. They stage owner items in its `## Attention` section.
+- The main agent writes the ATTENTION file at each phase boundary. It condenses the trackers' `## Attention` sections and the results, and merges duplicates.
+- The run reports; it does not solve. Do not research solutions for an ATTENTION item.
+- An accepted decision that no longer fits: an ATTENTION item, never a silent change.
 - Nothing needs the owner: no ATTENTION file.
+- Formats: [formats.md](formats.md).
 
-## Starting the run
+## Handoff and end of run
 
-1. Run `python3 -I <skill>/scripts/status.py <cycle>` and fix every gap it reports.
-2. Confirm the stage 2 readiness check passed.
-3. The owner types `/expedition run <cycle>`, then `/autopilot` with the parts to run.
-4. The autopilot loop prompt includes `Follow ~/.claude/skills/expedition/reference/run.md`. This skill is not model-invocable, so the file path is how later loop fires find these rules.
+- One handoff per run, `handoffs/handoff-<run start YYYY-MM-DD-HHMM>.md`. Create it with the `write-handoff` skill at the first part boundary. Rewrite it in place at each later part boundary and at the end. Its State section starts with the `Stage:` and `Next:` bullets ([formats.md](formats.md)).
+- All parts done: rewrite the handoff, then autopilot section 4 (commit, stop the loop, report).

@@ -5,6 +5,7 @@ Usage: python3 -I new_cycle.py <cycle> [--owner X]
 """
 import argparse
 import collections
+import datetime
 import re
 import subprocess
 import sys
@@ -48,6 +49,20 @@ def write_new(path, text):
     print(path)
 
 
+def from_template(name, cycle, today):
+    """Template head up to its Round heading, as Round 1 of a new cycle."""
+    path = Path(__file__).resolve().parent.parent / "templates" / name
+    if not path.is_file():
+        die(f"template missing: {path}")
+    out = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("## Round"):
+            out.append(f"## Round 1: discussion, {today}")
+            break
+        out.append(line.replace("[cycle]", cycle))
+    return "\n".join(out) + "\n"
+
+
 def main():
     ap = argparse.ArgumentParser(usage="new_cycle.py <cycle> [--owner X]")
     ap.add_argument("cycle")
@@ -75,14 +90,9 @@ def main():
         "## Integration\n\n"
         "## Process rules\n"
     ))
-    write_new(folder / "decisions.md", (
-        f"# {c} decisions\n\n"
-        "Accepted decisions only, numbered. Numbers are never reused.\n"
-    ))
-    write_new(folder / "findings.md", (
-        f"# {c} findings\n\n"
-        "Problem files only, short bullets.\n"
-    ))
+    today = datetime.date.today().isoformat()
+    write_new(folder / "decisions.md", from_template("decisions.md", c, today))
+    write_new(folder / "findings.md", from_template("findings.md", c, today))
 
 
 if __name__ == "__main__":
