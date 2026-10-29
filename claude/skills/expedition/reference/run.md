@@ -14,13 +14,13 @@
 1. Run `python3 -I <skill>/scripts/status.py <cycle>` and fix every gap it reports.
 2. Confirm the stage 2 readiness check passed.
 3. The owner types `/expedition run <cycle>`, then `/autopilot`.
-4. The autopilot loop prompt is exactly `/expedition run`. Nothing else goes in it.
+4. The autopilot loop prompt is exactly `Continue the run. Skip if a turn is already working.` Nothing else goes in it. Not `/expedition run`: a loop fire cannot load a skill marked `disable-model-invocation`.
 
 Release and merge sequences (merge commit names, labels, release checks) belong in the release part's phases or in the project rules. Never in the loop prompt.
 
 ## Each loop fire
 
-`/expedition run` must be safe to fire at any time.
+The loop prompt must be safe to fire at any time.
 
 1. A turn is already working: do nothing.
 2. Find the cycle: the argument, else the cycle this session runs, else the `Next:` line of the newest handoff (`.ai/plans/v*.x/<owner>/handoffs/handoff-*.md`, newest by the date in the file name).

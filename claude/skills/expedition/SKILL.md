@@ -61,7 +61,7 @@ A project template that lacks one gets it added in that project's style. Nothing
 
 ## Stage 3: run
 
-Unattended through `/autopilot`. The owner types `/expedition run <cycle>`, then `/autopilot`. The autopilot loop prompt is exactly `/expedition run`. Rules: [reference/run.md](reference/run.md). Short form:
+Unattended through `/autopilot`. The owner types `/expedition run <cycle>`, then `/autopilot`. The autopilot loop prompt is exactly `Continue the run. Skip if a turn is already working.` Rules: [reference/run.md](reference/run.md). Short form:
 
 - Resume-safe: a turn already working means do nothing. Otherwise find the cycle, run `status.py`, do the next step.
 - Each phase runs in its lane. Independent parts run at the same time.
