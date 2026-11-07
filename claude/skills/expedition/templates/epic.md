@@ -1,15 +1,16 @@
-# [Part name]
+# [Epic name]
 
 ## 1. Architecture
 
 ### 1.1 Overview
 
-Two or three sentences: the problem and why this part exists. Link the decision.
+Two or three sentences: the problem and why this epic exists. Link the decision.
 
 ### 1.2 Goals
 
 - Measurable outcome
 - Measurable outcome
+- Acceptance: the one check the builder runs itself and loops on, programmatic (a type check, a grep, a `diff` against a baseline, a test) or a reference plus judges (captures next to a named reference, three judges on named points)
 
 ### 1.3 Current structure _(optional, skip for greenfield)_
 
@@ -40,7 +41,7 @@ Sketch: [reference/flow.excalidraw](reference/flow.excalidraw) _(when one exists
 
 ### 1.6 Components
 
-One block per logical unit the part introduces or modifies. Required: a short description
+One block per logical unit the epic introduces or modifies. Required: a short description
 and a bullet list of what it does and does not do. Optional: operations table, interfaces,
 dependencies, stays unchanged, usage examples.
 
@@ -83,22 +84,18 @@ New packages, env vars (name, default, purpose), reused infrastructure.
 
 ## 2. Instructions for AI
 
-### 2.1 Phases
+### 2.1 Milestones
 
-#### 2.1.1 Phase 1: [Name]
+### Milestone: [Name]
 
-Lane: [workflow | agent | inline]
+- Files owned: [a, b]
+- Depends on: [milestone names or epic numbers, or none]
+- Review: [none | fable]
+- Local CI: [none | `pnpm test --changed` | `act pull_request -j <job>`] (what runs on the merged tree before the merge, beyond the task checks)
+- Task 1: [what]. Checks: [commands]
+- Task 2: [what]. Checks: [commands]
+- Task N: Cleanup, delete old code, update references. Checks: repo checks
 
-- Step
-- Step
-
-#### 2.1.N Final phase: Cleanup
-
-Lane: [workflow | agent | inline]
-
-- Delete old code, update references
-- Repo gates
-
-### 2.2 Gates
+### 2.2 Checks
 
 - `command` per base, what green means

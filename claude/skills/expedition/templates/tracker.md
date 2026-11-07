@@ -1,12 +1,11 @@
 # [num]: [title], tracker
 
-Status: [planned | running | done (<commit>)]
-Branch `[branch]`, worktree [name], PR #[n]
-Gates:
-- `[command]` at [commit]: [green | red]
-- CI run [id]: [green | red]
+Status: [planned | running | merged (<commit>)]
+Branch `[branch]`, worktree [name]
+Checks:
+- Check: [name], `[command]` at [commit]: [pass | fail]
 
-- Phase 01 [name]: [planned | running | done (<commit>, <workflow run id>)]
+- Task 1 [name]: [planned | running | done (<commit>, <workflow run id>)]
 
 ## Attention
 
@@ -14,4 +13,4 @@ Gates:
 
 ## Notes
 
-- [Optional: only what a later phase, a resume or the owner would otherwise rediscover.]
+- [Optional: only what a later task, a resume or the owner would otherwise rediscover.]

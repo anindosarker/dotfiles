@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
-"""Create an expedition cycle folder: .ai/plans/<cycle>/<owner>/ with stubs.
+"""Create an expedition release folder: .ai/plans/<release>/<owner>/ with the plan.md
+(Goals and Epics), decisions.md and findings.md stubs, the epics, trackers, attentions,
+handoffs and reference folders, and process.md copied from the newest earlier release
+(else the skill template). sprints.md is not written here: sprints.py makes it from
+ownership.md once the epics hold their milestone blocks.
 
-Usage: python3 -I new_cycle.py <cycle> [--owner X]
+Usage: python3 -I new_cycle.py <release> [--owner X] [--root PATH]
 """
 import argparse
 import collections
@@ -11,7 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-CYCLE_RE = re.compile(r"^v\d+\.\d+\.x$")
+RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
 
 
 def die(msg):
@@ -19,7 +23,12 @@ def die(msg):
     sys.exit(1)
 
 
-def repo_root():
+def repo_root(flag=None):
+    if flag:
+        p = Path(flag).resolve()
+        if not p.is_dir():
+            die(f"root not a folder: {p}")
+        return p
     try:
         out = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
@@ -49,8 +58,8 @@ def write_new(path, text):
     print(path)
 
 
-def from_template(name, cycle, today):
-    """Template head up to its Round heading, as Round 1 of a new cycle."""
+def from_template(name, release, today):
+    """Template head up to its Round heading, as Round 1 of a new release."""
     path = Path(__file__).resolve().parent.parent / "templates" / name
     if not path.is_file():
         die(f"template missing: {path}")
@@ -59,36 +68,60 @@ def from_template(name, cycle, today):
         if line.startswith("## Round"):
             out.append(f"## Round 1: discussion, {today}")
             break
-        out.append(line.replace("[cycle]", cycle))
+        out.append(line.replace("[release]", release).replace("[cycle]", release))
     return "\n".join(out) + "\n"
 
 
+def release_key(name):
+    return tuple(int(x) for x in re.findall(r"\d+", name))
+
+
+def process_text(root, owner, release):
+    """The newest earlier release's process.md with its title updated, else the template."""
+    plans = root / ".ai" / "plans"
+    earlier = sorted(
+        (p for p in plans.glob(f"v*.x/{owner}/process.md") if p.parent.parent.name != release),
+        key=lambda p: release_key(p.parent.parent.name),
+    )
+    if earlier:
+        src = earlier[-1]
+        text = src.read_text(encoding="utf-8")
+        text = re.sub(r"^# Expedition process, .*$", f"# Expedition process, {release}", text, count=1, flags=re.M)
+        print(f"process.md copied from {src.relative_to(root)}; trim it for this release")
+        return text
+    tpl = Path(__file__).resolve().parent.parent / "templates" / "process.md"
+    if not tpl.is_file():
+        die(f"template missing: {tpl}")
+    print("process.md from the skill template; fill every [...] placeholder")
+    return tpl.read_text(encoding="utf-8").replace("[project]", release, 1)
+
+
 def main():
-    ap = argparse.ArgumentParser(usage="new_cycle.py <cycle> [--owner X]")
-    ap.add_argument("cycle")
+    ap = argparse.ArgumentParser(usage="new_cycle.py <release> [--owner X] [--root PATH]")
+    ap.add_argument("release")
     ap.add_argument("--owner")
+    ap.add_argument("--root", help="repository root (default: git top level)")
     a = ap.parse_args()
-    if not CYCLE_RE.match(a.cycle):
-        die(f"bad cycle '{a.cycle}', expected like v0.7.x")
-    root = repo_root()
+    if not RELEASE_RE.match(a.release):
+        die(f"bad release '{a.release}', expected like v0.9.x")
+    root = repo_root(a.root)
     owner = detect_owner(root, a.owner)
-    folder = root / ".ai" / "plans" / a.cycle / owner
+    folder = root / ".ai" / "plans" / a.release / owner
     if folder.exists():
-        die(f"cycle folder exists: {folder}")
+        die(f"release folder exists: {folder}")
     folder.mkdir(parents=True)
     print(folder)
-    (folder / "handoffs").mkdir()
-    print(folder / "handoffs")
-    c = a.cycle
-    write_new(folder / f"{c}-plan.md", (
+    for sub in ("epics", "trackers", "attentions", "handoffs", "reference"):
+        (folder / sub).mkdir()
+        print(folder / sub)
+    write_new(folder / "process.md", process_text(root, owner, a.release))
+    c = a.release
+    write_new(folder / "plan.md", (
         f"# {c} plan\n\n"
-        "Index. Decisions: [decisions.md](decisions.md); parts implement them "
-        "and never re-decide.\n\n"
+        "Decisions: [decisions.md](decisions.md). Sprints: [sprints.md](sprints.md). "
+        "Epics implement decisions and never re-decide.\n\n"
         "## Goals\n\n- \n\n"
-        "## Parts\n\n| # | Part | Scope |\n|---|---|---|\n\n"
-        "## Dependencies\n\n"
-        "## Integration\n\n"
-        "## Process rules\n"
+        "## Epics\n\n| # | Epic | Scope |\n|---|---|---|\n"
     ))
     today = datetime.date.today().isoformat()
     write_new(folder / "decisions.md", from_template("decisions.md", c, today))

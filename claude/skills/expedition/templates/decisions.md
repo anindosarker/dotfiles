@@ -1,4 +1,4 @@
-# [cycle] decisions
+# [release] decisions
 
 ## Round [n]: [discussion | triage of ATTENTION-YYYY-MM-DD], [YYYY-MM-DD]
 
