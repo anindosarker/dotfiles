@@ -1,8 +1,8 @@
-Example of a release `plan.md`, its `ownership.md` as ownership.py wrote it (first rows only) and its sprint grid from a real project. Its relative links point into that project's plan folder.
+Example of a release `<release>-plan.md`, its `ownership.md` as ownership.py wrote it (first rows only) and its sprint grid from a real project. Its relative links point into that project's plan folder.
 
 # v0.8.x plan
 
-Release 0.8.0 (D32). Decisions: [decisions.md](decisions.md) D1 to D40. Findings: [findings.md](findings.md) F1 to F6. Sprints: [sprints.md](sprints.md). Epics implement decisions and never re-decide.
+Release 0.8.0 (D32). Decisions: [decisions.md](decisions.md) D1 to D40. Findings: [findings.md](findings.md) F1 to F6. Sprints: [sprints.md](sprints.md). Specs implement decisions and never re-decide.
 
 ## Goals
 
@@ -10,17 +10,17 @@ Release 0.8.0 (D32). Decisions: [decisions.md](decisions.md) D1 to D40. Findings
 - Filters live as chips with one editor, sorts in a toolbar editor, preferences behind one view settings button (D8 to D11) (D35)
 - All three bases identical in every change; registry output regenerated, docs app copies re-installed
 
-## Epics
+## Deliverables
 
-| # | Epic | Scope |
-|---|---|---|
-| 01 | [shared surface](epics/01-shared-surface.md) | Types, options, icon keys, strings, state slices and drag helpers every milestone builds on; no default flips. |
-| 02 | [frame and body](epics/02-frame-body.md) | Toolbar above the frame, row metrics, tokens, width rule, scroll cues, overflow text, pending-view script. |
-| 03 | [header, column menu and dragging](epics/03-header-menu-drag.md) | Quiet header, Notion column menu, hairline resize, header drag with animation and locked columns. |
-| 04 | [toolbar chrome](epics/04-toolbar-chrome.md) | Button group, filter chips, sort editor, view settings with pinned items, one search X, real triggers. |
-| 05 | [defaults and stories](epics/05-defaults-stories.md) | Stock defaults flipped to the new look; every story and play test follows; changelog lists each way back. |
-| 06 | [docs](epics/06-docs.md) | Guides rewritten for the new look and added for each new surface; ship with 0.8.0. |
-| 07 | [release 0.8.0](epics/07-release.md) | Checks rerun in throwaway apps per base; 0.8.0 released. |
+| # | Spec | Epic | Scope |
+|---|---|---|---|
+| 01 | [shared surface](specs/01-shared-surface.md) | E1 | Types, options, icon keys, strings, state slices and drag helpers every milestone builds on; no default flips. |
+| 02 | [frame and body](specs/02-frame-body.md) | E1 | Toolbar above the frame, row metrics, tokens, width rule, scroll cues, overflow text, pending-view script. |
+| 03 | [header, column menu and dragging](specs/03-header-menu-drag.md) | E1 | Quiet header, Notion column menu, hairline resize, header drag with animation and locked columns. |
+| 04 | [toolbar chrome](specs/04-toolbar-chrome.md) | E1 | Button group, filter chips, sort editor, view settings with pinned items, one search X, real triggers. |
+| 05 | [defaults and stories](specs/05-defaults-stories.md) | E1 | Stock defaults flipped to the new look; every story and play test follows; changelog lists each way back. |
+| 06 | [docs](specs/06-docs.md) | E1 | Guides rewritten for the new look and added for each new surface; ship with 0.8.0. |
+| 07 | [release 0.8.0](specs/07-release.md) | E1 | Checks rerun in throwaway apps per base; 0.8.0 released. |
 
 ---
 
@@ -28,7 +28,7 @@ Release 0.8.0 (D32). Decisions: [decisions.md](decisions.md) D1 to D40. Findings
 
 Generated: 2026-11-06 by ownership.py
 
-| Milestone | Epic | Depends on | Files |
+| Milestone | Spec | Depends on | Files |
 |---|---|---|---|
 | Shared surface | 01 | none | `types.ts`, `features/stConfigFeature.ts`, `features/stFeatures.ts`, `features/stRefsFeature.ts`, `features/stColumnDraggingFeature.ts`, `features/stViewSettingsFeature.ts`, `features/stFilterChipsFeature.ts`, `hooks/useST_TableOptions.ts`, `hooks/useST_TableInstance.ts`, `shared/locales/en.ts`, `icons.ts`, `icons/*.ts`, `components/icons/ST_GridLineIcons.tsx`, `shared/utils/{drag,viewSettingsStorage,column,style}.utils.ts`, `components/head/ST_TableHeadCellGrabHandle.tsx`, `components/menus/ST_ShowHideColumnsMenuItems.tsx`, `components/toolbar/ST_ToolbarDropZone.tsx`, `components/table/ST_TableContainer.tsx`, `components/table/ST_Table.tsx`, `components/body/ST_TableBodyCell.tsx`, `shared/utils/displayColumn.utils.ts`, `components/head/ST_TableHeadCellFilterContainer.tsx`, `index.ts`, `packages/shadcn-table/package.json`, `pnpm-lock.yaml`, `CHANGELOG.md`, `stories/styling/DefaultLook.stories.tsx` |
 | Demo captures | 01 | none | `reference/01-*.png`, `reference/01-demo-commit.txt` |
@@ -49,12 +49,12 @@ Updated: 2026-11-04 16:35
 
 | Milestone                 | S1  | S2  | S3  | S4  | S5  |
 | ------------------------- | --- | --- | --- | --- | --- |
-| Shared surface            | [x] | ·   | ·   | ·   | ·   |
-| Demo captures             | [x] | ·   | ·   | ·   | ·   |
-| Frame and body            | ·   | [x] | ·   | ·   | ·   |
-| Header, menu, drag        | ·   | [x] | ·   | ·   | ·   |
-| Toolbar chrome            | ·   | [x] | ·   | ·   | ·   |
-| Defaults and stories      | ·   | ·   | [x] | ·   | ·   |
-| Component fixes F3 to F6  | ·   | ·   | [x] | ·   | ·   |
-| Docs                      | ·   | ·   | ·   | [x] | ·   |
-| Release 0.8.0             | ·   | ·   | ·   | ·   | [ ] |
+| E1 01 Shared surface      | [x] | ·   | ·   | ·   | ·   |
+| E1 01 Demo captures       | [x] | ·   | ·   | ·   | ·   |
+| E1 02 Frame and body      | ·   | [x] | ·   | ·   | ·   |
+| E1 03 Header, menu, drag  | ·   | [x] | ·   | ·   | ·   |
+| E1 04 Toolbar chrome      | ·   | [x] | ·   | ·   | ·   |
+| E1 05 Defaults and stories | ·   | ·   | [x] | ·   | ·   |
+| fix Component fixes F3 to F6 | ·   | ·   | [x] | ·   | ·   |
+| E1 06 Docs                | ·   | ·   | ·   | [x] | ·   |
+| E1 07 Release 0.8.0       | ·   | ·   | ·   | ·   | [ ] |

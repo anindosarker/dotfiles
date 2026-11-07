@@ -3,28 +3,25 @@
 
 Usage: python3 -I status.py <release> [--owner X] [--root PATH]
 
-Layout: plan.md (## Goals and ## Epics only), epics/NN-<slug>.md, ownership.md
-(ownership.py), sprints.md (sprints.py), trackers/ (one per milestone, NN-<slug>-tracker.md
-or fix-<slug>-tracker.md). A folder with "<release>-plan.md" and no plan.md (specs/, a
-## Stories table, a "| Story" grid) is read as the legacy layout with the legacy checks;
-nothing is rewritten.
+Layout: <release>-plan.md (## Goals and ## Deliverables only), specs/NN-<slug>.md,
+ownership.md (ownership.py), sprints.md (sprints.py), trackers/ (one per milestone,
+NN-<slug>-tracker.md or fix-<slug>-tracker.md).
 
-Decisions (### D<n>) and findings (### F<n>) get a derived state table from the epic files
-that cite them and the Status lines of those epics' milestone trackers. ATTENTION items
-(## A<n> or ### A<n>) are untriaged until a decision (Source: A<n>) or an epic cites them,
+Decisions (### D<n>) and findings (### F<n>) get a derived state table from the spec files
+that cite them and the Status lines of those specs' milestone trackers. ATTENTION items
+(## A<n> or ### A<n>) are untriaged until a decision (Source: A<n>) or a spec cites them,
 or a tag line "[D<n>]" or "[F<n>]" sits under the heading. process.md (## P<n>) must exist
 with no placeholder left; (P<n>) citations must be defined.
 
-Batches: the tag line under each "### D<n>" heading ("[B<n>]", "[Done]  [B<n>]") puts the
-decision in a batch. The summary lists deciding (no tag), batched (B<n>, its sprints.md
-column has no run mark), running (a run mark in its column) and done ([Done]). The stage line
-reports discuss and run together ("Stage: discuss, run (B2, B3)"); an open ATTENTION item
-counts as discuss, never as a stage of its own.
+Epics: the tag line under each "### D<n>" heading ("[E<n>]", "[Done]  [E<n>]", or "[Done]"
+for a decision with nothing to run) puts the decision in an epic. The summary lists deciding
+(no tag), in E<n> (no row of the epic in sprints.md carries a run mark), running (one does)
+and done ([Done]). The stage line reports discuss and run together ("Stage: discuss, run
+(E2, E3)"); an open ATTENTION item counts as discuss, never as a stage of its own.
 
-Gaps reported for the layout: a plan.md section other than Goals and Epics (a ## Stories
-section: "legacy Stories table, delete it"); an Epics Scope cell over 120 characters; an
-epic with no "### Milestone:" block, a block without Files owned, a Task line without
-Checks, no Acceptance line; ownership.md missing or older than an epic file ("run
+Gaps reported for the layout: a plan section other than Goals and Deliverables; a
+Deliverables Scope cell over 120 characters; a spec with no "### Milestone:" block, a block without Files owned, a Task line without
+Checks, no Acceptance line; ownership.md missing or older than a spec file ("run
 ownership.py"), or one ownership.py would refuse (collision, cycle); sprints.md missing,
 without a "| Milestone" grid, with text under the grid, with a cell not one of [x], [ ],
 ·, [!] or blank, or with rows that differ from ownership.md. A tracker Status of merged
@@ -57,11 +54,8 @@ A_TAG_RE = re.compile(r"^\s*\[(?:D|F)\d+\]")
 SOURCE_RE = re.compile(r"Source:\s*(A\d+(?:\s*(?:,|and)\s*A\d+)*)")
 HEADING_RE = re.compile(r"^#{1,6}\s+(.*)$")
 GATES_LINE_RE = re.compile(r"^\s*-\s*Checks:")
-PLAN_SECTIONS = ("Goals", "Epics")
-LEGACY_INDEX_SECTIONS = ("Goals", "Epics", "Stories")
-LEGACY_SECTIONS = ("Specs", "Run plan")
-EPICS_HEAD = r"^## (?:Epics|Specs)\s*$(.*?)(?=^## |\Z)"
-STORY_COLS = ["Story", "Files owned"]  # legacy layout only
+PLAN_SECTIONS = ("Goals", "Deliverables")
+DELIVERABLES_HEAD = r"^## Deliverables\s*$(.*?)(?=^## |\Z)"
 SPRINT_MARKS = ("[x]", "[ ]", "·", "[!]", "")
 SCOPE_MAX = 120
 
@@ -290,49 +284,6 @@ def table_rows(text):
     return head, data
 
 
-def story_checks(folder, index_text):
-    """Legacy layout: Stories table columns, sprints.md presence, rows and cell marks."""
-    m = re.search(r"^## Stories\s*$(.*?)(?=^## |\Z)", index_text, re.M | re.S)
-    if not m:
-        print("  index has no ## Stories section (files.md)")
-        stories = None
-    else:
-        head, data = table_rows(m.group(1))
-        if head is None:
-            print("  ## Stories has no table")
-            stories = None
-        else:
-            if head != STORY_COLS:
-                print(f"  Stories columns {head}: exactly Story, Files owned (files.md)")
-            stories = [r[0] for r in data if r and r[0]]
-    sprints = folder / "sprints.md"
-    if not sprints.is_file():
-        print("  sprints.md missing beside the index (files.md)")
-        return
-    lines = [l.strip() for l in read(sprints).splitlines()]
-    start = next((i for i, l in enumerate(lines) if re.match(r"^\|\s*Story\b", l)), None)
-    if start is None:
-        print("  sprints.md has no table whose header starts \"| Story\"")
-        return
-    block = []
-    for l in lines[start:]:
-        if not l.startswith("|"):
-            break
-        block.append(l)
-    head, data = table_rows("\n".join(block))
-    grid = [r[0] for r in data if r and r[0]]
-    for r in data:
-        for c in r[1:]:
-            if c not in SPRINT_MARKS:
-                print(f"  sprints.md row {r[0]}: cell {c!r} not one of [x], [ ], ·, [!], blank")
-    if stories is not None:
-        for name in grid:
-            if name not in stories:
-                print(f"  mid-run story: {name}")
-        for name in stories:
-            if name not in grid:
-                print(f"  Stories row not in sprints.md: {name}")
-
 
 def a_cites(text, source_only):
     nums = set()
@@ -347,12 +298,12 @@ def slugify(name):
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 
-def epic_rows(plan):
-    """Rows of the Epics table (legacy ## Specs too): [(num, link)], long scopes [(num, len)]."""
+def spec_rows(plan):
+    """Rows of the Deliverables table: [(num, link)], long scopes [(num, len)]."""
     rows, long_scopes = [], []
     if not plan.is_file():
         return rows, long_scopes
-    m = re.search(EPICS_HEAD, read(plan), re.M | re.S)
+    m = re.search(DELIVERABLES_HEAD, read(plan), re.M | re.S)
     if m:
         for line in m.group(1).splitlines():
             r = ROW_RE.match(line.strip())
@@ -366,7 +317,7 @@ def epic_rows(plan):
 
 
 def other_trackers(folder, claimed, statuses):
-    """Trackers no epic or milestone owns (fix milestones and the like): (key, path, first line)."""
+    """Trackers no spec or milestone owns (fix milestones and the like): (key, path, first line)."""
     out = []
     if (folder / "trackers").is_dir():
         for p in sorted((folder / "trackers").glob("*-tracker.md")):
@@ -379,7 +330,7 @@ def other_trackers(folder, claimed, statuses):
 
 
 def aggregate(states):
-    """One epic state from its milestone tracker states, as tracker_status returns them."""
+    """One spec state from its milestone tracker states, as tracker_status returns them."""
     if not states or any(s is None for s in states):
         return None
     kinds = {"done" if s[0] in ("merged", "done") else s[0] for s in states}
@@ -390,105 +341,30 @@ def aggregate(states):
     return "planned", ""
 
 
-def legacy_collect(folder, index):
-    rows, long_scopes = epic_rows(index)
-    docs = [(num, folder / f) for num, f in rows if f and (folder / f).is_file()]
-    statuses = {num: tracker_status(folder, num) for num, _ in docs}
-    claimed = {f"{num}-tracker.md" for num, _ in docs}
-    extra = other_trackers(folder, claimed, statuses)
-    return {"rows": rows, "long": long_scopes, "docs": docs, "statuses": statuses, "extra": extra}
 
 
-def legacy_print(folder, index, d):
-    rows, docs, statuses = d["rows"], d["docs"], d["statuses"]
-    print("Specs:")
-    print(f"  legacy layout: {index.name}, specs/; legacy checks, nothing rewritten")
-    if index.is_file() and not rows and not re.search(r"^## (?:Epics|Specs)\s*$", read(index), re.M):
-        print("  index has no ## Epics section")
-    print(f"  index rows: {len(rows)}, linked spec files: {len(docs)}")
-    if index.is_file():
-        for _, line in outside_fences(read(index)):
-            h = re.match(r"^##\s+(.+?)\s*$", line)
-            if h and h.group(1) not in LEGACY_INDEX_SECTIONS + LEGACY_SECTIONS:
-                print(f"  index has extra section ## {h.group(1)}: only Goals, Epics, Stories (files.md)")
-    for num, n in d["long"]:
-        print(f"  row {num}: Scope {n} chars, over {SCOPE_MAX}: one outcome sentence (files.md)")
-    for num, f in rows:
-        if not f:
-            print(f"  row {num}: no linked file")
-        elif not (folder / f).is_file():
-            print(f"  row {num}: {f} missing (waiting on decisions)")
-    linked = {p.name for _, p in docs}
-    for sub in [x for x in (folder / "specs", folder) if x.is_dir()]:
-        for p in sorted(sub.iterdir(), key=lambda p: p.name):
-            if (p.is_file() and SPEC_RE.match(p.name)
-                    and not p.name.endswith("-tracker.md") and p.name not in linked):
-                print(f"  supporting: {p.relative_to(folder)}")
-    for num, _ in docs:
-        t = tracker_path(folder, num)
-        if not t.is_file():
-            print(f"  no tracker: spec {num}")
-        elif statuses[num] is None:
-            print(f"  no Status line: {t.name}")
-    for key, p, _ in d["extra"]:
-        if statuses[key] is None:
-            print(f"  no Status line: {p.name}")
-    if docs and index.is_file():
-        idx = read(index)
-        if re.search(r"^## Run plan\s*$", idx, re.M):
-            print("  legacy index: ## Run plan, no Stories or sprints.md checks")
-        else:
-            story_checks(folder, idx)
-
-    print("Spec checks:")
-    quiet = True
-    for _, p in docs:
-        text = read(p)
-        has_gates = False
-        for i, line in outside_fences(text):
-            h = HEADING_RE.match(line)
-            if h:
-                if re.search(r"\bGates\b", h.group(1)):
-                    has_gates = True
-                continue
-            if GATES_LINE_RE.match(line):
-                has_gates = True
-        if not has_gates:
-            print(f"  {p.name}: no checks")
-            quiet = False
-        if not re.search(r"^\s*-\s*Acceptance:", text, re.M):
-            print(f"  {p.name}: no Acceptance line")
-            quiet = False
-        for i, line in outside_fences(text):
-            if line.rstrip().endswith("?"):
-                print(f"  {p.name}:{i}: open question? {line.strip()[:80]}")
-                quiet = False
-    if quiet:
-        print("  ok")
-
-
-def milestone_tracker(folder, num, epic_slug, idx, name):
-    """trackers/NN-<milestone-slug>-tracker.md; the first milestone also takes NN-<epic-slug>
+def milestone_tracker(folder, num, spec_slug, idx, name):
+    """trackers/NN-<milestone-slug>-tracker.md; the first milestone also takes NN-<spec-slug>
     and NN-tracker.md."""
     t = folder / "trackers"
     cands = [t / f"{num}-{slugify(name)}-tracker.md"]
     if idx == 0:
-        cands += [t / f"{num}-{epic_slug}-tracker.md", t / f"{num}-tracker.md"]
+        cands += [t / f"{num}-{spec_slug}-tracker.md", t / f"{num}-tracker.md"]
     return next((c for c in cands if c.is_file()), cands[0])
 
 
 def new_collect(folder, plan, own):
-    rows, long_scopes = epic_rows(plan)
+    rows, long_scopes = spec_rows(plan)
     docs = [(num, folder / f) for num, f in rows if f and (folder / f).is_file()]
     statuses, claimed, blocks, missing = {}, set(), {}, []
     for num, p in docs:
         m = re.match(r"^\d{2}(?:\.\d+)?-(.+)\.md$", p.name)
-        epic_slug = m.group(1) if m else ""
-        bl = own.parse_epic(p)
+        spec_slug = m.group(1) if m else ""
+        bl = own.parse_spec(p)
         blocks[num] = bl
         states = []
         for i, b in enumerate(bl):
-            t = milestone_tracker(folder, num, epic_slug, i, b["name"])
+            t = milestone_tracker(folder, num, spec_slug, i, b["name"])
             b["tracker"] = t
             if t.is_file():
                 claimed.add(t.name)
@@ -512,37 +388,33 @@ def new_collect(folder, plan, own):
 
 def new_print(folder, plan, d, own):
     rows, docs, statuses = d["rows"], d["docs"], d["statuses"]
-    print("Epics:")
+    print("Specs:")
     text = read(plan) if plan.is_file() else ""
     if not plan.is_file():
-        print("  plan.md missing: new_cycle.py writes it")
-    elif not re.search(r"^## Epics\s*$", text, re.M):
-        print("  plan.md has no ## Epics section")
-    print(f"  plan.md rows: {len(rows)}, linked epic files: {len(docs)}")
+        print(f"  {plan.name} missing: new_cycle.py writes it")
+    elif not re.search(r"^## Deliverables\s*$", text, re.M):
+        print(f"  {plan.name} has no ## Deliverables section")
+    print(f"  {plan.name} rows: {len(rows)}, linked spec files: {len(docs)}")
     for _, line in outside_fences(text):
         h = re.match(r"^##\s+(.+?)\s*$", line)
         if not h:
             continue
-        if h.group(1) == "Stories":
-            print("  plan.md: legacy Stories table, delete it (ownership.md replaces it)")
-        elif h.group(1) not in PLAN_SECTIONS:
-            print(f"  plan.md has extra section ## {h.group(1)}: only Goals, Epics")
+        if h.group(1) not in PLAN_SECTIONS:
+            print(f"  {plan.name} has extra section ## {h.group(1)}: only Goals, Deliverables")
     for num, n in d["long"]:
         print(f"  row {num}: Scope {n} chars, over {SCOPE_MAX}: one outcome sentence")
     for num, f in rows:
         if not f:
             print(f"  row {num}: no linked file")
-        elif not f.startswith("epics/"):
-            print(f"  row {num}: {f} outside epics/")
+        elif not f.startswith("specs/"):
+            print(f"  row {num}: {f} outside specs/")
         elif not (folder / f).is_file():
             print(f"  row {num}: {f} missing (waiting on decisions)")
     linked = {p.name for _, p in docs}
-    if (folder / "epics").is_dir():
-        for p in sorted((folder / "epics").iterdir(), key=lambda p: p.name):
+    if (folder / "specs").is_dir():
+        for p in sorted((folder / "specs").iterdir(), key=lambda p: p.name):
             if p.is_file() and p.suffix == ".md" and p.name not in linked:
                 print(f"  supporting: {p.relative_to(folder)}")
-    if (folder / "specs").is_dir():
-        print("  legacy specs/ folder beside plan.md: move its files to epics/")
     for num, p in docs:
         bl = d["blocks"][num]
         if not bl:
@@ -560,13 +432,13 @@ def new_print(folder, plan, d, own):
     ownership = folder / "ownership.md"
     owned = None
     if not docs and not ownership.is_file():
-        print("  no epics yet")
+        print("  no specs yet")
     elif not ownership.is_file():
         print("  ownership.md missing: run ownership.py")
     else:
         newer = sorted(p.name for _, p in docs if p.stat().st_mtime > ownership.stat().st_mtime)
         if newer:
-            print(f"  ownership.md older than epics/{newer[0]}: run ownership.py")
+            print(f"  ownership.md older than specs/{newer[0]}: run ownership.py")
         owned, err = own.read_ownership(ownership)
         if err:
             print(f"  {err}")
@@ -589,17 +461,14 @@ def new_print(folder, plan, d, own):
     print("Sprints:")
     sprints = folder / "sprints.md"
     if owned is None:
-        print("  no ownership.md to compare with" if docs else "  no epics yet")
+        print("  no ownership.md to compare with" if docs else "  no specs yet")
     if not sprints.is_file():
         if docs:
             print("  sprints.md missing: run sprints.py")
     else:
         head, data = own.table_rows(read(sprints), "Milestone")
         if head is None:
-            if own.table_rows(read(sprints), "Story")[0] is not None:
-                print("  sprints.md has a legacy \"| Story\" grid: run sprints.py")
-            else:
-                print("  sprints.md has no grid whose header starts \"| Milestone\"")
+            print("  sprints.md has no grid whose header starts \"| Milestone\"")
         else:
             lines = read(sprints).splitlines()
             start = next(i for i, l in enumerate(lines) if re.match(r"^\s*\|\s*Milestone\s*\|", l))
@@ -617,18 +486,16 @@ def new_print(folder, plan, d, own):
             ticked = sum(1 for r in data if "[x]" in r[1:])
             print(f"  {len(grid)} rows, {len(head) - 1} columns, {ticked} done")
             if owned is not None:
-                names = [m["name"] for m in owned]
-                batched = sp.batch_columns(folder, own, owned)
-                if batched is not None:
-                    names = [n for n in names if n in batched[0]]
+                in_epic = sp.epic_rows(folder, own, owned)
+                names = [m["name"] for m in owned if m["name"] in in_epic or m["spec"] == own.FIX]
                 for n in names:
                     if n not in grid:
                         print(f"  ownership.md row not in sprints.md: {n} (run sprints.py)")
                 for n in grid:
                     if n not in names:
-                        print(f"  sprints.md row not in ownership.md: {n}")
+                        print(f"  sprints.md row not in ownership.md or in no epic: {n}")
 
-    print("Epic checks:")
+    print("Spec checks:")
     quiet = True
     for num, p in docs:
         text = read(p)
@@ -654,17 +521,17 @@ def new_print(folder, plan, d, own):
         print("  ok")
 
 
-def batch_marks(path):
-    """{batch number: True when its sprints.md column holds a run mark}."""
+def epic_marks(path):
+    """{epic number: True when a sprints.md row of that epic ("E<n> NN name") holds a run mark}."""
     if not path.is_file():
         return {}
-    own = load_ownership()
-    head, data = own.table_rows(read(path), "Milestone")
+    head, data = load_ownership().table_rows(read(path), "Milestone")
     out = {}
-    for i, label in enumerate(head[1:] if head else []):
-        m = re.match(r"^B(\d+)$", label)
+    for r in data if head else []:
+        m = re.match(r"^E(\d+)\s", r[0]) if r else None
         if m:
-            out[int(m.group(1))] = any(i + 1 < len(r) and r[i + 1] in ("[ ]", "[x]", "[!]") for r in data)
+            out[int(m.group(1))] = out.get(int(m.group(1)), False) or any(
+                c in ("[ ]", "[x]", "[!]") for c in r[1:])
     return out
 
 
@@ -686,35 +553,23 @@ def main():
     print(f"Planning rules: {', '.join(rules) if rules else 'none, bundled default'}")
     print(f"Release {a.release} ({rel})")
 
-    plan = folder / "plan.md"
-    legacy_index = folder / f"{a.release}-plan.md"
-    legacy = not plan.is_file() and legacy_index.is_file()
-    index = legacy_index if legacy else plan
+    plan = folder / f"{a.release}-plan.md"
+    index = plan
     decisions = folder / "decisions.md"
     findings = folder / "findings.md"
-    print("Files:" + (" legacy layout" if legacy else ""))
-    shown = (index, decisions, findings) if legacy else (
-        plan, folder / "ownership.md", folder / "sprints.md", decisions, findings)
-    for p in shown:
+    print("Files:")
+    for p in (plan, folder / "ownership.md", folder / "sprints.md", decisions, findings):
         print(f"  {p.name}: {'present' if p.is_file() else 'missing'}")
-    if not legacy and legacy_index.is_file():
-        print(f"  legacy: {legacy_index.name} beside plan.md")
-    for name in ("decisions-review.md", "findings-review.md"):
-        if (folder / name).is_file():
-            print(f"  legacy: {name}")
 
-    own = None if legacy else load_ownership()
-    d = legacy_collect(folder, index) if legacy else new_collect(folder, plan, own)
+    own = load_ownership()
+    d = new_collect(folder, plan, own)
     docs, statuses = d["docs"], d["statuses"]
 
     dec_items, dec_states = state_table("Decisions", "D", decisions, docs, statuses, True)
     state_table("Findings", "F", findings, docs, statuses, False,
                 [(key, first) for key, _, first in d["extra"]])
 
-    if legacy:
-        legacy_print(folder, index, d)
-    else:
-        new_print(folder, plan, d, own)
+    new_print(folder, plan, d, own)
 
     print("Process:")
     proc = folder / "process.md"
@@ -771,38 +626,34 @@ def main():
     if dups:
         print(f"  duplicate numbers: {', '.join(f'A{n}' for n in dups)}")
 
-    print("Batches:")
-    tags = load_ownership().read_tags(folder)
+    print("Epics:")
+    tags = own.read_tags(folder)
     nums = [n for n, _, _ in dec_items]
     closed = lambda n: dec_states.get(n, "").startswith(("superseded", "deferred"))
-    batch_mode = any(t["batch"] for t in tags.values())
+    marks = epic_marks(folder / "sprints.md")
+    untagged = lambda n: not tags.get(n, {}).get("epic") and not tags.get(n, {}).get("done")
+    deciding = [n for n in nums if untagged(n) and not closed(n)]
+    done_alone = [n for n in nums if tags.get(n, {}).get("done") and not tags[n].get("epic")]
+    groups = collections.defaultdict(list)
+    for n in nums:
+        if tags.get(n, {}).get("epic"):
+            groups[tags[n]["epic"]].append(n)
     running = []
-    if batch_mode:
-        marks = batch_marks(folder / "sprints.md")
-        deciding = [n for n in nums if not tags.get(n, {}).get("batch") and not closed(n)]
-        groups = collections.defaultdict(list)
-        for n in nums:
-            if tags.get(n, {}).get("batch"):
-                groups[tags[n]["batch"]].append(n)
-        print(f"  deciding: {', '.join(f'D{n}' for n in deciding) or 'none'}")
-        for b in sorted(groups):
-            if all(tags[n]["done"] for n in groups[b]):
-                state = "done"
-            else:
-                state = "running" if marks.get(b) else "batched"
-                running.append(f"B{b}")
-            print(f"  B{b} {state}: {', '.join(f'D{n}' for n in groups[b])}")
-    else:
-        print("  none: no [B<n>] tag in decisions.md")
-        deciding = [n for n in nums if dec_states.get(n) == "unplanned"]
-        if any(st in ("planned", "running", "unknown") for st in dec_states.values()):
-            running.append("")
+    print(f"  deciding: {', '.join(f'D{n}' for n in deciding) or 'none'}")
+    if done_alone:
+        print(f"  done, nothing to run: {', '.join(f'D{n}' for n in done_alone)}")
+    for e in sorted(groups):
+        if all(tags[n]["done"] for n in groups[e]):
+            state = " done"
+        else:
+            state = " running" if marks.get(e) else ""
+            running.append(f"E{e}")
+        print(f"  E{e}{state}: {', '.join(f'D{n}' for n in groups[e])}")
     parts = []
     if not dec_items or deciding or uncited:
         parts.append("discuss")
     if running:
-        named = ", ".join(r for r in running if r)
-        parts.append(f"run ({named})" if named else "run")
+        parts.append(f"run ({', '.join(running)})")
     print(f"Stage: {', '.join(parts) or 'discuss'}")
 
 

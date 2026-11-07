@@ -27,7 +27,7 @@ const INTEGRATION = '<integration branch>'
 const MIRROR = 'dev' // the staging branch: untouched during the sprints, fast-forwarded to INTEGRATION once after the last feature column (process.md P1)
 const RELEASE_LABEL = '<release label>'
 const RELEASE_PREFIX = 'v<release>' // merge commit subject: `merge: <milestone> (<epic>)`
-const RELEASE_EPIC = `${PLANS}/epics/<release epic>.md` // the release milestone's check and release steps
+const RELEASE_EPIC = `${PLANS}/specs/<release epic>.md` // the release milestone's check and release steps
 const GATE_JUDGED = null // { question: '...', captures: ['...'] | 'tracker' } when RELEASE_EPIC names a judged clause
 // Stage switches: a milestone turns a stage off here.
 const RUN_FILES_CHECK = true, RUN_REVIEW = true, RUN_VERIFY = true, RUN_JUDGES = true, RUN_MERGE = true, RUN_GATE = true, RUN_RELEASE = true
@@ -40,7 +40,7 @@ const STOPPED_MILESTONES = [] // release milestone: { milestone: '<name>', statu
 const MILESTONES = [
   // One entry: this milestone (empty for a release milestone with no build of its own). `epic` is the epic number; `plan` is the epic file and `tracker` the milestone's tracker (a string or an array).
   // review: 'fable' runs the review bounce (the milestone block says `Review: fable`); judged: { question, captures: [...] | 'tracker' }, judgeCount (default 3).
-  { id: 'NN', epic: 'NN', wt: `${ROOT}.worktrees/<slug>`, branch: 'v<release>/<slug>', plan: `${PLANS}/epics/NN-<slug>.md`, tracker: `${PLANS}/trackers/NN-<milestone-slug>-tracker.md`, title: '<milestone name>', review: 'fable', judged: null },
+  { id: 'NN', epic: 'NN', wt: `${ROOT}.worktrees/<slug>`, branch: 'v<release>/<slug>', plan: `${PLANS}/specs/NN-<slug>.md`, tracker: `${PLANS}/trackers/NN-<milestone-slug>-tracker.md`, title: '<milestone name>', review: 'fable', judged: null },
   // releaseLabel overrides RELEASE_LABEL for a milestone whose label differs (P6): { ..., releaseLabel: '<label>' }.
   // A shared run: several file sets, one branch. `lead` is the shared prework prompt on the run worktree,
   // `fileSets` one builder each; `plan` and `tracker` may be arrays, one per epic or milestone, joined by `list`.

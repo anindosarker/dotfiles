@@ -14,14 +14,13 @@ run mark ("[ ]", "[x]", "[!]"); a row with only "·" is placed again, except a f
 row, which keeps its cells. New rows are added; a
 new fix milestone goes in the running column (the first column holding a "[ ]", else the
 last). A row no longer in ownership.md is dropped, unless it carries a run mark: then it is
-kept with a warning. A legacy "| Story" grid is read for its marks the same way.
+kept with a warning.
 
-Batch mode, once an epic carries a "- Batch: B<n>" line (new_epic.py --batch): one column per
-batch, "| Milestone | B1 | ... |". A milestone's batch is its epic's Batch line, never
-inferred from decisions (ownership.py epic_batches). Only milestones of batched epics get a row; a fix
-milestone goes in the running column as above. A row's text is the milestone name, two spaces
-and the D ids its epic cites, e.g. "Sticky footer  D102". The talker reruns it on go, the runner on merge:
-ticks survive as above. A grid of "S" columns is replaced, not carried, when batch mode starts.
+Rows: every milestone of a spec that carries a "- Epic: E<n>" line (new_spec.py --epic), and
+every fix milestone. A later epic's independent milestones join an existing column, a running
+one too; dependent ones open the next. Row text is the epic label, the spec number and the
+milestone name, "E1 01 Filtering" ("fix <name>" for a fix milestone); rows sorted by epic,
+spec number, then ownership.md order. The talker reruns it on go, the runner on merge.
 """
 import argparse
 import datetime
@@ -49,28 +48,26 @@ def load_ownership():
     return mod
 
 
-ROW_IDS_RE = re.compile(r"^(.*?)\s{2,}(D\d+(?:,\s*D\d+)*)$")
+ROW_PREFIX_RE = re.compile(r"^(?:E\d+\s+\d{2}(?:\.\d+)?|fix)\s+(.*)$")
 
 
 def row_name(text):
-    """Milestone name of a grid row, without the trailing D ids."""
-    m = ROW_IDS_RE.match(text)
+    """Milestone name of a grid row, without the epic label and spec number (or "fix")."""
+    m = ROW_PREFIX_RE.match(text)
     return m.group(1) if m else text
 
 
 def read_grid(path, own):
-    """Existing grid: (column count, rows as [(name, cells)], column labels) from a "| Milestone"
-    or "| Story" table. Row names lose their trailing D ids."""
+    """Existing grid: (column count, rows as [(name, cells)], column labels) from the
+    "| Milestone" table. Row names lose their prefix."""
     if not path.is_file():
         return 0, [], []
-    text = own.read(path)
-    for first in ("Milestone", "Story"):
-        head, data = own.table_rows(text, first)
-        if head is not None:
-            n = len(head) - 1
-            rows = [(row_name(r[0]), (r[1:] + [""] * n)[:n]) for r in data if r and r[0]]
-            return n, rows, head[1:]
-    return 0, [], []
+    head, data = own.table_rows(own.read(path), "Milestone")
+    if head is None:
+        return 0, [], []
+    n = len(head) - 1
+    rows = [(row_name(r[0]), (r[1:] + [""] * n)[:n]) for r in data if r and r[0]]
+    return n, rows, head[1:]
 
 
 def marked(cells):
@@ -85,23 +82,23 @@ def running_column(n, rows):
     return n
 
 
-def build(release, milestones, col, existing, num_key, label="S", ids=None):
-    """Return (text, warnings) for sprints.md. label is the column prefix ("S" sprints, "B"
-    batches); ids maps a milestone name to the D ids shown after it."""
+def build(release, milestones, col, existing, num_key, label=None):
+    """Return (text, warnings) for sprints.md. label maps a milestone name to its epic number
+    (None for a fix milestone)."""
     n_old, rows_old = existing
-    ids = ids or {}
+    label = label or {}
     old = dict(rows_old)
     warnings = []
     run_col = running_column(n_old, rows_old)
     names = [m["name"] for m in milestones]
-    epic = {m["name"]: m["epic"] for m in milestones}
+    spec = {m["name"]: m["spec"] for m in milestones}
     order = {m["name"]: i for i, m in enumerate(milestones)}
     place = {}
     for name in names:
         cells = old.get(name)
-        if cells is not None and (marked(cells) or epic[name] == "fix"):
+        if cells is not None and (marked(cells) or spec[name] == "fix"):
             place[name] = list(cells)
-        elif cells is None and epic[name] == "fix" and run_col:
+        elif cells is None and spec[name] == "fix" and run_col:
             place[name] = run_col
         else:
             place[name] = col[name]
@@ -110,7 +107,7 @@ def build(release, milestones, col, existing, num_key, label="S", ids=None):
         if name not in col and marked(cells):
             kept.append(name)
             place[name] = list(cells)
-            warnings.append(f"row '{name}' is not in ownership.md but carries a mark: kept")
+            warnings.append(f"row '{name}' is not in ownership.md or in no epic but carries a mark: kept")
     width = max([n_old] + [v for v in place.values() if isinstance(v, int)] + [1])
 
     def cells_of(name):
@@ -125,33 +122,22 @@ def build(release, milestones, col, existing, num_key, label="S", ids=None):
 
     old_order = {name: i for i, (name, _) in enumerate(rows_old)}
     rows = sorted(names + kept, key=lambda n: (
-        first_col(n), num_key(epic.get(n, "fix")), order.get(n, len(order) + old_order.get(n, 0))))
+        label.get(n) or 10 ** 6, num_key(spec.get(n, "fix")), order.get(n, len(order) + old_order.get(n, 0))))
     now = datetime.datetime.now()
-    head = "| Milestone | " + " | ".join(f"{label}{i + 1}" for i in range(width)) + " |"
+    head = "| Milestone | " + " | ".join(f"S{i + 1}" for i in range(width)) + " |"
     sep = "|---|" + "---|" * width
-    show = lambda name: f"{name}  {ids[name]}" if ids.get(name) else name
+    show = lambda name: (f"E{label[name]} {spec[name]} {name}" if label.get(name)
+                         else f"fix {name}" if spec.get(name, "fix") == "fix" else name)
     body = "".join(f"| {show(name)} | " + " | ".join(cells_of(name)) + " |\n" for name in rows)
     text = f"# {release} sprints\n\nUpdated: {now:%Y-%m-%d %H:%M}\n\n{head}\n{sep}\n{body}"
     return text, warnings
 
 
-def batch_columns(folder, own, milestones):
-    """Batch mode: (column per batched milestone, D ids per milestone); None when no epic
-    carries a Batch line."""
-    batches = own.epic_batches(folder)
-    if not any(b for b, _ in batches.values()):
-        return None
-    col, ids = {}, {}
-    for m in milestones:
-        batch, cited = batches.get(m["epic"], (None, []))
-        if batch:
-            col[m["name"]] = batch
-            ids[m["name"]] = ", ".join(f"D{d}" for d in cited)
-    last = max(col.values(), default=1)
-    for m in milestones:
-        if m["epic"] == own.FIX:
-            col[m["name"]] = last
-    return col, ids
+def epic_rows(folder, own, milestones):
+    """{milestone name: epic number} for every milestone whose spec carries an Epic line."""
+    epics = own.spec_epics(folder)
+    return {m["name"]: epics[m["spec"]][0] for m in milestones
+            if m["spec"] in epics and epics[m["spec"]][0]}
 
 
 def write(folder, release, quiet=False):
@@ -160,28 +146,21 @@ def write(folder, release, quiet=False):
     milestones, err = own.read_ownership(ownership)
     if err:
         die(err)
-    epics = folder / "epics"
-    if epics.is_dir():
-        newer = [p for p in epics.glob("*.md") if p.stat().st_mtime > ownership.stat().st_mtime]
+    specs = folder / "specs"
+    if specs.is_dir():
+        newer = [p for p in specs.glob("*.md") if p.stat().st_mtime > ownership.stat().st_mtime]
         if newer:
-            die(f"ownership.md older than epics/{newer[0].name}: run ownership.py first")
+            die(f"ownership.md older than specs/{newer[0].name}: run ownership.py first")
     col, _, errors, _ = own.schedule(milestones)
     if errors:
         for e in errors:
             print(f"error: {e}", file=sys.stderr)
         die("ownership.md does not schedule: run ownership.py")
     path = folder / "sprints.md"
-    n_old, rows_old, labels = read_grid(path, own)
-    label, ids = "S", {}
-    batches = batch_columns(folder, own, milestones)
-    if batches is not None:
-        label, col, ids = "B", batches[0], batches[1]
-        milestones = [m for m in milestones if m["name"] in col or m["epic"] == own.FIX]
-        if any(l.startswith("S") for l in labels):
-            print("warning: sprint grid replaced by the batch grid; S column marks not carried",
-                  file=sys.stderr)
-            n_old, rows_old = 0, []
-    text, warnings = build(release, milestones, col, (n_old, rows_old), own.num_key, label, ids)
+    n_old, rows_old, _ = read_grid(path, own)
+    label = epic_rows(folder, own, milestones)
+    milestones = [m for m in milestones if m["name"] in label or m["spec"] == own.FIX]
+    text, warnings = build(release, milestones, col, (n_old, rows_old), own.num_key, label)
     for w in warnings:
         print(f"warning: {w}", file=sys.stderr)
     path.write_text(text, encoding="utf-8")

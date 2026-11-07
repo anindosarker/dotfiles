@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Create an expedition release folder: .ai/plans/<release>/<owner>/ with the plan.md
-(Goals and Epics), decisions.md and findings.md stubs, the epics, trackers, attentions,
+"""Create an expedition release folder: .ai/plans/<release>/<owner>/ with the <release>-plan.md
+(Goals and Deliverables), decisions.md and findings.md stubs, the specs, trackers, attentions,
 handoffs and reference folders, and process.md copied from the newest earlier release
 (else the skill template). sprints.md is not written here: sprints.py makes it from
-ownership.md once the epics hold their milestone blocks.
+ownership.md once the specs hold their milestone blocks.
 
 Usage: python3 -I new_cycle.py <release> [--owner X] [--root PATH]
 """
@@ -111,17 +111,17 @@ def main():
         die(f"release folder exists: {folder}")
     folder.mkdir(parents=True)
     print(folder)
-    for sub in ("epics", "trackers", "attentions", "handoffs", "reference"):
+    for sub in ("specs", "trackers", "attentions", "handoffs", "reference"):
         (folder / sub).mkdir()
         print(folder / sub)
     write_new(folder / "process.md", process_text(root, owner, a.release))
     c = a.release
-    write_new(folder / "plan.md", (
+    write_new(folder / f"{c}-plan.md", (
         f"# {c} plan\n\n"
         "Decisions: [decisions.md](decisions.md). Sprints: [sprints.md](sprints.md). "
-        "Epics implement decisions and never re-decide.\n\n"
+        "Specs implement decisions and never re-decide.\n\n"
         "## Goals\n\n- \n\n"
-        "## Epics\n\n| # | Epic | Scope |\n|---|---|---|\n"
+        "## Deliverables\n\n| # | Spec | Epic | Scope |\n|---|---|---|---|\n"
     ))
     today = datetime.date.today().isoformat()
     write_new(folder / "decisions.md", from_template("decisions.md", c, today))

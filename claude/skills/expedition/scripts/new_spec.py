@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
-"""Create an epic file (epics/NN-<slug>.md) and the tracker of its first milestone
+"""Create a spec file (specs/NN-<slug>.md) and the tracker of its first milestone
 (trackers/NN-<slug>-tracker.md) in a release, and add the row
-"| NN | [Title](epics/NN-<slug>.md) | scope |" to the Epics table of plan.md.
+"| NN | [Title](specs/NN-<slug>.md) |  | scope |" (Epic cell empty) to the Deliverables table of
+<release>-plan.md.
 
-Usage: python3 -I new_epic.py <release> <num> <slug> "<Title>" "<scope>"
+Usage: python3 -I new_spec.py <release> <num> <slug> "<Title>" "<scope>"
        [--owner X] [--template PATH] [--root PATH]
 
 Template: --template PATH, else a contract stub when the project has planning
-rules (find_rules.py), else the bundled templates/epic.md. Section 2.1 holds one "### Milestone: [name]" block with
+rules (find_rules.py), else the bundled templates/spec.md. Section 2.1 holds one "### Milestone: [name]" block with
 the lines Files owned, Depends on, Review and its Task lines; write one block per
 milestone, then run ownership.py and sprints.py. A later milestone's tracker is
 trackers/NN-<milestone-slug>-tracker.md.
 
-Batch tag mode, on go: python3 -I new_epic.py <release> --batch B<n> <epic numbers or D ids>
-[--owner X] [--root PATH]. A D id resolves to the epics citing it. Each named epic gets the line
-"- Batch: B<n>" directly under its title line; each decision those epics cite (and each named
-D id) gets the tag line "[B<n>]" directly under its heading in decisions.md. An existing Batch
-line or batch tag is kept and reported. Each file is read right before its write.
+Epic tag mode, on go: python3 -I new_spec.py <release> --epic E<n> <spec numbers or D ids>
+[--owner X] [--root PATH]. A D id resolves to the specs citing it. Each named spec gets the line
+"- Epic: E<n>" directly under its title line; each decision those specs cite (and each named
+D id) gets the tag line "[E<n>]" directly under its heading in decisions.md, and the spec's
+Deliverables row gets E<n> in its Epic cell. An existing Epic line or epic tag is kept and
+reported. Each file is read right before its write.
 """
 import argparse
 import collections
@@ -30,7 +32,7 @@ RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
 NUM_RE = re.compile(r"^\d{2}(\.\d+)?$")
 SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 ROW_RE = re.compile(r"^\|\s*(\d{2}(?:\.\d+)?)\s*\|")
-BATCH_RE = re.compile(r"^B\d+$")
+EPIC_RE = re.compile(r"^E\d+$")
 
 
 def die(msg):
@@ -107,7 +109,7 @@ def load_template(root, flag, rules):
     if rules:
         return STUB.format(heading="[title]", paths=", ".join(rules))
     tdir = Path(__file__).resolve().parent.parent / "templates"
-    bundled = tdir / "epic.md"
+    bundled = tdir / "spec.md"
     if not bundled.is_file():
         die(f"bundled template missing: {bundled}")
     return bundled.read_text(encoding="utf-8")
@@ -145,26 +147,26 @@ def set_heading(text, heading):
 def insert_row(plan_text, num, row):
     lines = plan_text.splitlines(keepends=True)
     try:
-        start = next(i for i, l in enumerate(lines) if l.strip() == "## Epics")
+        start = next(i for i, l in enumerate(lines) if l.strip() == "## Deliverables")
     except StopIteration:
-        die("plan.md has no ## Epics section")
+        die("plan has no ## Deliverables section")
     i = start + 1
     while i < len(lines) and not lines[i].lstrip().startswith("|"):
         if lines[i].startswith("## "):
-            die("plan.md ## Epics section has no table")
+            die("plan ## Deliverables section has no table")
         i += 1
     if i >= len(lines):
-        die("plan.md ## Epics section has no table")
+        die("plan ## Deliverables section has no table")
     header = i
     if header + 1 >= len(lines) or not re.match(r"^\|[\s|:-]+\|\s*$", lines[header + 1]):
-        die("plan.md Epics table has no separator row")
+        die("plan Deliverables table has no separator row")
     end = header + 2
     insert_at = None
     while end < len(lines) and lines[end].lstrip().startswith("|"):
         m = ROW_RE.match(lines[end].lstrip())
         if m:
             if m.group(1) == num:
-                die(f"plan.md already has a row for epic {num}")
+                die(f"plan already has a row for spec {num}")
             if insert_at is None and num_key(m.group(1)) > num_key(num):
                 insert_at = end
         end += 1
@@ -185,26 +187,26 @@ def load_ownership():
     return mod
 
 
-def tag_batch(folder, batch, items):
-    """Write "- Batch: B<n>" into each named epic (a D id names the epics citing it) and
-    "[B<n>]" under each decision those epics cite and each named D id."""
+def tag_epic(folder, epic, items):
+    """Write "- Epic: E<n>" into each named spec (a D id names the specs citing it) and
+    "[E<n>]" under each decision those specs cite and each named D id."""
     own = load_ownership()
-    files = dict(own.epic_files(folder))
-    nums, epics = set(), set()
+    files = dict(own.spec_files(folder))
+    nums, specs = set(), set()
     for item in items:
         d = re.match(r"^D(\d+)$", item)
         if d:
             nums.add(int(d.group(1)))
-            hit = [num for num, p in files.items() if int(d.group(1)) in own.epic_cites(p)]
+            hit = [num for num, p in files.items() if int(d.group(1)) in own.spec_cites(p)]
             if not hit:
-                print(f"{item}: no epic cites it")
-            epics.update(hit)
+                print(f"{item}: no spec cites it")
+            specs.update(hit)
         elif item in files:
-            epics.add(item)
+            specs.add(item)
         else:
-            die(f"'{item}' is neither an epic number with a file nor a D id")
-    for num in epics:
-        nums |= own.epic_cites(files[num])
+            die(f"'{item}' is neither a spec number with a file nor a D id")
+    for num in specs:
+        nums |= own.spec_cites(files[num])
     path = folder / "decisions.md"
     if not path.is_file():
         die(f"decisions.md missing: {path}")
@@ -213,68 +215,80 @@ def tag_batch(folder, batch, items):
     missing = sorted(nums - set(tags))
     if missing:
         die(f"not in decisions.md: {', '.join(f'D{n}' for n in missing)}")
-    marked, kept_epics = [], []
-    for num in sorted(epics, key=own.num_key):
-        old = own.epic_batch(files[num])
+    marked, kept_specs = [], []
+    for num in sorted(specs, key=own.num_key):
+        old = own.spec_epic(files[num])
         if old:
-            kept_epics.append(f"{num} B{old}")
+            kept_specs.append(f"{num} E{old}")
             continue
         elines = files[num].read_text(encoding="utf-8").splitlines(keepends=True)
         title = next((i for i, l in enumerate(elines) if l.startswith("# ")), None)
         if title is None:
             die(f"{files[num].name} has no title line")
-        elines.insert(title + 1, f"- Batch: {batch}\n")
+        elines.insert(title + 1, f"- Epic: {epic}\n")
         files[num].write_text("".join(elines), encoding="utf-8")
         marked.append(num)
-    print(f"{batch} epics: {', '.join(marked) or 'none'}")
-    if kept_epics:
-        print(f"kept epics: {', '.join(kept_epics)}")
+    print(f"{epic} specs: {', '.join(marked) or 'none'}")
+    plan = folder / f"{folder.parent.name}-plan.md"
+    if plan.is_file():
+        plines = plan.read_text(encoding="utf-8").splitlines(keepends=True)
+        for i, l in enumerate(plines):
+            r = ROW_RE.match(l.lstrip())
+            cells = l.rstrip("\n").split("|")
+            if r and r.group(1) in specs and len(cells) >= 6 and not cells[3].strip():
+                cells[3] = f" {epic} "
+                plines[i] = "|".join(cells) + "\n"
+        plan.write_text("".join(plines), encoding="utf-8")
+    else:
+        print(f"warning: {plan.name} missing, Epic cells not written")
+    if kept_specs:
+        print(f"kept specs: {', '.join(kept_specs)}")
     tagged, kept = [], []
     for n in sorted(nums, key=lambda n: -tags[n]["line"]):
         t = tags[n]
-        if t["batch"]:
-            kept.append(f"D{n} B{t['batch']}" + (" done" if t["done"] else ""))
+        if t["epic"]:
+            kept.append(f"D{n} E{t['epic']}" + (" done" if t["done"] else ""))
             continue
-        lines.insert(t["line"] + 1, f"[{batch}]\n")
+        lines.insert(t["line"] + 1, f"[{epic}]\n")
         tagged.append(n)
     path.write_text("".join(lines), encoding="utf-8")
-    print(f"{batch}: {', '.join(f'D{n}' for n in sorted(tagged)) or 'nothing tagged'}")
+    print(f"{epic}: {', '.join(f'D{n}' for n in sorted(tagged)) or 'nothing tagged'}")
     if kept:
         print(f"kept: {', '.join(sorted(kept, key=lambda k: int(k.split()[0][1:])))}")
 
 
 def main():
     ap = argparse.ArgumentParser(
-        usage='new_epic.py <release> <num> <slug> "<Title>" "<scope>" '
+        usage='new_spec.py <release> <num> <slug> "<Title>" "<scope>" '
               "[--owner X] [--template PATH] [--root PATH]\n"
-              "       new_epic.py <release> --batch B<n> <epic numbers or D ids> [--owner X] [--root PATH]"
+              "       new_spec.py <release> --epic E<n> <spec numbers or D ids> [--owner X] [--root PATH]"
     )
     ap.add_argument("release")
     ap.add_argument("rest", nargs="*")
-    ap.add_argument("--batch", help="tag mode: write - Batch: B<n> into each epic and [B<n>] under each cited decision")
+    ap.add_argument("--epic", help="tag mode: write - Epic: E<n> into each spec and [E<n>] under each cited decision")
     ap.add_argument("--owner")
     ap.add_argument("--template")
     ap.add_argument("--root", help="repository root (default: git top level)")
     a = ap.parse_args()
     if not RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
-    if a.batch:
-        if not BATCH_RE.match(a.batch):
-            die(f"bad batch '{a.batch}', expected like B3")
+    if a.epic:
+        if not EPIC_RE.match(a.epic):
+            die(f"bad epic '{a.epic}', expected like E3")
         items = [s.strip() for x in a.rest for s in x.split(",") if s.strip()]
         if not items:
-            die("--batch needs epic numbers or D ids")
+            die("--epic needs spec numbers or D ids")
         root = repo_root(a.root)
         folder = root / ".ai" / "plans" / a.release / detect_owner(root, a.owner)
         if not folder.is_dir():
             die(f"release folder missing: {folder}")
-        tag_batch(folder, a.batch, items)
+        tag_epic(folder, a.epic, items)
         return
     if len(a.rest) != 4:
         ap.error("expected <num> <slug> \"<Title>\" \"<scope>\"")
     a.num, a.slug, a.title, a.scope = a.rest
     if not NUM_RE.match(a.num):
-        die(f"bad epic number '{a.num}', expected like 03 or 04.1")
+        die(f"bad spec number '{a.num}', expected like 03 or 04.1")
     if not SLUG_RE.match(a.slug):
         die(f"bad slug '{a.slug}', expected lowercase-with-dashes")
     if "|" in a.title or "|" in a.scope:
@@ -288,34 +302,31 @@ def main():
     folder = root / ".ai" / "plans" / a.release / owner
     if not folder.is_dir():
         die(f"release folder missing: {folder}")
-    plan = folder / "plan.md"
+    plan = folder / f"{a.release}-plan.md"
     if not plan.is_file():
-        legacy = folder / f"{a.release}-plan.md"
-        if legacy.is_file():
-            die(f"legacy layout ({legacy.name}, specs/): new_epic.py writes plan.md and epics/ only")
-        die(f"plan.md missing: {plan}")
+        die(f"{plan.name} missing: {plan}")
 
-    epic_name = f"{a.num}-{a.slug}.md"
-    epics_dir = folder / "epics"
+    spec_name = f"{a.num}-{a.slug}.md"
+    specs_dir = folder / "specs"
     trackers_dir = folder / "trackers"
-    for d in (epics_dir, trackers_dir):
+    for d in (specs_dir, trackers_dir):
         d.mkdir(exist_ok=True)
-    epic = epics_dir / epic_name
+    spec = specs_dir / spec_name
     tracker = trackers_dir / f"{a.num}-{a.slug}-tracker.md"
-    for p in (epic, tracker):
+    for p in (spec, tracker):
         if p.exists():
             die(f"refusing to overwrite {p}")
-    clash = [p.name for p in epics_dir.glob(f"{a.num}-*.md")]
+    clash = [p.name for p in specs_dir.glob(f"{a.num}-*.md")]
     if clash:
-        die(f"epic {a.num} already has a file: {clash[0]}")
+        die(f"spec {a.num} already has a file: {clash[0]}")
 
-    row = f"| {a.num} | [{a.title}](epics/{epic_name}) | {a.scope} |"
+    row = f"| {a.num} | [{a.title}](specs/{spec_name}) |  | {a.scope} |"
     new_plan = insert_row(plan.read_text(encoding="utf-8"), a.num, row)
     rules = [] if a.template else find_rules(root)
     template = load_template(root, a.template, rules)
 
-    epic.write_text(set_heading(template, f"# {a.num}: {a.title}"), encoding="utf-8")
-    print(epic)
+    spec.write_text(set_heading(template, f"# {a.num}: {a.title}"), encoding="utf-8")
+    print(spec)
     tracker.write_text(tracker_text(a.num, a.title), encoding="utf-8")
     print(tracker)
     plan.write_text(new_plan, encoding="utf-8")

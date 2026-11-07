@@ -6,7 +6,7 @@ in the running sprint column (the first column holding a "[ ]", else the last).
 Usage: python3 -I new_fix.py <release> <slug> "F3, F4" [--files a,b] [--depends "<names>"]
        [--title "<Title>"] [--owner X] [--root PATH]
 
-A fix milestone has a tracker and a grid row, no epic. Its name is the tracker title
+A fix milestone has a tracker and a grid row, no spec. Its name is the tracker title
 without ", tracker": --title, else the slug in words, followed by the findings.
 """
 import argparse
@@ -88,8 +88,8 @@ def main():
     own = load("ownership")
     root = own.repo_root(a.root)
     folder = own.release_folder(root, own.detect_owner(root, a.owner), a.release)
-    if not (folder / "epics").is_dir():
-        die(f"epics folder missing: {folder / 'epics'} (legacy layout: write the fix tracker by hand)")
+    if not (folder / "specs").is_dir():
+        die(f"specs folder missing: {folder / 'specs'}")
     trackers = folder / "trackers"
     trackers.mkdir(exist_ok=True)
     tracker = trackers / f"fix-{a.slug}-tracker.md"

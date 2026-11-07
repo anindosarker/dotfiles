@@ -1,8 +1,8 @@
 # Process, [release]
 
-Project facts only. The process itself is the expedition skill; commands are in the package manifests; code rules in the project's coding standards; what a milestone must run is in its epic.
+Project facts only. The process itself is the expedition skill; commands are in the package manifests; code rules in the project's coding standards; what a milestone must run is in its spec.
 
-One rule per topic, two to five bullets. Each bullet is a full sentence that states the fact explicitly (names, paths, the exact command in a code block when it matters) so no agent reads it two ways. Nothing restated from elsewhere. Suggestions to agents stay here; per-milestone requirements go to the epic.
+One rule per topic, two to five bullets. Each bullet is a full sentence that states the fact explicitly (names, paths, the exact command in a code block when it matters) so no agent reads it two ways. Nothing restated from elsewhere. Suggestions to agents stay here; per-milestone requirements go to the spec.
 
 ## P1 Branches
 
@@ -18,7 +18,7 @@ One rule per topic, two to five bullets. Each bullet is a full sentence that sta
 
 ## P3 Merge
 
-- A milestone merges into the integration branch the moment its recorded checks pass: `merge: <milestone> (<epic>)`, branch deleted. No PR, no CI wait.
+- A milestone merges into the integration branch the moment its recorded checks pass: `merge: <milestone> (<spec>)`, branch deleted. No PR, no CI wait.
 
 ## P4 Release
 
@@ -46,4 +46,4 @@ One rule per topic, two to five bullets. Each bullet is a full sentence that sta
 
 ## P10 Plans
 
-- The planning template the epics follow; what `plan.md` names; how bugs are reproduced before planning.
+- The planning template the specs follow; what `<release>-plan.md` names; how bugs are reproduced before planning.

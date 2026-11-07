@@ -1,10 +1,10 @@
-# [Epic name]
+# [Spec name]
 
 ## 1. Architecture
 
 ### 1.1 Overview
 
-Two or three sentences: the problem and why this epic exists. Link the decision.
+Two or three sentences: the problem and why this spec exists. Link the decision.
 
 ### 1.2 Goals
 
@@ -41,7 +41,7 @@ Sketch: [reference/flow.excalidraw](reference/flow.excalidraw) _(when one exists
 
 ### 1.6 Components
 
-One block per logical unit the epic introduces or modifies. Required: a short description
+One block per logical unit the spec introduces or modifies. Required: a short description
 and a bullet list of what it does and does not do. Optional: operations table, interfaces,
 dependencies, stays unchanged, usage examples.
 
@@ -89,7 +89,7 @@ New packages, env vars (name, default, purpose), reused infrastructure.
 ### Milestone: [Name]
 
 - Files owned: [a, b]
-- Depends on: [milestone names or epic numbers, or none]
+- Depends on: [milestone names or spec numbers, or none]
 - Review: [none | fable]
 - Local CI: [none | `pnpm test --changed` | `act pull_request -j <job>`] (what runs on the merged tree before the merge, beyond the task checks)
 - Task 1: [what]. Checks: [commands]

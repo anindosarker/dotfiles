@@ -1,30 +1,30 @@
 #!/usr/bin/env python3
-"""Generate ownership.md for a release from the milestone blocks of its epics.
+"""Generate ownership.md for a release from the milestone blocks of its specs.
 
 Usage: python3 -I ownership.py <release> [--owner X] [--root PATH]
 
-Reads every epics/NN-<slug>.md for "### Milestone: <name>" blocks ("#### Milestone:"
+Reads every specs/NN-<slug>.md for "### Milestone: <name>" blocks ("#### Milestone:"
 is accepted too) with the lines "- Files owned: a, b", "- Depends on: <milestone names,
-epic numbers or none>" and "- Review: none | fable", and every trackers/fix-<slug>-tracker.md
-as a fix milestone (no epic; its name is the tracker title, its files come from a
+spec numbers or none>" and "- Review: none | fable", and every trackers/fix-<slug>-tracker.md
+as a fix milestone (no spec; its name is the tracker title, its files come from a
 "Files owned:" line and its dependencies from a "Depends on:" line, both optional).
 
-Edges: A to B when B lists A (or A's epic number) under Depends on, or when A and B
-share a file (lower epic number first). Two milestones of one epic that share a file
+Edges: A to B when B lists A (or A's spec number) under Depends on, or when A and B
+share a file (lower spec number first). Two milestones of one spec that share a file
 while neither depends on the other are a collision; a dependency cycle is an error.
 Fix milestones take part through Depends on only: the run places them in the
 running sprint column (sprints.py, new_fix.py).
 
 A milestone's column is the longest chain ending at it plus one. The critical path is
 the longest chain ending at the release milestone (the last milestone of the highest
-epic number). ownership.md holds a title, the Generated line, the table
-"| Milestone | Epic | Depends on | Files |" and the line "Critical path: A > B > C".
+spec number). ownership.md holds a title, the Generated line, the table
+"| Milestone | Spec | Depends on | Files |" and the line "Critical path: A > B > C".
 It is never edited by hand. On any error nothing is written and the exit code is 1.
 
-Check mode: ownership.py <release> --overlap <epic numbers or D ids> writes nothing. It
-reports every file the named epics' milestones own (for a D id: the epics citing it) that a
-milestone of a running batch also owns. A running batch is a [B<n>] tag in decisions.md on a
-decision without [Done]; an epic's batch is its own "- Batch: B<n>" line (new_epic.py --batch).
+Check mode: ownership.py <release> --overlap <spec numbers or D ids> writes nothing. It
+reports every file the named specs' milestones own (for a D id: the specs citing it) that a
+milestone of a running epic also owns. A running epic is a [E<n>] tag in decisions.md on a
+decision without [Done]; a spec's epic is its own "- Epic: E<n>" line (new_spec.py --epic).
 Exit code 1 when a file is shared, 0 otherwise.
 """
 import argparse
@@ -36,19 +36,19 @@ import sys
 from pathlib import Path
 
 RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
-EPIC_FILE_RE = re.compile(r"^(\d{2}(?:\.\d+)?)-([a-z0-9]+(?:-[a-z0-9]+)*)\.md$")
-EPIC_NUM_RE = re.compile(r"^\d{2}(?:\.\d+)?$")
+SPEC_FILE_RE = re.compile(r"^(\d{2}(?:\.\d+)?)-([a-z0-9]+(?:-[a-z0-9]+)*)\.md$")
+SPEC_NUM_RE = re.compile(r"^\d{2}(?:\.\d+)?$")
 MILESTONE_RE = re.compile(r"^#{3,4}\s+Milestone:\s*(.+?)\s*$")
 HEADING_RE = re.compile(r"^#{1,6}\s")
 FIELD_RE = re.compile(r"^\s*(?:-\s*)?(Files owned|Depends on|Review):\s*(.*?)\s*$")
 TASK_RE = re.compile(r"^\s*-\s*Task\s+\d+:")
-OWNERSHIP_COLS = ["Milestone", "Epic", "Depends on", "Files"]
+OWNERSHIP_COLS = ["Milestone", "Spec", "Depends on", "Files"]
 FIX = "fix"
 D_HEAD_RE = re.compile(r"^###\s+D(\d+)\b")
-TAG_LINE_RE = re.compile(r"^\s*(?:\[(?:Done|B\d+)\]\s*)+$")
+TAG_LINE_RE = re.compile(r"^\s*(?:\[(?:Done|E\d+)\]\s*)+$")
 D_CITE_RE = re.compile(r"\((D\d+[^)]*)\)")
 D_ID_RE = re.compile(r"^D(\d+)$")
-BATCH_LINE_RE = re.compile(r"^\s*-\s*Batch:\s*B(\d+)\s*$")
+EPIC_LINE_RE = re.compile(r"^\s*-\s*Epic:\s*E(\d+)\s*$")
 
 
 def die(msg):
@@ -128,8 +128,8 @@ def outside_fences(text):
             yield i, line
 
 
-def parse_epic(path):
-    """Milestone blocks of one epic file, in order.
+def parse_spec(path):
+    """Milestone blocks of one spec file, in order.
 
     Each block: dict name, line, files (list or None when the line is missing),
     deps (raw text or None), review (text or None), tasks (list of (line, text)).
@@ -182,20 +182,20 @@ def fix_milestone(path):
     return {"name": name, "files": files, "deps": deps, "path": path}
 
 
-def epic_files(folder):
-    d = folder / "epics"
+def spec_files(folder):
+    d = folder / "specs"
     if not d.is_dir():
         return []
     out = []
     for p in d.iterdir():
-        m = EPIC_FILE_RE.match(p.name)
+        m = SPEC_FILE_RE.match(p.name)
         if p.is_file() and m:
             out.append((m.group(1), p))
     return sorted(out, key=lambda x: num_key(x[0]))
 
 
-def resolve_deps(text, names, epics):
-    """Milestone names a Depends on value lists; epic numbers expand to the epic's milestones.
+def resolve_deps(text, names, specs):
+    """Milestone names a Depends on value lists; spec numbers expand to the spec's milestones.
 
     Returns (resolved names, unknown parts). Known names may contain commas.
     """
@@ -214,9 +214,9 @@ def resolve_deps(text, names, epics):
     for part in (s.strip().strip("`") for s in rest.split(",")):
         if not part:
             continue
-        num = re.sub(r"^(?:epic\s+)", "", part, flags=re.I)
-        if EPIC_NUM_RE.match(num) and num in epics:
-            found.extend(epics[num])
+        num = re.sub(r"^(?:spec\s+)", "", part, flags=re.I)
+        if SPEC_NUM_RE.match(num) and num in specs:
+            found.extend(specs[num])
         else:
             unknown.append(part)
     order = {n: i for i, n in enumerate(names)}
@@ -224,30 +224,30 @@ def resolve_deps(text, names, epics):
 
 
 def collect(folder):
-    """Return (milestones, errors). A milestone: name, epic, order, deps (names), files, review."""
+    """Return (milestones, errors). A milestone: name, spec, order, deps (names), files, review."""
     errors = []
     raw = []
-    for num, path in epic_files(folder):
-        blocks = parse_epic(path)
+    for num, path in spec_files(folder):
+        blocks = parse_spec(path)
         for b in blocks:
-            b["epic"] = num
+            b["spec"] = num
             b["path"] = path
             raw.append(b)
     trackers = folder / "trackers"
     if trackers.is_dir():
         for p in sorted(trackers.glob("fix-*-tracker.md")):
             f = fix_milestone(p)
-            f.update(epic=FIX, review=None, line=1, tasks=[])
+            f.update(spec=FIX, review=None, line=1, tasks=[])
             raw.append(f)
     names = [b["name"] for b in raw]
     for name, c in collections.Counter(names).items():
         if c > 1:
             where = ", ".join(sorted({str(b["path"].relative_to(folder)) for b in raw if b["name"] == name}))
             errors.append(f"milestone '{name}' defined {c} times: {where}")
-    epics = collections.defaultdict(list)
+    specs = collections.defaultdict(list)
     for b in raw:
-        if b["epic"] != FIX:
-            epics[b["epic"]].append(b["name"])
+        if b["spec"] != FIX:
+            specs[b["spec"]].append(b["name"])
     out = []
     for i, b in enumerate(raw):
         where = f"{b['path'].relative_to(folder)}:{b['line']}"
@@ -258,11 +258,11 @@ def collect(folder):
         for f in b["files"] or []:
             if "|" in f:
                 errors.append(f"{where}: file '{f}' contains '|'")
-        deps, unknown = resolve_deps(b["deps"], [n for n in names if n != b["name"]], epics)
+        deps, unknown = resolve_deps(b["deps"], [n for n in names if n != b["name"]], specs)
         deps = [d for d in deps if d != b["name"]]
         for u in unknown:
             errors.append(f"{where}: milestone '{b['name']}' depends on unknown '{u}'")
-        out.append({"name": b["name"], "epic": b["epic"], "order": i, "deps": deps,
+        out.append({"name": b["name"], "spec": b["spec"], "order": i, "deps": deps,
                     "files": b["files"] or [], "review": b.get("review")})
     return out, errors
 
@@ -270,7 +270,7 @@ def collect(folder):
 def schedule(milestones):
     """Return (columns, critical path, errors, warnings) for milestones with resolved deps.
 
-    milestones: list of dicts name, epic, order, deps, files (epic 'fix' for a fix milestone).
+    milestones: list of dicts name, spec, order, deps, files (spec 'fix' for a fix milestone).
     """
     errors, warnings = [], []
     by_name = {m["name"]: m for m in milestones}
@@ -296,7 +296,7 @@ def schedule(milestones):
 
     owners = collections.defaultdict(list)
     for m in milestones:
-        if m["epic"] == FIX:
+        if m["spec"] == FIX:
             continue
         for f in m["files"]:
             if m["name"] not in owners[f]:
@@ -306,9 +306,9 @@ def schedule(milestones):
             for b in names[i + 1:]:
                 if reaches(a, b) or reaches(b, a):
                     continue
-                ea, eb = by_name[a]["epic"], by_name[b]["epic"]
+                ea, eb = by_name[a]["spec"], by_name[b]["spec"]
                 if ea == eb:
-                    errors.append(f"collision: file '{f}' owned by '{a}' and '{b}' (epic {ea}), neither depends on the other")
+                    errors.append(f"collision: file '{f}' owned by '{a}' and '{b}' (spec {ea}), neither depends on the other")
                     continue
                 lo, hi = (a, b) if num_key(ea) < num_key(eb) else (b, a)
                 succ[lo].add(hi)
@@ -349,11 +349,11 @@ def schedule(milestones):
                 errors.append(f"collision: file '{f}' owned by '{seen[col[n]]}' and '{n}' in column S{col[n]}")
             seen[col[n]] = n
 
-    epic_ms = [m for m in milestones if m["epic"] != FIX]
+    spec_ms = [m for m in milestones if m["spec"] != FIX]
     path = []
-    if epic_ms:
-        top = max(num_key(m["epic"]) for m in epic_ms)
-        release = [m for m in epic_ms if num_key(m["epic"]) == top][-1]["name"]
+    if spec_ms:
+        top = max(num_key(m["spec"]) for m in spec_ms)
+        release = [m for m in spec_ms if num_key(m["spec"]) == top][-1]["name"]
         n = release
         while n:
             path.append(n)
@@ -386,12 +386,12 @@ def cell_files(files):
 
 
 def render(release, milestones, path, today):
-    rows = [f"| {m['name']} | {m['epic']} | {', '.join(m['deps']) or 'none'} | {cell_files(m['files'])} |"
+    rows = [f"| {m['name']} | {m['spec']} | {', '.join(m['deps']) or 'none'} | {cell_files(m['files'])} |"
             for m in milestones]
     return (
         f"# {release} ownership\n\n"
         f"Generated: {today} by ownership.py\n\n"
-        "| Milestone | Epic | Depends on | Files |\n|---|---|---|---|\n"
+        "| Milestone | Spec | Depends on | Files |\n|---|---|---|---|\n"
         + "".join(r + "\n" for r in rows)
         + f"\nCritical path: {' > '.join(path) or 'none'}\n"
     )
@@ -416,7 +416,7 @@ def table_rows(text, first_col):
 
 
 def read_ownership(path):
-    """Milestones from ownership.md: list of dicts name, epic, order, deps, files; or (None, error)."""
+    """Milestones from ownership.md: list of dicts name, spec, order, deps, files; or (None, error)."""
     if not path.is_file():
         return None, f"{path.name} missing: run ownership.py"
     head, data = table_rows(read(path), "Milestone")
@@ -430,16 +430,16 @@ def read_ownership(path):
         if len(r) < 4 or not r[0]:
             continue
         deps, _ = resolve_deps(r[2], [n for n in names if n != r[0]], {})
-        out.append({"name": r[0], "epic": r[1], "order": i, "deps": deps,
+        out.append({"name": r[0], "spec": r[1], "order": i, "deps": deps,
                     "files": split_files(r[3])})
     return out, None
 
 
 def read_tags(folder):
-    """Decision tags: {D number: {"batch": n or None, "done": bool, "line": heading index}}.
+    """Decision tags: {D number: {"epic": n or None, "done": bool, "line": heading index}}.
 
-    The tag line is the first non-blank line under a "### D<n>" heading, e.g. "[B1]" or
-    "[Done]  [B1]". A decision without one is in no batch.
+    The tag line is the first non-blank line under a "### D<n>" heading, e.g. "[E1]" or
+    "[Done]  [E1]". A decision without one is in no epic.
     """
     path = folder / "decisions.md"
     tags = {}
@@ -451,17 +451,17 @@ def read_tags(folder):
         if not m:
             continue
         nxt = next((l for l in lines[i:] if l.strip()), "")
-        batch, done = None, False
+        epic, done = None, False
         if TAG_LINE_RE.match(nxt):
-            b = re.search(r"\[B(\d+)\]", nxt)
-            batch = int(b.group(1)) if b else None
+            b = re.search(r"\[E(\d+)\]", nxt)
+            epic = int(b.group(1)) if b else None
             done = "[Done]" in nxt
-        tags[int(m.group(1))] = {"batch": batch, "done": done, "line": i - 1}
+        tags[int(m.group(1))] = {"epic": epic, "done": done, "line": i - 1}
     return tags
 
 
-def epic_cites(path):
-    """Decision numbers an epic cites: (D7), (D6, D7), (D10 addendum)."""
+def spec_cites(path):
+    """Decision numbers a spec cites: (D7), (D6, D7), (D10 addendum)."""
     nums = set()
     for _, line in outside_fences(read(path)):
         for m in D_CITE_RE.finditer(line):
@@ -469,60 +469,60 @@ def epic_cites(path):
     return nums
 
 
-def epic_batch(path):
-    """The epic's own "- Batch: B<n>" line, as n; None when the epic is in no batch."""
+def spec_epic(path):
+    """The spec's own "- Epic: E<n>" line, as n; None when the spec is in no epic."""
     for _, line in outside_fences(read(path)):
-        m = BATCH_LINE_RE.match(line)
+        m = EPIC_LINE_RE.match(line)
         if m:
             return int(m.group(1))
     return None
 
 
-def epic_batches(folder):
-    """{epic number: (batch or None, sorted cited D numbers)}; batch from the epic's Batch line only."""
-    return {num: (epic_batch(path), sorted(epic_cites(path))) for num, path in epic_files(folder)}
+def spec_epics(folder):
+    """{spec number: (epic or None, sorted cited D numbers)}; epic from the spec's Epic line only."""
+    return {num: (spec_epic(path), sorted(spec_cites(path))) for num, path in spec_files(folder)}
 
 
-def running_batches(tags):
-    """Batches with at least one decision not yet [Done]."""
-    return sorted({t["batch"] for t in tags.values() if t["batch"] and not t["done"]})
+def running_epics(tags):
+    """Epics with at least one decision not yet [Done]."""
+    return sorted({t["epic"] for t in tags.values() if t["epic"] and not t["done"]})
 
 
 def overlap(folder, items):
-    """Print files the named epics (or the epics citing the named D ids) share with
-    milestones of running batches. Returns the number of shared files."""
+    """Print files the named specs (or the specs citing the named D ids) share with
+    milestones of running epics. Returns the number of shared files."""
     tags = read_tags(folder)
-    batches = epic_batches(folder)
-    files = dict(epic_files(folder))
+    epics = spec_epics(folder)
+    files = dict(spec_files(folder))
     targets = set()
     for item in items:
         d = D_ID_RE.match(item)
         if d:
-            hit = [num for num, (_, cited) in batches.items() if int(d.group(1)) in cited]
+            hit = [num for num, (_, cited) in epics.items() if int(d.group(1)) in cited]
             if not hit:
-                print(f"{item}: no epic cites it yet, files unknown")
+                print(f"{item}: no spec cites it yet, files unknown")
             targets.update(hit)
-        elif EPIC_NUM_RE.match(item) and item in files:
+        elif SPEC_NUM_RE.match(item) and item in files:
             targets.add(item)
         else:
-            die(f"'{item}' is neither an epic number with a file nor a D id")
-    running = set(running_batches(tags))
+            die(f"'{item}' is neither a spec number with a file nor a D id")
+    running = set(running_epics(tags))
     owned = {}
-    for num, (batch, _) in batches.items():
-        if num in targets or batch not in running:
+    for num, (epic, _) in epics.items():
+        if num in targets or epic not in running:
             continue
-        for b in parse_epic(files[num]):
+        for b in parse_spec(files[num]):
             for f in b["files"] or []:
-                owned.setdefault(f, []).append(f"{b['name']} (B{batch})")
+                owned.setdefault(f, []).append(f"{b['name']} (E{epic})")
     shared = 0
     for num in sorted(targets, key=num_key):
-        for b in parse_epic(files[num]):
+        for b in parse_spec(files[num]):
             for f in b["files"] or []:
                 if f in owned:
                     shared += 1
                     print(f"{num} {b['name']}: `{f}` shared with {', '.join(owned[f])}")
-    print(f"running batches: {', '.join(f'B{n}' for n in sorted(running)) or 'none'}; "
-          f"checked epics: {', '.join(sorted(targets, key=num_key)) or 'none'}; shared files: {shared}")
+    print(f"running epics: {', '.join(f'E{n}' for n in sorted(running)) or 'none'}; "
+          f"checked specs: {', '.join(sorted(targets, key=num_key)) or 'none'}; shared files: {shared}")
     return shared
 
 
@@ -530,7 +530,7 @@ def generate(folder, release, quiet=False):
     """Collect, schedule and write ownership.md. Returns (milestones, columns, path) or exits 1."""
     milestones, errors = collect(folder)
     if not milestones and not errors:
-        errors.append("no '### Milestone:' blocks in epics/*.md and no trackers/fix-*-tracker.md")
+        errors.append("no '### Milestone:' blocks in specs/*.md and no trackers/fix-*-tracker.md")
     col, path, errs, warnings = schedule(milestones) if not errors else ({}, [], [], [])
     errors += errs
     for w in warnings:
@@ -540,7 +540,7 @@ def generate(folder, release, quiet=False):
             print(f"error: {e}", file=sys.stderr)
         print("error: ownership.md not written", file=sys.stderr)
         sys.exit(1)
-    milestones.sort(key=lambda m: (num_key(m["epic"]), m["order"]))
+    milestones.sort(key=lambda m: (num_key(m["spec"]), m["order"]))
     out = folder / "ownership.md"
     out.write_text(render(release, milestones, path, datetime.date.today().isoformat()), encoding="utf-8")
     if not quiet:
@@ -552,10 +552,10 @@ def generate(folder, release, quiet=False):
 
 def main():
     ap = argparse.ArgumentParser(
-        usage="ownership.py <release> [--overlap <epic or D ids> ...] [--owner X] [--root PATH]")
+        usage="ownership.py <release> [--overlap <spec or D ids> ...] [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("--overlap", nargs="+", metavar="ID",
-                    help="check mode: files the named epics or D ids share with running batches")
+                    help="check mode: files the named specs or D ids share with running epics")
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: git top level)")
     a = ap.parse_args()
@@ -566,8 +566,8 @@ def main():
     if a.overlap:
         items = [s.strip() for x in a.overlap for s in x.split(",") if s.strip()]
         sys.exit(1 if overlap(folder, items) else 0)
-    if not (folder / "epics").is_dir():
-        die(f"epics folder missing: {folder / 'epics'} (legacy layout has specs/; ownership.py reads epics/ only)")
+    if not (folder / "specs").is_dir():
+        die(f"specs folder missing: {folder / 'specs'}")
     generate(folder, a.release)
 
 
