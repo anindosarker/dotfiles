@@ -1,0 +1,41 @@
+[
+  {
+    "skills": ["finding-new-tools"],
+    "query": "find cool new self-hosted note apps",
+    "expected_behavior": [
+      "Runs scout.py once with keywords like \"self-hosted notes\" in the same tool-call turn as 1-3 WebSearch queries (for example r/selfhosted or awesome-selfhosted)",
+      "Answers with a table of 8-12 tools: name, what it is, signal plus date, link",
+      "At least 60% of listed items were created, launched or posted in the last 60 days",
+      "Items come from at least 3 distinct source types (for example GitHub, Hacker News, Reddit, web search)",
+      "Prefers new or rising projects over famous ones such as Joplin, Obsidian or Notion",
+      "All links are real URLs taken from script output or search results, not invented",
+      "Does not fetch each item to verify it"
+    ]
+  },
+  {
+    "skills": ["finding-new-tools"],
+    "query": "trending MCP servers this month",
+    "expected_behavior": [
+      "Runs scout.py once with keywords like \"mcp server\" in the same tool-call turn as 1-3 WebSearch queries (for example mcp.so, glama.ai or r/mcp)",
+      "Answers with a table of 8-12 MCP servers: name, what it is, signal plus date, link",
+      "At least 60% of listed items are from the last 60 days",
+      "Items come from at least 3 distinct source types (for example GitHub, npm, Hacker News, Hugging Face)",
+      "Does not lead with the well-known reference servers only",
+      "All links are real URLs taken from script output or search results",
+      "Does not fetch each item to verify it"
+    ]
+  },
+  {
+    "skills": ["finding-new-tools"],
+    "query": "new open-source alternatives to Loom",
+    "expected_behavior": [
+      "Searches for what Loom does (for example \"screen recorder\") rather than only the word Loom",
+      "Runs scout.py once in the same tool-call turn as 1-3 WebSearch queries (for example alternativeto.net or opensourcealternative.to)",
+      "Answers with a table of 8-12 open-source screen recording tools: name, what it is, signal plus date, link",
+      "At least 60% of listed items are from the last 60 days",
+      "Items come from at least 3 distinct source types",
+      "All links are real URLs taken from script output or search results",
+      "Does not fetch each item to verify it"
+    ]
+  }
+]

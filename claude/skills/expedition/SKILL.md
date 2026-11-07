@@ -32,7 +32,7 @@ Writing a rule: one rule per topic, two to five bullets; each bullet a full sent
 
 ## Owner input
 
-- Owner comments are feedback for discussion, not decisions. Discuss, propose, and record a decision only when the owner accepts it.
+- Owner comments are feedback for discussion, not decisions. An owner message that picks an option, adds specifics or corrects the item is still discussion: fold it into the item and post the item again. Write a decision only on an explicit confirmation ("record it", "accepted", "record D<n>"); "k", "fix it", "makes sense" or a message of specifics never counts, and the agent never asks "record it?" as a prompt.
 - Only a real choice reaches the owner: a visible behavior or look, a public API, a re-decided decision, a scope change. Epic wording that follows shipped code, tracker and process gaps, tooling with one right answer, a deviation that keeps the decided behavior: the agent settles them, records a short decision and moves on. The owner does not read epic files.
 - A decision can be revisited. A new decision supersedes it; the old one stays in the file, marked.
 - A run agent follows accepted decisions. A decision that no longer fits becomes an ATTENTION item, never a silent change.
@@ -58,7 +58,7 @@ Item format, one item per message, the next item only after the owner rules on t
 - ...
 ```
 
-No question at the end; the options are the question. A "makes sense" or a follow-up question is still discussion; write the decision into `decisions.md` only when the owner accepts it ("k", "accepted", "record it"), in that same turn, then post the next item.
+No question at the end; the options are the question. A "makes sense" or a follow-up question is still discussion; write the decision into `decisions.md` only on the owner's explicit confirmation ("record it", "accepted", "record D<n>"), in that same turn, then post the next item. A message of specifics or a chosen option is not a confirmation: repost the item with them folded in and wait.
 - Handoff: only when the owner asks.
 
 ## Stage 2: plan

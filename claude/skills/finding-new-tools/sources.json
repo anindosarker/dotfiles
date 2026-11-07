@@ -1,0 +1,180 @@
+{
+  "_schema": [
+    "Each entry in 'sources' is one feed. Edit freely; no code change needed for rss/atom/json types.",
+    "name: short label shown as [name] in output. enabled: false disables it.",
+    "type: rss | atom | json (generic) or github_search | github_trending | npm_search (built-in handlers).",
+    "     npm_search = json search config plus a first-publish check: keeps only packages created within --days.",
+    "url: template. Placeholders: {q} = urlencoded keywords, {tag} = first keyword, letters/digits only,",
+    "     {since_date} = YYYY-MM-DD for --days ago, {since_ts} = unix seconds for --days ago.",
+    "keyword: 'server' (the URL already searches) or 'local' (keep items whose title/desc/tags contain a keyword).",
+    "items: dotted path to the item list in a json response ('' = response is the list).",
+    "fields (json only): title, url, desc, score, date, tags. Value = dotted path, or a template like",
+    "     'https://huggingface.co/{id}', or a list of those (first non-empty wins).",
+    "unit: label for the score in output, e.g. '★' or 'pts'. No score field = every item gets 0.5.",
+    "topics: optional list. Source only runs when a keyword equals one of these words (keeps AI-only feeds out of",
+    "     unrelated searches). Omit to always run.",
+    "undated: optional 'now' = treat items without a date as fresh (for trending pages).",
+    "min_rel: optional 0..1, fraction of keywords an item must contain to be kept (default: any for server; all for local, half when 3+ keywords).",
+    "weight: optional rank multiplier, default 1.0 (e.g. 0.6 for article feeds that are about tools, not tools).",
+    "Note: reddit allows about 1 unauthenticated request per minute; a second run inside that window skips it (HTTP 429)."
+  ],
+  "sources": [
+    {
+      "name": "github",
+      "type": "github_search",
+      "url": "https://api.github.com/search/repositories?q={q}+created:>{since_date}&sort=stars&order=desc&per_page=30",
+      "keyword": "server",
+      "unit": "★"
+    },
+    {
+      "name": "gh_trending_w",
+      "type": "github_trending",
+      "url": "https://github.com/trending?since=weekly",
+      "keyword": "local",
+      "unit": "★/wk",
+      "undated": "now"
+    },
+    {
+      "name": "gh_trending_m",
+      "type": "github_trending",
+      "url": "https://github.com/trending?since=monthly",
+      "keyword": "local",
+      "unit": "★/mo",
+      "undated": "now"
+    },
+    {
+      "name": "producthunt",
+      "type": "atom",
+      "url": "https://www.producthunt.com/feed",
+      "keyword": "local"
+    },
+    {
+      "name": "betalist",
+      "type": "atom",
+      "url": "https://feeds.feedburner.com/betalist",
+      "keyword": "local"
+    },
+    {
+      "name": "reddit",
+      "type": "atom",
+      "url": "https://www.reddit.com/search.rss?q={q}&sort=top&t=month",
+      "keyword": "server",
+      "min_rel": 1.0
+    },
+    {
+      "name": "hn_show",
+      "type": "json",
+      "url": "https://hn.algolia.com/api/v1/search?query={q}&tags=show_hn&numericFilters=created_at_i>{since_ts}",
+      "keyword": "server",
+      "items": "hits",
+      "fields": {
+        "title": "title",
+        "url": ["url", "https://news.ycombinator.com/item?id={objectID}"],
+        "desc": "story_text",
+        "score": "points",
+        "date": "created_at_i"
+      },
+      "unit": "pts"
+    },
+    {
+      "name": "hn",
+      "type": "json",
+      "url": "https://hn.algolia.com/api/v1/search?query={q}&tags=story&numericFilters=created_at_i>{since_ts},points>15",
+      "keyword": "server",
+      "items": "hits",
+      "fields": {
+        "title": "title",
+        "url": ["url", "https://news.ycombinator.com/item?id={objectID}"],
+        "desc": "story_text",
+        "score": "points",
+        "date": "created_at_i"
+      },
+      "unit": "pts"
+    },
+    {
+      "name": "lobsters",
+      "type": "json",
+      "url": "https://lobste.rs/hottest.json",
+      "keyword": "local",
+      "items": "",
+      "fields": {
+        "title": "title",
+        "url": ["url", "short_id_url"],
+        "desc": "description_plain",
+        "score": "score",
+        "date": "created_at",
+        "tags": "tags"
+      },
+      "unit": "pts"
+    },
+    {
+      "name": "devto",
+      "type": "json",
+      "url": "https://dev.to/api/articles?tag={tag}&top=30&per_page=30",
+      "keyword": "server",
+      "items": "",
+      "fields": {
+        "title": "title",
+        "url": "url",
+        "desc": "description",
+        "score": "positive_reactions_count",
+        "date": "published_at",
+        "tags": "tag_list"
+      },
+      "unit": "♥",
+      "weight": 0.6
+    },
+    {
+      "name": "npm",
+      "type": "npm_search",
+      "url": "https://registry.npmjs.org/-/v1/search?text={q}&size=250",
+      "keyword": "server",
+      "items": "objects",
+      "fields": {
+        "title": "package.name",
+        "url": ["package.links.npm", "https://www.npmjs.com/package/{package.name}"],
+        "desc": "package.description",
+        "score": "downloads.weekly",
+        "date": "package.date",
+        "tags": "package.keywords"
+      },
+      "unit": "dl/wk",
+      "weight": 0.8,
+      "topics": ["mcp", "js", "javascript", "typescript", "ts", "node", "nodejs", "npm", "react", "vue", "svelte", "solid", "angular", "nextjs", "next.js", "vite", "bun", "deno", "cli", "sdk", "eslint", "webpack", "tailwind", "component", "components", "ui", "frontend", "backend", "orm", "testing", "server", "servers", "api", "graphql", "websocket", "electron"]
+    },
+    {
+      "name": "hf_models",
+      "type": "json",
+      "url": "https://huggingface.co/api/models?search={q}&sort=trendingScore&limit=20&full=false",
+      "keyword": "server",
+      "items": "",
+      "fields": {
+        "title": "id",
+        "url": "https://huggingface.co/{id}",
+        "desc": "pipeline_tag",
+        "score": "likes",
+        "date": "createdAt",
+        "tags": "tags"
+      },
+      "unit": "♥",
+      "topics": ["ai", "ml", "llm", "llms", "model", "models", "agent", "agents", "mcp", "gpt", "rag", "embedding", "embeddings", "diffusion", "tts", "stt", "speech", "vision", "ocr", "transformer", "transformers", "chatbot", "inference", "gguf", "lora", "nlp", "voice", "image", "video"]
+    },
+    {
+      "name": "hf_spaces",
+      "type": "json",
+      "url": "https://huggingface.co/api/spaces?search={q}&sort=trendingScore&limit=20",
+      "keyword": "server",
+      "items": "",
+      "fields": {
+        "title": "id",
+        "url": "https://huggingface.co/spaces/{id}",
+        "desc": "sdk",
+        "score": "likes",
+        "date": "createdAt",
+        "tags": "tags"
+      },
+      "unit": "♥",
+      "topics": ["ai", "ml", "llm", "llms", "model", "models", "agent", "agents", "mcp", "gpt", "rag", "embedding", "embeddings", "diffusion", "tts", "stt", "speech", "vision", "ocr", "transformer", "transformers", "chatbot", "inference", "gguf", "lora", "nlp", "voice", "image", "video"]
+    }
+  ]
+}
