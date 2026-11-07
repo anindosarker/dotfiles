@@ -120,8 +120,15 @@ if not (args.color_name is None):
     state[args.name] = args.color_name
     changed = True
 
+def default_color():
+    # each session starts at its own palette color (stable hash of the session
+    # name), then windows step through the palette by index
+    offset = int(hashlib.sha1(args.session.encode('utf-8')).hexdigest(), 16)
+    return colors[(args.idx + offset) % len(colors)]
+
+
 if args.cycle:
-    cur = state.get(args.idx, state.get(args.name, colors[args.idx % len(colors)]))
+    cur = state.get(args.idx, state.get(args.name, default_color()))
     i = colors.index(cur) if cur in colors else 0
     state[args.idx] = colors[(i + args.cycle) % len(colors)]
     changed = True
@@ -139,8 +146,8 @@ c = state.get(args.idx, None)
 if c is None:
     c = state.get(args.name, None)
 if c is None:
-    # color by window index so neighbouring windows always differ
-    c = colors[args.idx % len(colors)]
+    # color by window index (offset per session) so neighbouring windows differ
+    c = default_color()
 
 def xterm_rgb(n):
     if n >= 232:

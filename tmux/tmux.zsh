@@ -38,3 +38,18 @@ tmxa() {
     tmux a -t "$1"
   fi
 }
+
+# Tab completion for tmxa: offers running session names with their window count
+_tmxa() {
+  local -a sessions
+  sessions=(${(f)"$(tmux ls -F '#{session_name}:#{session_windows} windows#{?session_attached, (attached),}' 2>/dev/null)"})
+  _describe 'tmux session' sessions
+}
+(( $+functions[compdef] )) && compdef _tmxa tmxa
+
+# Outside tmux: short terminal title (folder name) instead of user@host:path,
+# so VS Code tabs ("terminal.integrated.tabs.title": "${sequence}") stay readable.
+if [[ -z $TMUX ]]; then
+  ZSH_THEME_TERM_TITLE_IDLE="%1~"
+  ZSH_THEME_TERM_TAB_TITLE_IDLE="%1~"
+fi
