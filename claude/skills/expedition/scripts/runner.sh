@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # Runner session for the expedition batch flow: a second Claude Code session in a tmux window
-# of the talker's own tmux session. It receives "RUN <batch> <release folder>" and replies
-# "DONE ..." or "BLOCKED ..." (reference/run.md).
+# of the talker's own tmux session. It receives "RUN <batch> <release folder> from <talker>",
+# typed into its window by "send", and replies "DONE ..." or "BLOCKED ..." by SendMessage
+# (reference/run.md).
 #
 # Usage: runner.sh start <release> [--model M]   open the window, or resume a dead runner
 #        runner.sh list                          registry entries with busy or idle
 #        runner.sh stop <release>                close the window, mark the entry stopped
+#        runner.sh send <release> "<line>"         type "ultracode <line>" into the runner window
+#                                                and submit it (typed prompts opt the turn in to
+#                                                ultracode; a SendMessage does not)
 #
 # Registry: ~/.claude/expedition-runners.json, one entry per runner name
 # (name, uuid, tmux target, cwd, release, started, state). Status files:
@@ -24,7 +28,7 @@ BRIEF_TEMPLATE="$SKILL_DIR/templates/runner-brief.md"
 die() { echo "error: $*" >&2; exit 1; }
 
 usage() {
-  echo "usage: runner.sh start <release> [--model M] | list | stop <release>" >&2
+  echo "usage: runner.sh start <release> [--model M] | list | stop <release> | send <release> \"<line>\"" >&2
   exit 2
 }
 
@@ -166,11 +170,34 @@ cmd_stop() {
   echo "$name stopped"
 }
 
+cmd_send() {
+  [ $# -eq 2 ] || usage
+  check_release "$1"
+  local name="runner-$1" line="ultracode $2" target i
+  [ -n "$(reg field "$name" uuid)" ] || die "no registry entry for $name"
+  [ "$(reg field "$name" state)" != "stopped" ] || die "$name is stopped: runner.sh start $1"
+  target="$(reg field "$name" tmux)"
+  window_alive "$target" || die "$name window is gone: runner.sh start $1 resumes it"
+  tmux send-keys -t "$target" -l "$line"
+  sleep 0.3
+  tmux send-keys -t "$target" Enter
+  # A long line can stay in the input box after the first Enter: check, send Enter once more.
+  sleep 1
+  # The input box is the text between the last two rule lines of the pane.
+  if tmux capture-pane -p -t "$target" \
+      | awk '/^[[:space:]]*─/ { n++; box[n] = buf; buf = ""; next } { buf = buf $0 } END { print box[n] }' \
+      | grep -qF -- "${line:0:40}"; then
+    tmux send-keys -t "$target" Enter
+  fi
+  echo "typed into $target: $line"
+}
+
 [ $# -ge 1 ] || usage
 sub="$1"; shift
 case "$sub" in
   start) cmd_start "$@" ;;
   list) [ $# -eq 0 ] || usage; cmd_list ;;
   stop) cmd_stop "$@" ;;
+  send) cmd_send "$@" ;;
   *) usage ;;
 esac

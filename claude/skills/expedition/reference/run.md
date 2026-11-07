@@ -17,16 +17,16 @@
 2. Confirm the stage 2 readiness check passed.
 3. The runner session runs every batch: started by `scripts/runner.sh start <release>` as a window `runner-<release>` in the talker's own tmux session (outside tmux the script prints the command), brief from `templates/runner-brief.md`. Its first prompt starts with `ultracode`, so the Workflow tool is opted in from the first turn. Each go sends one RUN line; the turn it arrives in starts the batch: autopilot start script, loop scheduled, worktrees assigned, the batch's first milestones launched. Loop: the loop skill with no interval (`ScheduleWakeup` dynamic mode), 30 minute fallback; the workflow or watcher notification is the real wake signal. The owner never has to type a command.
 4. A runner that died: `runner.sh start` finds its entry in `~/.claude/expedition-runners.json` and resumes it with `claude --resume <uuid>`. `runner.sh list` shows each runner busy or idle (Stop and UserPromptSubmit hooks of `templates/runner-settings.json`).
-5. The autopilot loop prompt is exactly `Read ~/.claude/skills/expedition/reference/run.md, then continue the run. Skip if a turn is already working.` Nothing else goes in it. A loop fire cannot load a skill marked `disable-model-invocation`, and after compaction the session may no longer hold the run rules, so the prompt names the file.
+5. The autopilot loop prompt is exactly `ultracode. Read ~/.claude/skills/expedition/reference/run.md, then continue the run. Skip if a turn is already working.` Nothing else goes in it. A loop fire cannot load a skill marked `disable-model-invocation`, and after compaction the session may no longer hold the run rules, so the prompt names the file.
 
 The release's `process.md` (`.ai/plans/<release>/<owner>/process.md`) holds the project facts P1 to P<n> (branches and worktrees, merge, release, checks, agent sandbox, plans); every sub-agent prompt names it by path. `new_cycle.py` copies it from the previous release; the plan stage trims it before the run. Never in the loop prompt.
 
 ## Batches
 
 - Messages, one line each, nothing else in a message:
-  - Talker to runner: `RUN <batch> <release folder>`
-  - Runner to talker: `DONE <batch> <merge sha> attention <A ids or none>`
-  - Runner to talker: `BLOCKED <batch> <tracker path>`, when a bounce loop or a gate cannot be resolved
+  - Talker to runner: `RUN <batch> <release folder> from <talker session name>`, typed into the runner window by `runner.sh send` (as `ultracode RUN ...`, so the turn is opted in to the Workflow tool)
+  - Runner to talker, by `SendMessage` to the name after `from`: `DONE <batch> <merge sha> attention <A ids or none>`
+  - Runner to talker, the same way: `BLOCKED <batch> <tracker path>`, when a bounce loop or a gate cannot be resolved
 - RUN is idempotent: a batch whose `sprints.md` column is already running or done is not started again; the runner replies with the current state.
 - Several batches run at once, no slot limit. One worktree per milestone from the pool. Machine load as today: `process.md` P5, `SERIAL_GATES` when loaded.
 - On the merge of a batch the runner: ticks the column and reruns `sprints.py`, writes ATTENTION, `findings.md` and the handoff, tags `[Done]` on the batch's decisions, sends DONE.
