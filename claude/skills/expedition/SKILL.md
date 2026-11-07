@@ -32,11 +32,13 @@ Writing a rule: one rule per topic, two to five bullets; each bullet a full sent
 
 ## Owner input
 
-- Owner comments are feedback for discussion, not decisions. An owner message that picks an option, adds specifics or corrects the item is still discussion: fold it into the item and post the item again. Write a decision only on an explicit confirmation ("record it", "accepted", "record D<n>"); "k", "fix it", "makes sense" or a message of specifics never counts, and the agent never asks "record it?" as a prompt.
+- Owner comments are feedback for discussion, not decisions. An owner message that picks an option, adds specifics or corrects the item is still discussion: fold it into the item and post the item again. Write a decision only on an explicit confirmation ("record it", "accepted", "record D<n>"), or on "k" when the agent's last message was the complete item ending with the line `Say "record it" to write D<n>, or add to it.`; "k" on an item still being shaped, "fix it", "makes sense" or a message of specifics never counts.
 - Only a real choice reaches the owner: a visible behavior or look, a public API, a re-decided decision, a scope change. Epic wording that follows shipped code, tracker and process gaps, tooling with one right answer, a deviation that keeps the decided behavior: the agent settles them, records a short decision and moves on. The owner does not read epic files.
 - A decision can be revisited. A new decision supersedes it; the old one stays in the file, marked.
 - A run agent follows accepted decisions. A decision that no longer fits becomes an ATTENTION item, never a silent change.
 - A side-agent note the owner pastes ("Heads up ...") is feedback too: explain the trade-off, give the options with a lean, the owner picks.
+- Cost is one clause, once: "bigger epic", "two sprints". Never argue an option down on effort, never repeat the cost after the owner leans; the owner decides what is worth building.
+- An explanation the owner asks for is a short bullet list, one plain sentence per bullet, never prose paragraphs; the same holds for a "what are we deciding" recap of an item.
 
 ## Stage 1: discuss
 
@@ -47,8 +49,9 @@ Interactive. You research and propose; the owner gives feedback and accepts.
 - `decisions.md` holds accepted decisions only, as `### D<n>` items under a round heading. A number is never reused or renumbered.
 - `findings.md` holds problems found in the code, as `### F<n>` items.
 - Research: inline, or one or two agents for lookups. No Workflow in this stage.
+- An item that needs a lookup does not block the round: start the lookup agent, say so in one line, and post the next item whose facts are in hand; the waiting item is posted when the agent reports. Items may therefore be ruled out of order; the numbers stay.
 
-Item format, one item per message, the next item only after the owner rules on this one:
+Item format, one item per message, the next item only after the owner rules on this one (or while this one waits on a lookup, see above):
 
 ```
 # <n>. <Title>: one plain sentence that says what is wrong today, where, and what the change is.
@@ -58,7 +61,7 @@ Item format, one item per message, the next item only after the owner rules on t
 - ...
 ```
 
-No question at the end; the options are the question. A "makes sense" or a follow-up question is still discussion; write the decision into `decisions.md` only on the owner's explicit confirmation ("record it", "accepted", "record D<n>"), in that same turn, then post the next item. A message of specifics or a chosen option is not a confirmation: repost the item with them folded in and wait.
+No question at the end; the options are the question. A "makes sense" or a follow-up question is still discussion; write the decision into `decisions.md` only on the owner's explicit confirmation ("record it", "accepted", "record D<n>", or "k" right after the complete item that ends with `Say "record it" to write D<n>, or add to it.`), in that same turn, then post the next item. A message of specifics or a chosen option is not a confirmation: repost the item with them folded in and wait.
 - Handoff: only when the owner asks.
 
 ## Stage 2: plan

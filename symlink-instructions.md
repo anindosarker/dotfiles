@@ -104,3 +104,9 @@ tmux source-file ~/.tmux.conf
 ```
 
 `tmux/colortag/name2color.py` is a patched copy of the tmux-colortag script: 8-color palette, color by window index, and `--cycle` (`prefix y` next color, `prefix Y` previous). A plugin update (`prefix U`) may replace the link; re-run the last `ln -sf` line if colors go back to the old palette.
+
+Shell helpers `tmx` (main session for the folder) and `tmxn` (new session `<folder>-2`, `-3`, ...) live in `tmux/tmux.zsh`. Add to `~/.zshrc`:
+
+```bash
+[[ -f ~/.dotfiles/tmux/tmux.zsh ]] && source ~/.dotfiles/tmux/tmux.zsh
+```

@@ -29,6 +29,7 @@ parser.add_argument('--clear-idx', action='store_true')
 parser.add_argument('--clear-name', action='store_true')
 parser.add_argument('--clear', action='store_true')
 parser.add_argument('--show-state', action='store_true')
+parser.add_argument('--alpha', type=float, help='print the color blended into the bar (colour237) at this strength, as #rrggbb')
 parser.add_argument('--cycle', type=int, nargs='?', const=1, help='move this window to the next (1) or previous (-1) palette color')
 args = parser.parse_args()
 
@@ -141,4 +142,18 @@ if c is None:
     # color by window index so neighbouring windows always differ
     c = colors[args.idx % len(colors)]
 
-print("colour{}".format(c))
+def xterm_rgb(n):
+    if n >= 232:
+        v = 8 + (n - 232) * 10
+        return (v, v, v)
+    n -= 16
+    lv = [0, 95, 135, 175, 215, 255]
+    return (lv[n // 36], lv[(n // 6) % 6], lv[n % 6])
+
+
+if args.alpha is not None:
+    fg, bg = xterm_rgb(c), xterm_rgb(237)
+    a = max(0.0, min(1.0, args.alpha))
+    print("#{:02x}{:02x}{:02x}".format(*[round(f * a + b * (1 - a)) for f, b in zip(fg, bg)]))
+else:
+    print("colour{}".format(c))
