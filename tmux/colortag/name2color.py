@@ -22,7 +22,7 @@ colors = ['#f38ba8', '#a6e3a1', '#f9e2af', '#89b4fa', '#f5c2e7', '#94e2d5', '#fa
 BASE = '#1e1e2e'  # Catppuccin Mocha base: the bar color that --alpha blends into
 
 # Extra accents for prefix y / Y. The cycle list is the 8 defaults plus these,
-# sorted by hue so y / Y step around the color wheel.
+# spread out so each y / Y press lands on a clearly different hue.
 EXTRA = [
     # Catppuccin Mocha: rosewater, flamingo, maroon, sky, sapphire, lavender
     '#f5e0dc', '#f2cdcd', '#eba0ac', '#89dceb', '#74c7ec', '#b4befe',
@@ -38,7 +38,10 @@ def _hue(c):
     return (h if s_ > 0.25 else -1, l)
 
 
-CYCLE = sorted(colors + EXTRA, key=_hue)
+_wheel = sorted(colors + EXTRA, key=_hue)
+# walk the hue-sorted wheel 7 steps at a time (7 and 20 share no factor, so every
+# color is visited once): each press jumps about a third of the wheel away
+CYCLE = [_wheel[(i * 7) % len(_wheel)] for i in range(len(_wheel))]
 
 parser = argparse.ArgumentParser(description='Maps tmux window tags to colors.')
 parser.add_argument('session', type=str, help='session name')
