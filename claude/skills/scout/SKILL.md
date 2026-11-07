@@ -1,9 +1,9 @@
 ---
-name: finding-new-tools
+name: scout
 description: Finds new and trending tools, repos, apps and libraries from GitHub, Product Hunt, BetaList, Reddit, Hacker News, Lobsters, dev.to, npm, Hugging Face and more. Use when the user asks for cool, new, trending, underrated or lesser-known tools, alternatives, libraries or projects for a topic, or "what's out there" / "anything new for X", or when ordinary web search would only return well-known basic answers.
 ---
 
-# Finding new tools
+# Scout
 
 Speed first: one script run plus parallel searches, then answer. Target under 15 s. No planning step.
 
@@ -16,7 +16,7 @@ Drop filler like "cool", "new", "best", "alternative". For "alternatives to X", 
 
 In a single tool-call turn, send all of these together:
 
-- `python3 ~/.claude/skills/finding-new-tools/scripts/scout.py "<keywords>"`
+- `python3 ~/.claude/skills/scout/scripts/scout.py "<keywords>"`
   (options: `--days 30`, `--top 15`, `--json`, `--only github,hn_show`, `--feed <rss/atom/json url>`)
 - 1-3 WebSearch queries aimed at niche sources the script does not cover. Pick freely, for example:
 

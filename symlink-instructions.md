@@ -89,3 +89,18 @@ source ~/.zshrc
 - Always edit files inside `~/dotfiles/` and commit from there — never edit the symlink target directly.
 - If you get a "file exists" error, remove the old file first (`rm ~/.zshrc`) then re-run the symlink command.
 - To add a new config in the future, move it into your dotfiles folder and symlink it the same way.
+
+---
+
+### tmux
+
+```bash
+ln -sf ~/.dotfiles/tmux/tmux.conf ~/.tmux.conf
+# install plugins (TPM), then link the patched tmux-colortag script
+git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
+~/.tmux/plugins/tpm/bin/install_plugins
+ln -sf ~/.dotfiles/tmux/colortag/name2color.py ~/.tmux/plugins/tmux-colortag/name2color.py
+tmux source-file ~/.tmux.conf
+```
+
+`tmux/colortag/name2color.py` is a patched copy of the tmux-colortag script: 8-color palette, color by window index, and `--cycle` (bound to `prefix Y`). A plugin update (`prefix U`) may replace the link; re-run the last `ln -sf` line if colors go back to the old palette.

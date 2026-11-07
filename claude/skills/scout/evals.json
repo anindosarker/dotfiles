@@ -1,6 +1,6 @@
 [
   {
-    "skills": ["finding-new-tools"],
+    "skills": ["scout"],
     "query": "find cool new self-hosted note apps",
     "expected_behavior": [
       "Runs scout.py once with keywords like \"self-hosted notes\" in the same tool-call turn as 1-3 WebSearch queries (for example r/selfhosted or awesome-selfhosted)",
@@ -13,7 +13,7 @@
     ]
   },
   {
-    "skills": ["finding-new-tools"],
+    "skills": ["scout"],
     "query": "trending MCP servers this month",
     "expected_behavior": [
       "Runs scout.py once with keywords like \"mcp server\" in the same tool-call turn as 1-3 WebSearch queries (for example mcp.so, glama.ai or r/mcp)",
@@ -26,7 +26,7 @@
     ]
   },
   {
-    "skills": ["finding-new-tools"],
+    "skills": ["scout"],
     "query": "new open-source alternatives to Loom",
     "expected_behavior": [
       "Searches for what Loom does (for example \"screen recorder\") rather than only the word Loom",
