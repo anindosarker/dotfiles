@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat >/dev/null 2>&1 || :; if [ -n \"${EXPEDITION_RUNNER:-}\" ]; then mkdir -p \"$HOME/.claude/expedition-runners\" && printf idle > \"$HOME/.claude/expedition-runners/$EXPEDITION_RUNNER.status\"; fi",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat >/dev/null 2>&1 || :; if [ -n \"${EXPEDITION_RUNNER:-}\" ]; then mkdir -p \"$HOME/.claude/expedition-runners\" && printf busy > \"$HOME/.claude/expedition-runners/$EXPEDITION_RUNNER.status\"; fi",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

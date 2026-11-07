@@ -20,6 +20,12 @@ the longest chain ending at the release milestone (the last milestone of the hig
 epic number). ownership.md holds a title, the Generated line, the table
 "| Milestone | Epic | Depends on | Files |" and the line "Critical path: A > B > C".
 It is never edited by hand. On any error nothing is written and the exit code is 1.
+
+Check mode: ownership.py <release> --overlap <epic numbers or D ids> writes nothing. It
+reports every file the named epics' milestones own (for a D id: the epics citing it) that a
+milestone of a running batch also owns. A running batch is a [B<n>] tag in decisions.md on a
+decision without [Done]; an epic's batch is its own "- Batch: B<n>" line (new_epic.py --batch).
+Exit code 1 when a file is shared, 0 otherwise.
 """
 import argparse
 import collections
@@ -38,6 +44,11 @@ FIELD_RE = re.compile(r"^\s*(?:-\s*)?(Files owned|Depends on|Review):\s*(.*?)\s*
 TASK_RE = re.compile(r"^\s*-\s*Task\s+\d+:")
 OWNERSHIP_COLS = ["Milestone", "Epic", "Depends on", "Files"]
 FIX = "fix"
+D_HEAD_RE = re.compile(r"^###\s+D(\d+)\b")
+TAG_LINE_RE = re.compile(r"^\s*(?:\[(?:Done|B\d+)\]\s*)+$")
+D_CITE_RE = re.compile(r"\((D\d+[^)]*)\)")
+D_ID_RE = re.compile(r"^D(\d+)$")
+BATCH_LINE_RE = re.compile(r"^\s*-\s*Batch:\s*B(\d+)\s*$")
 
 
 def die(msg):
@@ -424,6 +435,97 @@ def read_ownership(path):
     return out, None
 
 
+def read_tags(folder):
+    """Decision tags: {D number: {"batch": n or None, "done": bool, "line": heading index}}.
+
+    The tag line is the first non-blank line under a "### D<n>" heading, e.g. "[B1]" or
+    "[Done]  [B1]". A decision without one is in no batch.
+    """
+    path = folder / "decisions.md"
+    tags = {}
+    if not path.is_file():
+        return tags
+    lines = read(path).splitlines()
+    for i, line in outside_fences(read(path)):
+        m = D_HEAD_RE.match(line)
+        if not m:
+            continue
+        nxt = next((l for l in lines[i:] if l.strip()), "")
+        batch, done = None, False
+        if TAG_LINE_RE.match(nxt):
+            b = re.search(r"\[B(\d+)\]", nxt)
+            batch = int(b.group(1)) if b else None
+            done = "[Done]" in nxt
+        tags[int(m.group(1))] = {"batch": batch, "done": done, "line": i - 1}
+    return tags
+
+
+def epic_cites(path):
+    """Decision numbers an epic cites: (D7), (D6, D7), (D10 addendum)."""
+    nums = set()
+    for _, line in outside_fences(read(path)):
+        for m in D_CITE_RE.finditer(line):
+            nums |= {int(n) for n in re.findall(r"\bD(\d+)\b", m.group(1))}
+    return nums
+
+
+def epic_batch(path):
+    """The epic's own "- Batch: B<n>" line, as n; None when the epic is in no batch."""
+    for _, line in outside_fences(read(path)):
+        m = BATCH_LINE_RE.match(line)
+        if m:
+            return int(m.group(1))
+    return None
+
+
+def epic_batches(folder):
+    """{epic number: (batch or None, sorted cited D numbers)}; batch from the epic's Batch line only."""
+    return {num: (epic_batch(path), sorted(epic_cites(path))) for num, path in epic_files(folder)}
+
+
+def running_batches(tags):
+    """Batches with at least one decision not yet [Done]."""
+    return sorted({t["batch"] for t in tags.values() if t["batch"] and not t["done"]})
+
+
+def overlap(folder, items):
+    """Print files the named epics (or the epics citing the named D ids) share with
+    milestones of running batches. Returns the number of shared files."""
+    tags = read_tags(folder)
+    batches = epic_batches(folder)
+    files = dict(epic_files(folder))
+    targets = set()
+    for item in items:
+        d = D_ID_RE.match(item)
+        if d:
+            hit = [num for num, (_, cited) in batches.items() if int(d.group(1)) in cited]
+            if not hit:
+                print(f"{item}: no epic cites it yet, files unknown")
+            targets.update(hit)
+        elif EPIC_NUM_RE.match(item) and item in files:
+            targets.add(item)
+        else:
+            die(f"'{item}' is neither an epic number with a file nor a D id")
+    running = set(running_batches(tags))
+    owned = {}
+    for num, (batch, _) in batches.items():
+        if num in targets or batch not in running:
+            continue
+        for b in parse_epic(files[num]):
+            for f in b["files"] or []:
+                owned.setdefault(f, []).append(f"{b['name']} (B{batch})")
+    shared = 0
+    for num in sorted(targets, key=num_key):
+        for b in parse_epic(files[num]):
+            for f in b["files"] or []:
+                if f in owned:
+                    shared += 1
+                    print(f"{num} {b['name']}: `{f}` shared with {', '.join(owned[f])}")
+    print(f"running batches: {', '.join(f'B{n}' for n in sorted(running)) or 'none'}; "
+          f"checked epics: {', '.join(sorted(targets, key=num_key)) or 'none'}; shared files: {shared}")
+    return shared
+
+
 def generate(folder, release, quiet=False):
     """Collect, schedule and write ownership.md. Returns (milestones, columns, path) or exits 1."""
     milestones, errors = collect(folder)
@@ -449,8 +551,11 @@ def generate(folder, release, quiet=False):
 
 
 def main():
-    ap = argparse.ArgumentParser(usage="ownership.py <release> [--owner X] [--root PATH]")
+    ap = argparse.ArgumentParser(
+        usage="ownership.py <release> [--overlap <epic or D ids> ...] [--owner X] [--root PATH]")
     ap.add_argument("release")
+    ap.add_argument("--overlap", nargs="+", metavar="ID",
+                    help="check mode: files the named epics or D ids share with running batches")
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: git top level)")
     a = ap.parse_args()
@@ -458,6 +563,9 @@ def main():
         die(f"bad release '{a.release}', expected like v0.9.x")
     root = repo_root(a.root)
     folder = release_folder(root, detect_owner(root, a.owner), a.release)
+    if a.overlap:
+        items = [s.strip() for x in a.overlap for s in x.split(",") if s.strip()]
+        sys.exit(1 if overlap(folder, items) else 0)
     if not (folder / "epics").is_dir():
         die(f"epics folder missing: {folder / 'epics'} (legacy layout has specs/; ownership.py reads epics/ only)")
     generate(folder, a.release)

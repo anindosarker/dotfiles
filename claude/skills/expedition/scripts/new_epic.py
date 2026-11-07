@@ -11,6 +11,12 @@ rules (find_rules.py), else the bundled templates/epic.md. Section 2.1 holds one
 the lines Files owned, Depends on, Review and its Task lines; write one block per
 milestone, then run ownership.py and sprints.py. A later milestone's tracker is
 trackers/NN-<milestone-slug>-tracker.md.
+
+Batch tag mode, on go: python3 -I new_epic.py <release> --batch B<n> <epic numbers or D ids>
+[--owner X] [--root PATH]. A D id resolves to the epics citing it. Each named epic gets the line
+"- Batch: B<n>" directly under its title line; each decision those epics cite (and each named
+D id) gets the tag line "[B<n>]" directly under its heading in decisions.md. An existing Batch
+line or batch tag is kept and reported. Each file is read right before its write.
 """
 import argparse
 import collections
@@ -24,6 +30,7 @@ RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
 NUM_RE = re.compile(r"^\d{2}(\.\d+)?$")
 SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 ROW_RE = re.compile(r"^\|\s*(\d{2}(?:\.\d+)?)\s*\|")
+BATCH_RE = re.compile(r"^B\d+$")
 
 
 def die(msg):
@@ -169,22 +176,103 @@ def insert_row(plan_text, num, row):
     return "".join(lines)
 
 
+def load_ownership():
+    sys.dont_write_bytecode = True
+    path = Path(__file__).resolve().parent / "ownership.py"
+    spec = importlib.util.spec_from_file_location("ownership", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def tag_batch(folder, batch, items):
+    """Write "- Batch: B<n>" into each named epic (a D id names the epics citing it) and
+    "[B<n>]" under each decision those epics cite and each named D id."""
+    own = load_ownership()
+    files = dict(own.epic_files(folder))
+    nums, epics = set(), set()
+    for item in items:
+        d = re.match(r"^D(\d+)$", item)
+        if d:
+            nums.add(int(d.group(1)))
+            hit = [num for num, p in files.items() if int(d.group(1)) in own.epic_cites(p)]
+            if not hit:
+                print(f"{item}: no epic cites it")
+            epics.update(hit)
+        elif item in files:
+            epics.add(item)
+        else:
+            die(f"'{item}' is neither an epic number with a file nor a D id")
+    for num in epics:
+        nums |= own.epic_cites(files[num])
+    path = folder / "decisions.md"
+    if not path.is_file():
+        die(f"decisions.md missing: {path}")
+    tags = own.read_tags(folder)
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    missing = sorted(nums - set(tags))
+    if missing:
+        die(f"not in decisions.md: {', '.join(f'D{n}' for n in missing)}")
+    marked, kept_epics = [], []
+    for num in sorted(epics, key=own.num_key):
+        old = own.epic_batch(files[num])
+        if old:
+            kept_epics.append(f"{num} B{old}")
+            continue
+        elines = files[num].read_text(encoding="utf-8").splitlines(keepends=True)
+        title = next((i for i, l in enumerate(elines) if l.startswith("# ")), None)
+        if title is None:
+            die(f"{files[num].name} has no title line")
+        elines.insert(title + 1, f"- Batch: {batch}\n")
+        files[num].write_text("".join(elines), encoding="utf-8")
+        marked.append(num)
+    print(f"{batch} epics: {', '.join(marked) or 'none'}")
+    if kept_epics:
+        print(f"kept epics: {', '.join(kept_epics)}")
+    tagged, kept = [], []
+    for n in sorted(nums, key=lambda n: -tags[n]["line"]):
+        t = tags[n]
+        if t["batch"]:
+            kept.append(f"D{n} B{t['batch']}" + (" done" if t["done"] else ""))
+            continue
+        lines.insert(t["line"] + 1, f"[{batch}]\n")
+        tagged.append(n)
+    path.write_text("".join(lines), encoding="utf-8")
+    print(f"{batch}: {', '.join(f'D{n}' for n in sorted(tagged)) or 'nothing tagged'}")
+    if kept:
+        print(f"kept: {', '.join(sorted(kept, key=lambda k: int(k.split()[0][1:])))}")
+
+
 def main():
     ap = argparse.ArgumentParser(
         usage='new_epic.py <release> <num> <slug> "<Title>" "<scope>" '
-              "[--owner X] [--template PATH] [--root PATH]"
+              "[--owner X] [--template PATH] [--root PATH]\n"
+              "       new_epic.py <release> --batch B<n> <epic numbers or D ids> [--owner X] [--root PATH]"
     )
     ap.add_argument("release")
-    ap.add_argument("num")
-    ap.add_argument("slug")
-    ap.add_argument("title")
-    ap.add_argument("scope")
+    ap.add_argument("rest", nargs="*")
+    ap.add_argument("--batch", help="tag mode: write - Batch: B<n> into each epic and [B<n>] under each cited decision")
     ap.add_argument("--owner")
     ap.add_argument("--template")
     ap.add_argument("--root", help="repository root (default: git top level)")
     a = ap.parse_args()
     if not RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
+    if a.batch:
+        if not BATCH_RE.match(a.batch):
+            die(f"bad batch '{a.batch}', expected like B3")
+        items = [s.strip() for x in a.rest for s in x.split(",") if s.strip()]
+        if not items:
+            die("--batch needs epic numbers or D ids")
+        root = repo_root(a.root)
+        folder = root / ".ai" / "plans" / a.release / detect_owner(root, a.owner)
+        if not folder.is_dir():
+            die(f"release folder missing: {folder}")
+        tag_batch(folder, a.batch, items)
+        return
+    if len(a.rest) != 4:
+        ap.error("expected <num> <slug> \"<Title>\" \"<scope>\"")
+    a.num, a.slug, a.title, a.scope = a.rest
     if not NUM_RE.match(a.num):
         die(f"bad epic number '{a.num}', expected like 03 or 04.1")
     if not SLUG_RE.match(a.slug):

@@ -2,9 +2,11 @@
 
 ## Contents
 - Shared rule
+- Shared files
 - ATTENTION file
 - decisions.md
 - findings.md
+- sprints.md
 - Tracker
 - process.md
 - Handoff
@@ -12,6 +14,15 @@
 ## Shared rule
 
 Every item has an ID heading. Its first bullet is required and self-explanatory: a reader understands the item from it alone. Everything after it is open-ended, but in bullets. Templates: [../templates/](../templates/).
+
+## Shared files
+
+`decisions.md` and the ATTENTION files are written by both sessions, talker and runner.
+
+- `[B<n>]` is written by whoever sends RUN. `[Done]` is written by the runner on merge.
+- Re-read the file right before every write, make a targeted edit, commit at once. No held edits.
+- The next D, F or A number is read from the file at write time, never from memory.
+- Agents on milestone branches never edit `decisions.md`.
 
 ## ATTENTION file
 
@@ -31,12 +42,12 @@ Every item has an ID heading. Its first bullet is required and self-explanatory:
 ```
 
 - First bullet: one line, no jargon. It explains the situation and why it needs the owner. More lines are discouraged, but allowed.
-- No tags, no outcome line. Never edited after the run.
+- One tag line once ruled, directly under the heading: `[D107]` (a fix decision) or `[F40]` (deferred as a finding). Nothing else is edited after the run.
 - A-numbers continue across the whole release. A second ATTENTION file starts after the last A of the previous one.
 - The run reports; it does not solve. Do not research solutions for an item.
 - Not an ATTENTION item: epic text that lags shipped code, a tracker gap, a process lesson, a tooling fact with one right answer. Those go to the tracker Notes, a decision or the epic file directly (`process.md` holds project facts only); the owner sees choices only.
-- Only the main agent writes it. It condenses the trackers' `## Attention` sections and the workflow and agent results, merges duplicates, and appends at each milestone boundary, not in one batch at the end.
-- An item is triaged when a decision cites it (`- Source: A2`) or an epic file cites it (`(A2)`).
+- Only the runner writes its items; the tag line is written by whoever records the ruling. It condenses the trackers' `## Attention` sections and the workflow and agent results, merges duplicates, and appends at each milestone boundary, not in one batch at the end.
+- An item is triaged when it has a tag line, a decision cites it (`- Source: A2`) or an epic file cites it (`(A2)`).
 
 ## decisions.md
 
@@ -61,6 +72,18 @@ One file per release, template [../templates/decisions.md](../templates/decision
 - Source: A2
 ```
 
+- Tag line, directly under the heading, three states: none (deciding), in a batch, done:
+
+  ```
+  ### D1 Toolbar above the frame
+
+  ### D1 Toolbar above the frame
+  [B1]
+
+  ### D1 Toolbar above the frame
+  [Done]  [B1]
+  ```
+
 - Accepted decisions only. Questions stay in chat.
 - Superseded: the heading becomes `### D7 (superseded by D15) ...`. The text stays.
 - Small wording fixes: in place.
@@ -81,6 +104,18 @@ One file per release, template [../templates/findings.md](../templates/findings.
 - The heading names the problem, not the file.
 - The first bullet names the path and explains.
 - Epics cite a finding as `(F3)`.
+
+## sprints.md
+
+Columns are batches `B1`, `B2`, ...; a milestone's column is its epic's `- Batch: B<n>` line, written under the title line by `new_epic.py --batch`, never inferred from decisions. Each milestone row carries the D ids its epic cites, after two spaces.
+
+```md
+| Milestone | B1 | B2 |
+|---|---|---|
+| Row virtualizer  D101 | [x] |  |
+| Sticky footer  D102 | [x] |  |
+| Resize handle  D104, D105 |  | [ ] |
+```
 
 ## Tracker
 
@@ -113,8 +148,8 @@ Checks:
 - `Checks:` is followed by one bullet per check: command, commit, result. The integration milestone's suite run on the staging branch gets its own bullet.
 - `## Attention` and `## Notes` are optional. Empty is the normal case. Do not spend tokens on notes.
 - Never: review-round narration, check output, commit lists.
-- Writers: `new_fix.py` creates a fix milestone's tracker with `Status: planned`; `new_epic.py` creates the epic's first milestone's tracker with `Status: planned`; the main agent creates every further milestone's tracker from the template with `Status: planned` in stage 2, when the milestone block is written. In the run, the builder fills it, the fixer and the verifier update it. One worktree per milestone, so no conflicts.
-- The main agent writes the ATTENTION file, `decisions.md`, `findings.md` and handoffs.
+- Writers: `new_fix.py` creates a fix milestone's tracker with `Status: planned`; `new_epic.py` creates the epic's first milestone's tracker with `Status: planned`; the epic writer creates every further milestone's tracker from the template with `Status: planned` in stage 2, when the milestone block is written. In the run, the builder fills it, the fixer and the verifier update it. One worktree per milestone, so no conflicts.
+- The runner writes the ATTENTION file and handoffs. Both sessions write `decisions.md` and `findings.md` (Shared files).
 
 ## process.md
 
@@ -149,7 +184,7 @@ Written with the `write-handoff` skill.
 - Every expedition handoff starts its State section with these two bullets:
 
   ```
-  - Stage: <discuss | plan | run | triage>
+  - Stage: <the Stage line of status.py, e.g. discuss, run (B2)>
   - Next: `/expedition <stage> <release>`, <where to start, e.g. A1 or epic 04.1>
   ```
 

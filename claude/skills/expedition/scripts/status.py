@@ -11,8 +11,15 @@ nothing is rewritten.
 
 Decisions (### D<n>) and findings (### F<n>) get a derived state table from the epic files
 that cite them and the Status lines of those epics' milestone trackers. ATTENTION items
-(## A<n>) are untriaged until a decision (Source: A<n>) or an epic cites them. process.md
-(## P<n>) must exist with no placeholder left; (P<n>) citations must be defined.
+(## A<n> or ### A<n>) are untriaged until a decision (Source: A<n>) or an epic cites them,
+or a tag line "[D<n>]" or "[F<n>]" sits under the heading. process.md (## P<n>) must exist
+with no placeholder left; (P<n>) citations must be defined.
+
+Batches: the tag line under each "### D<n>" heading ("[B<n>]", "[Done]  [B<n>]") puts the
+decision in a batch. The summary lists deciding (no tag), batched (B<n>, its sprints.md
+column has no run mark), running (a run mark in its column) and done ([Done]). The stage line
+reports discuss and run together ("Stage: discuss, run (B2, B3)"); an open ATTENTION item
+counts as discuss, never as a stage of its own.
 
 Gaps reported for the layout: a plan.md section other than Goals and Epics (a ## Stories
 section: "legacy Stories table, delete it"); an Epics Scope cell over 120 characters; an
@@ -45,7 +52,8 @@ DEC_PAREN_RE = re.compile(r"\(decisions? " + LIST + r"\)")
 DEC_BARE_RE = re.compile(r"\bdecision (\d+)(?![\d-])", re.I)
 STATUS_RE = re.compile(r"^Status:\s*(.*?)\s*$", re.M)
 STATUS_VALUE_RE = re.compile(r"^(planned|running|done|merged)\b\s*(?:\(([^)]*)\))?")
-A_HEAD_RE = re.compile(r"^##\s+A(\d+)\b")
+A_HEAD_RE = re.compile(r"^#{2,3}\s+A(\d+)\b")
+A_TAG_RE = re.compile(r"^\s*\[(?:D|F)\d+\]")
 SOURCE_RE = re.compile(r"Source:\s*(A\d+(?:\s*(?:,|and)\s*A\d+)*)")
 HEADING_RE = re.compile(r"^#{1,6}\s+(.*)$")
 GATES_LINE_RE = re.compile(r"^\s*-\s*Checks:")
@@ -91,10 +99,10 @@ def detect_owner(root, flag):
     return counts.most_common(1)[0][0]
 
 
-def load_ownership():
+def load_ownership(name="ownership"):
     sys.dont_write_bytecode = True
-    path = Path(__file__).resolve().parent / "ownership.py"
-    spec = importlib.util.spec_from_file_location("ownership", path)
+    path = Path(__file__).resolve().parent / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -250,11 +258,11 @@ def state_table(label, letter, path, docs, statuses, legacy_cites, extra=()):
     texts.update(dict(extra))
     cited = {num: cites(t, letter, legacy_cites)
              for num, t in texts.items()}
-    rows = []
+    rows, state_of = [], {}
     for n, heading, body in items:
         citing = sorted((num for num, c in cited.items() if n in c), key=num_key)
-        rows.append((f"{letter}{n}", ", ".join(citing) or "-",
-                     item_state(heading, body, citing, statuses)))
+        state_of[n] = item_state(heading, body, citing, statuses)
+        rows.append((f"{letter}{n}", ", ".join(citing) or "-", state_of[n]))
     if rows:
         w1 = max(len(r[0]) for r in rows) + 2
         w2 = max(len(r[1]) for r in rows) + 2
@@ -268,7 +276,7 @@ def state_table(label, letter, path, docs, statuses, legacy_cites, extra=()):
     dups = sorted(n for n, c in collections.Counter(defined).items() if c > 1)
     if dups:
         print(f"  duplicate numbers: {', '.join(f'{letter}{n}' for n in dups)}")
-    return items
+    return items, state_of
 
 
 def table_rows(text):
@@ -604,11 +612,15 @@ def new_print(folder, plan, d, own):
                 for c in r[1:]:
                     if c not in SPRINT_MARKS:
                         print(f"  sprints.md row {r[0]}: cell {c!r} not one of [x], [ ], ·, [!], blank")
-            grid = [r[0] for r in data if r and r[0]]
+            sp = load_ownership("sprints")
+            grid = [sp.row_name(r[0]) for r in data if r and r[0]]
             ticked = sum(1 for r in data if "[x]" in r[1:])
-            print(f"  {len(grid)} rows, {len(head) - 1} sprints, {ticked} done")
+            print(f"  {len(grid)} rows, {len(head) - 1} columns, {ticked} done")
             if owned is not None:
                 names = [m["name"] for m in owned]
+                batched = sp.batch_columns(folder, own, owned)
+                if batched is not None:
+                    names = [n for n in names if n in batched[0]]
                 for n in names:
                     if n not in grid:
                         print(f"  ownership.md row not in sprints.md: {n} (run sprints.py)")
@@ -640,6 +652,20 @@ def new_print(folder, plan, d, own):
                 quiet = False
     if quiet:
         print("  ok")
+
+
+def batch_marks(path):
+    """{batch number: True when its sprints.md column holds a run mark}."""
+    if not path.is_file():
+        return {}
+    own = load_ownership()
+    head, data = own.table_rows(read(path), "Milestone")
+    out = {}
+    for i, label in enumerate(head[1:] if head else []):
+        m = re.match(r"^B(\d+)$", label)
+        if m:
+            out[int(m.group(1))] = any(i + 1 < len(r) and r[i + 1] in ("[ ]", "[x]", "[!]") for r in data)
+    return out
 
 
 def main():
@@ -681,7 +707,7 @@ def main():
     d = legacy_collect(folder, index) if legacy else new_collect(folder, plan, own)
     docs, statuses = d["docs"], d["statuses"]
 
-    dec_items = state_table("Decisions", "D", decisions, docs, statuses, True)
+    dec_items, dec_states = state_table("Decisions", "D", decisions, docs, statuses, True)
     state_table("Findings", "F", findings, docs, statuses, False,
                 [(key, first) for key, _, first in d["extra"]])
 
@@ -720,9 +746,15 @@ def main():
     a_ids = []
     if not attention:
         print("  none")
+    ruled = set()
     for p in attention:
         lines = [l for _, l in outside_fences(read(p))]
         ids = [int(m.group(1)) for l in lines if (m := A_HEAD_RE.match(l))]
+        for i, l in enumerate(lines):
+            m = A_HEAD_RE.match(l)
+            nxt = next((x for x in lines[i + 1:] if x.strip()), "") if m else ""
+            if m and A_TAG_RE.match(nxt):
+                ruled.add(int(m.group(1)))
         if ids:
             a_ids += ids
             print(f"  {p.name}: {len(ids)} items, A{min(ids)} to A{max(ids)}")
@@ -732,22 +764,46 @@ def main():
     cited_a = a_cites(read(decisions), True) if decisions.is_file() else set()
     for _, p in docs:
         cited_a |= a_cites(read(p), False)
-    uncited = sorted(set(a_ids) - cited_a)
+    uncited = sorted(set(a_ids) - cited_a - ruled)
     if a_ids:
         print(f"  untriaged: {', '.join(f'A{n}' for n in uncited) or 'none'}")
     dups = sorted(n for n, c in collections.Counter(a_ids).items() if c > 1)
     if dups:
         print(f"  duplicate numbers: {', '.join(f'A{n}' for n in dups)}")
 
-    if not dec_items:
-        stage = "discuss"
-    elif not docs:
-        stage = "plan"
-    elif uncited:
-        stage = "triage"
+    print("Batches:")
+    tags = load_ownership().read_tags(folder)
+    nums = [n for n, _, _ in dec_items]
+    closed = lambda n: dec_states.get(n, "").startswith(("superseded", "deferred"))
+    batch_mode = any(t["batch"] for t in tags.values())
+    running = []
+    if batch_mode:
+        marks = batch_marks(folder / "sprints.md")
+        deciding = [n for n in nums if not tags.get(n, {}).get("batch") and not closed(n)]
+        groups = collections.defaultdict(list)
+        for n in nums:
+            if tags.get(n, {}).get("batch"):
+                groups[tags[n]["batch"]].append(n)
+        print(f"  deciding: {', '.join(f'D{n}' for n in deciding) or 'none'}")
+        for b in sorted(groups):
+            if all(tags[n]["done"] for n in groups[b]):
+                state = "done"
+            else:
+                state = "running" if marks.get(b) else "batched"
+                running.append(f"B{b}")
+            print(f"  B{b} {state}: {', '.join(f'D{n}' for n in groups[b])}")
     else:
-        stage = "run"
-    print(f"Stage: {stage}")
+        print("  none: no [B<n>] tag in decisions.md")
+        deciding = [n for n in nums if dec_states.get(n) == "unplanned"]
+        if any(st in ("planned", "running", "unknown") for st in dec_states.values()):
+            running.append("")
+    parts = []
+    if not dec_items or deciding or uncited:
+        parts.append("discuss")
+    if running:
+        named = ", ".join(r for r in running if r)
+        parts.append(f"run ({named})" if named else "run")
+    print(f"Stage: {', '.join(parts) or 'discuss'}")
 
 
 if __name__ == "__main__":

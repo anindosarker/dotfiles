@@ -1,17 +1,17 @@
 # Stage 4: triage
 
-Interactive with the owner. Input: an `attentions/ATTENTION-<YYYY-MM-DD>.md` file from stage 3.
+Folded into stage 1: the items of an `attentions/ATTENTION-<YYYY-MM-DD>.md` file enter the discussion at once, in order with the rest, when the runner sends DONE or BLOCKED.
 
 ## Steps
 
 1. Run `python3 -I <skill>/scripts/status.py <release>` to list the untriaged ATTENTION items.
 2. Settle every item that is not a real choice first, without the owner (decision with its `Source:` line, follow-up routed, epic or process text fixed inline). Then go through the real choices one at a time. For each, give the facts and a recommendation. Use the item format from SKILL.md stage 1 (title sentence, bullets, `## Options:` with the recommended option first); the next item only after the owner rules on this one. The owner gives feedback. Discuss in chat, not in the file.
-3. Record a decision only when the owner accepts it. It goes in `decisions.md` under a new heading `## Round <n>: triage of ATTENTION-<YYYY-MM-DD>`. Numbering continues. Each decision ends with `- Source: A<n>`. Format: [formats.md](formats.md).
+3. Record a decision only when the owner accepts it. It goes in `decisions.md` under a new heading `## Round <n>: triage of ATTENTION-<YYYY-MM-DD>`. Numbering continues. Each decision ends with `- Source: A<n>`. A ruling is a D item (fix) or an F item (defer); write the tag line `[D<n>]` or `[F<n>]` under the A heading. Format: [formats.md](formats.md).
 4. An item the owner accepts as it is still gets a short decision with its `Source:` line, so `status.py` sees it triaged.
 5. Record bugs found during triage in `findings.md`, under the same round heading.
 6. A decision that changes an earlier one supersedes it: mark the old heading `(superseded by D<n>)`.
 7. Route each piece of follow-up work (rules below).
-8. Back to stage 2 for the new epics: add each one with `scripts/new_epic.py` (a fix with no epic: `scripts/new_fix.py`), cite the decisions as `(D<n>)`, run `ownership.py` and `sprints.py`, and run the readiness check again.
+8. The new decisions join the next batch (SKILL.md, Batches): the fork writes their epics; a fix with no epic: `scripts/new_fix.py`.
 9. Handoff: only when the owner asks.
 
 ## Routing

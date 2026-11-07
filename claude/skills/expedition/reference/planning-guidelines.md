@@ -54,7 +54,7 @@ How to write an implementation plan for this repository. Applies to humans and a
 12. **No em dashes.** Use a comma, a colon or a new sentence.
 13. **Dependency edges need a file reason.** Each milestone block names its `Files owned` and
     `Depends on`; `ownership.py` computes the edges (a listed dependency, or a shared file,
-    lower epic number first) and the sprint columns. Milestones without such a reason run at
+    lower epic number first) and the run order. Milestones without such a reason run at
     the same time. A file shared by two milestones of one column is a script error, fixed in
     the epic.
 14. **Integration never waits on CI.** Merge on local checks that pass, merge commit per milestone.
@@ -158,7 +158,7 @@ New packages, env vars (name, default, purpose), reused infrastructure.
 ### 2.1 Milestones
 
 One block per milestone. A milestone is one branch, one worktree, one tracker, one merge, and
-fits one sprint; `ownership.py` reads these blocks.
+runs inside one batch; `ownership.py` reads these blocks.
 
 ### Milestone: [Name]
 
