@@ -21,6 +21,25 @@ colors = ['#f38ba8', '#a6e3a1', '#f9e2af', '#89b4fa', '#f5c2e7', '#94e2d5', '#fa
 #         red        green      yellow     blue       pink       teal       peach      mauve
 BASE = '#1e1e2e'  # Catppuccin Mocha base: the bar color that --alpha blends into
 
+# Extra accents for prefix y / Y. The cycle list is the 8 defaults plus these,
+# sorted by hue so y / Y step around the color wheel.
+EXTRA = [
+    # Catppuccin Mocha: rosewater, flamingo, maroon, sky, sapphire, lavender
+    '#f5e0dc', '#f2cdcd', '#eba0ac', '#89dceb', '#74c7ec', '#b4befe',
+    # Monokai: pink, orange, yellow, green, blue, purple
+    '#f92672', '#fd971f', '#e6db74', '#a6e22e', '#66d9ef', '#ae81ff',
+]
+
+
+def _hue(c):
+    import colorsys
+    r, g, b = (int(c[i:i + 2], 16) / 255 for i in (1, 3, 5))
+    h, l, s_ = colorsys.rgb_to_hls(r, g, b)
+    return (h if s_ > 0.25 else -1, l)
+
+
+CYCLE = sorted(colors + EXTRA, key=_hue)
+
 parser = argparse.ArgumentParser(description='Maps tmux window tags to colors.')
 parser.add_argument('session', type=str, help='session name')
 parser.add_argument('idx', type=int, help='index of the window')
@@ -131,8 +150,8 @@ def default_color():
 
 if args.cycle:
     cur = state.get(args.idx, state.get(args.name, default_color()))
-    i = colors.index(cur) if cur in colors else 0
-    state[args.idx] = colors[(i + args.cycle) % len(colors)]
+    i = CYCLE.index(cur) if cur in CYCLE else 0
+    state[args.idx] = CYCLE[(i + args.cycle) % len(CYCLE)]
     changed = True
 
 if changed:
