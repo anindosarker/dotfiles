@@ -20,7 +20,7 @@ Rows: every milestone of a spec that carries a "- Epic: E<n>" line (new_spec.py 
 every fix milestone. A later epic's independent milestones join an existing column, a running
 one too; dependent ones open the next. Row text is the epic label, the spec number and the
 milestone name, "E1 01 Filtering" ("fix <name>" for a fix milestone); rows sorted by epic,
-spec number, then ownership.md order. The talker reruns it on go, the runner on merge.
+spec number, then ownership.md order. The lead reruns it on go, the runner on merge.
 """
 import argparse
 import datetime

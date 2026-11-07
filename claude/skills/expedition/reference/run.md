@@ -15,7 +15,7 @@
 
 1. Run `python3 -I <skill>/scripts/status.py <release>` and fix every gap it reports.
 2. Confirm the stage 2 readiness check passed.
-3. The runner session runs every epic: started by `scripts/runner.sh start <release>` from the talker's working directory (the runner and every spec fork run from the same folder as the talker, never from a subfolder or the repo root the script could infer; the script takes the cwd it is called from, so call it in a Bash call of its own, never after a `cd`) as a window `<release> runner1` (also its session name) in the talker's own tmux session (outside tmux the script prints the command), brief from `templates/runner-brief.md`. Its first prompt starts with `ultracode`, so the Workflow tool is opted in from the first turn. Each go sends one RUN line; the turn it arrives in starts the epic: autopilot start script, loop scheduled, worktrees assigned, the epic's ready milestones launched. Loop: the loop skill with no interval (`ScheduleWakeup` dynamic mode), 30 minute fallback; the workflow or watcher notification is the real wake signal. The owner never has to type a command.
+3. The runner session runs every epic: started by `scripts/runner.sh start <release>` from the lead's working directory (the runner and every spec fork run from the same folder as the lead, never from a subfolder or the repo root the script could infer; the script takes the cwd it is called from, so call it in a Bash call of its own, never after a `cd`) as a window `<release> runner1` (also its session name) in the lead's own tmux session (outside tmux the script prints the command), brief from `templates/runner-brief.md`. Its first prompt starts with `ultracode`, so the Workflow tool is opted in from the first turn. Each go sends one RUN line; the turn it arrives in starts the epic: autopilot start script, loop scheduled, worktrees assigned, the epic's ready milestones launched. Loop: the loop skill with no interval (`ScheduleWakeup` dynamic mode), 30 minute fallback; the workflow or watcher notification is the real wake signal. The owner never has to type a command.
 4. A runner that died: `runner.sh start` finds its entry in `~/.claude/expedition-runners.json` and resumes it with `claude --resume <uuid>`. `runner.sh list` shows each runner busy or idle (Stop and UserPromptSubmit hooks of `templates/runner-settings.json`).
 5. The autopilot loop prompt is exactly `ultracode. Read ~/.claude/skills/expedition/reference/run.md, then continue the run. Skip if a turn is already working.` Nothing else goes in it. A loop fire cannot load a skill marked `disable-model-invocation`, and after compaction the session may no longer hold the run rules, so the prompt names the file.
 
@@ -24,11 +24,11 @@ The release's `process.md` (`.ai/plans/<release>/<owner>/process.md`) holds the 
 ## Epics
 
 - Messages, one line each, nothing else in a message:
-  - Talker to runner: `HELLO from <talker session name>`, typed by `runner.sh send` from a talker that starts fresh on a release with a live runner. No work starts.
-  - Talker to runner: `RUN E<n> <release folder> from <talker session name>`, typed into the runner window by `runner.sh send` (as `ultracode RUN ...`, so the turn is opted in to the Workflow tool)
-  - Runner to talker, by `SendMessage` to the name after `from`: `DONE E<n> <merge sha> attention <A ids or none>`, when every milestone of the epic has merged
-  - Runner to talker, the same way: `BLOCKED E<n> <tracker path>`, when a bounce loop or a gate cannot be resolved
-  - Spec writer to talker, by `SendMessage`: `SPECS E<n> <spec numbers>`, from the forked session `runner.sh fork` opened
+  - Lead to runner: `HELLO from <lead session name>`, typed by `runner.sh send` from a lead that starts fresh on a release with a live runner. No work starts.
+  - Lead to runner: `RUN E<n> <release folder> from <lead session name>`, typed into the runner window by `runner.sh send` (as `ultracode RUN ...`, so the turn is opted in to the Workflow tool)
+  - Runner to lead, by `SendMessage` to the name after `from`: `DONE E<n> <merge sha> attention <A ids or none>`, when every milestone of the epic has merged
+  - Runner to lead, the same way: `BLOCKED E<n> <tracker path>`, when a bounce loop or a gate cannot be resolved
+  - Spec writer to lead, by `SendMessage`: `SPECS E<n> <spec numbers>`, from the forked session `runner.sh fork` opened
 - Reply target: the name after `from` in the latest RUN or HELLO line; DONE and BLOCKED go there from then on.
 - RUN is idempotent: an epic whose `sprints.md` rows are already running or done is not started again; the runner replies with the current state.
 - Several epics run at once, no slot limit. One worktree per milestone from the pool. Machine load as today: `process.md` P5, `SERIAL_GATES` when loaded.
@@ -47,7 +47,7 @@ The loop prompt must be safe to fire at any time. Each fire reads this file, abo
    - Read `sprints.md` and the trackers only. No `git status`, `diff` or `log` in worktrees; no pull unless a merge is due this tick.
    - A tick with work (tick a cell, merge, launch) reports one line per action.
    - A tick that ticks or merges nothing ends with exactly one line: `tick <HH:MM>: <milestone> <stage>, ..., <milestone> waiting on <dep>. Next <HH:MM>.` No table, no per-milestone bullets, no restating what was read.
-   - Messages to the talker are DONE, BLOCKED and the reply to a HELLO only. Never a status line.
+   - Messages to the lead are DONE, BLOCKED and the reply to a HELLO only. Never a status line.
 
 Waiting on CI or a release run is never a foreground wait and never blocks the next milestone. Arm a background watcher: a shell loop over `gh pr checks <N> --json name,state` (or `gh run watch <id> --exit-status`) every 60 s that exits on any `FAILURE`, `ERROR` or `CANCELLED` and when nothing is `IN_PROGRESS`, `PENDING` or `QUEUED`. `SKIPPED` entries from a `labeled` event run are normal. Its completion notification wakes the loop; the fallback wakeup stays at 30 min. A milestone merges on local checks that pass; CI on the staging branch, after the one fast-forward, is the backstop, read in the integration milestone (`process.md` P1, P4).
 

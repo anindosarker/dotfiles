@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runner session for the expedition flow: a second Claude Code session in a tmux window
-# of the talker's own tmux session. It receives "RUN E<n> <release folder> from <talker>",
+# of the lead's own tmux session. It receives "RUN E<n> <release folder> from <lead>",
 # typed into its window by "send", and replies "DONE ..." or "BLOCKED ..." by SendMessage
 # (reference/run.md).
 #
@@ -10,9 +10,9 @@
 #        runner.sh send <release> "<line>"         type "ultracode <line>" into the runner window
 #                                                and submit it (typed prompts opt the turn in to
 #                                                ultracode; a SendMessage does not)
-#        runner.sh fork <release> E<n> "<D ids>" --from <talker> [--model M]
+#        runner.sh fork <release> E<n> "<D ids>" --from <lead> [--model M]
 #                                                open window "<release> specs E<n>": a forked session
-#                                                of the talker ($CLAUDE_CODE_SESSION_ID) that writes
+#                                                of the lead ($CLAUDE_CODE_SESSION_ID) that writes
 #                                                the epic's specs and replies "SPECS E<n> ...";
 #                                                its own --session-id is in the registry, and a
 #                                                fork whose window died is resumed, not forked again
@@ -36,7 +36,7 @@ BRIEF_TEMPLATE="$SKILL_DIR/templates/runner-brief.md"
 die() { echo "error: $*" >&2; exit 1; }
 
 usage() {
-  echo "usage: runner.sh start <release> [--model M] | list | stop <release or window name> | send <release> \"<line>\" | fork <release> E<n> \"<D ids>\" --from <talker> [--model M]" >&2
+  echo "usage: runner.sh start <release> [--model M] | list | stop <release or window name> | send <release> \"<line>\" | fork <release> E<n> \"<D ids>\" --from <lead> [--model M]" >&2
   exit 2
 }
 
@@ -221,7 +221,7 @@ cmd_fork() {
   [ -n "$release" ] && [ -n "$epic" ] && [ -n "$ids" ] || usage
   check_release "$release"
   [[ "$epic" =~ ^E[0-9]+$ ]] || die "bad epic '$epic', expected like E3"
-  [ -n "$from" ] || die "--from <talker session name> is required"
+  [ -n "$from" ] || die "--from <lead session name> is required"
   local name="$release specs $epic" cwd target uuid resume=0 parent="${CLAUDE_CODE_SESSION_ID:-}"
   cwd="$(pwd)"
   uuid="$(reg field "$name" uuid)"
@@ -235,13 +235,13 @@ cmd_fork() {
     cwd="$(reg field "$name" cwd)"
     parent="$(reg field "$name" parent)"
   else
-    [ -n "$parent" ] || die "CLAUDE_CODE_SESSION_ID is unset: run fork from the talker session"
+    [ -n "$parent" ] || die "CLAUDE_CODE_SESSION_ID is unset: run fork from the lead session"
     uuid="$(python3 -I -c 'import uuid; print(uuid.uuid4())')"
   fi
   if [ "$resume" = 1 ]; then
     prompt="Resumed. Finish the task of the first prompt of this session, then stop."
   elif [ -z "$prompt" ]; then
-    prompt="You are the spec writer for epic $epic of $release, decisions $ids. You hold the talker's full context. Write one spec per decided item with new_spec.py per SKILL.md stage 2, run ownership.py, then reply by SendMessage to $from with one line: SPECS $epic <spec numbers>. Do nothing else."
+    prompt="You are the spec writer for epic $epic of $release, decisions $ids. You hold the lead's full context. Write one spec per decided item with new_spec.py per SKILL.md stage 2, run ownership.py, then reply by SendMessage to $from with one line: SPECS $epic <spec numbers>. Do nothing else."
   fi
   local -a cmd
   if [ "$resume" = 1 ]; then

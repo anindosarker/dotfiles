@@ -17,9 +17,9 @@ Every item has an ID heading. Its first bullet is required and self-explanatory:
 
 ## Shared files
 
-`decisions.md` and the ATTENTION files are written by both sessions, talker and runner.
+`decisions.md` and the ATTENTION files are written by both sessions, lead and runner.
 
-- `[E<n>]` is written by whoever sends RUN. `[Done]` is written by the runner on merge, or by the talker when a decision with nothing to run is recorded.
+- `[E<n>]` is written by whoever sends RUN. `[Done]` is written by the runner on merge, or by the lead when a decision with nothing to run is recorded.
 - Re-read the file right before every write, make a targeted edit, commit at once. No held edits.
 - The next D, F or A number is read from the file at write time, never from memory.
 - Agents on milestone branches never edit `decisions.md`.
