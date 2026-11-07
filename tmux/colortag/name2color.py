@@ -16,8 +16,10 @@ def error(msg):
 
 
 # add your favorite color code (256) here as candidates
-colors = [203, 114, 221, 75, 176, 44, 215, 141]
-#         red  green yellow blue pink cyan orange purple
+# Catppuccin Mocha accents
+colors = ['#f38ba8', '#a6e3a1', '#f9e2af', '#89b4fa', '#f5c2e7', '#94e2d5', '#fab387', '#cba6f7']
+#         red        green      yellow     blue       pink       teal       peach      mauve
+BASE = '#1e1e2e'  # Catppuccin Mocha base: the bar color that --alpha blends into
 
 parser = argparse.ArgumentParser(description='Maps tmux window tags to colors.')
 parser.add_argument('session', type=str, help='session name')
@@ -149,18 +151,25 @@ if c is None:
     # color by window index (offset per session) so neighbouring windows differ
     c = default_color()
 
-def xterm_rgb(n):
-    if n >= 232:
-        v = 8 + (n - 232) * 10
+def to_rgb(c):
+    # a palette hex string, or a 0-255 code from a manual color-idx/color-name pin
+    if isinstance(c, str):
+        return tuple(int(c[i:i + 2], 16) for i in (1, 3, 5))
+    if c < 16:
+        return (128, 128, 128)
+    if c >= 232:
+        v = 8 + (c - 232) * 10
         return (v, v, v)
-    n -= 16
+    c -= 16
     lv = [0, 95, 135, 175, 215, 255]
-    return (lv[n // 36], lv[(n // 6) % 6], lv[n % 6])
+    return (lv[c // 36], lv[(c // 6) % 6], lv[c % 6])
 
 
 if args.alpha is not None:
-    fg, bg = xterm_rgb(c), xterm_rgb(237)
+    fg, bg = to_rgb(c), to_rgb(BASE)
     a = max(0.0, min(1.0, args.alpha))
     print("#{:02x}{:02x}{:02x}".format(*[round(f * a + b * (1 - a)) for f, b in zip(fg, bg)]))
+elif isinstance(c, str):
+    print(c)
 else:
     print("colour{}".format(c))
