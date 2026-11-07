@@ -106,7 +106,7 @@ cmd_start() {
   local name
   name="$(runner_name "$release")"
   local cwd
-  cwd="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+  cwd="$(pwd)"
   mkdir -p "$STATE_DIR"
 
   local state uuid target resume=0

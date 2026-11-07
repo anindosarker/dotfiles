@@ -21,7 +21,7 @@ Mechanical steps use the scripts, never hand-written files. The main agent calls
 - Overlap with running epics: `python3 -I ${CLAUDE_SKILL_DIR}/scripts/ownership.py v0.<n>.x --overlap <spec numbers or D ids>` (check mode, writes nothing)
 - Epic tags on go: `python3 -I ${CLAUDE_SKILL_DIR}/scripts/new_spec.py v0.<n>.x --epic E<n> <spec numbers or D ids>` (writes `- Epic: E<n>` under each spec's title line, `[E<n>]` under each cited decision and `E<n>` in the spec's Deliverables row; a D id names the specs citing it)
 - Sprint grid: `python3 -I ${CLAUDE_SKILL_DIR}/scripts/sprints.py v0.<n>.x`, by the talker on go and by the runner on merge (columns are the sprints `ownership.py` computes; ticks survive a regeneration)
-- Runner session: `${CLAUDE_SKILL_DIR}/scripts/runner.sh start|list|stop|send v0.<n>.x`
+- Runner session: `${CLAUDE_SKILL_DIR}/scripts/runner.sh start|list|stop|send v0.<n>.x`, run from the talker's working directory: the runner and the spec forks start in the same folder as the talker, never one level down
 - Mid-run fix: `python3 -I ${CLAUDE_SKILL_DIR}/scripts/new_fix.py v0.<n>.x <slug> "F3, F4"` (the tracker stub citing the findings plus a grid row in the running sprint column)
 - State and gaps: `python3 -I ${CLAUDE_SKILL_DIR}/scripts/status.py v0.<n>.x`
 
