@@ -29,7 +29,7 @@ parser.add_argument('--clear-idx', action='store_true')
 parser.add_argument('--clear-name', action='store_true')
 parser.add_argument('--clear', action='store_true')
 parser.add_argument('--show-state', action='store_true')
-parser.add_argument('--cycle', action='store_true', help='move this window to the next palette color')
+parser.add_argument('--cycle', type=int, nargs='?', const=1, help='move this window to the next (1) or previous (-1) palette color')
 args = parser.parse_args()
 
 xdg_config_home_path = os.environ.get("XDG_CONFIG_HOME")
@@ -121,8 +121,8 @@ if not (args.color_name is None):
 
 if args.cycle:
     cur = state.get(args.idx, state.get(args.name, colors[args.idx % len(colors)]))
-    i = colors.index(cur) if cur in colors else -1
-    state[args.idx] = colors[(i + 1) % len(colors)]
+    i = colors.index(cur) if cur in colors else 0
+    state[args.idx] = colors[(i + args.cycle) % len(colors)]
     changed = True
 
 if changed:

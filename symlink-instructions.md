@@ -103,4 +103,4 @@ ln -sf ~/.dotfiles/tmux/colortag/name2color.py ~/.tmux/plugins/tmux-colortag/nam
 tmux source-file ~/.tmux.conf
 ```
 
-`tmux/colortag/name2color.py` is a patched copy of the tmux-colortag script: 8-color palette, color by window index, and `--cycle` (bound to `prefix Y`). A plugin update (`prefix U`) may replace the link; re-run the last `ln -sf` line if colors go back to the old palette.
+`tmux/colortag/name2color.py` is a patched copy of the tmux-colortag script: 8-color palette, color by window index, and `--cycle` (`prefix y` next color, `prefix Y` previous). A plugin update (`prefix U`) may replace the link; re-run the last `ln -sf` line if colors go back to the old palette.
