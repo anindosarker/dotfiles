@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runner session for the expedition flow: a second Claude Code session in a tmux window
-# of the lead's own tmux session. It receives "RUN E<n> <release folder> from <lead>",
+# of the lead's own tmux session. It receives "RUN E<n> <release folder> epic <epic file> from <lead>",
 # typed into its window by "send", and replies "DONE ..." or "BLOCKED ..." by SendMessage
 # (reference/run.md).
 #
@@ -209,7 +209,7 @@ cmd_start() {
 
   local brief
   brief="$(file_of "$name").brief.md"
-  sed -e "s|{{release}}|$release|g" -e "s|{{name}}|$name|g" "$BRIEF_TEMPLATE" > "$brief"
+  sed -e "s|{{release}}|$release|g" -e "s|{{name}}|$name|g" -e "s|{{brief}}|$brief|g" "$BRIEF_TEMPLATE" > "$brief"
 
   local prompt="ultracode. You are $name, the expedition runner for $release. Follow the appended brief. Reply with one line: ready."
   local -a cmd=(claude -n "$name" --dangerously-skip-permissions --model "$model"
@@ -327,7 +327,7 @@ cmd_fork() {
   if [ "$resume" = 1 ]; then
     prompt="Resumed. Finish the task of the first prompt of this session, then stop."
   elif [ -z "$prompt" ]; then
-    prompt="You are the spec writer for epic $epic of $release, decisions $ids. You hold the lead's full context. Write one spec per decided item with new_spec.py per SKILL.md stage 2, run ownership.py, then reply by SendMessage to $from with one line: SPECS $epic <spec numbers>. Do nothing else."
+    prompt="You are the spec writer for epic $epic of $release, decisions $ids. You hold the lead's full context. First read the epic file epics/$epic.md in the release folder and every file its Notes name. Write one spec per decided item with new_spec.py per SKILL.md stage 2, run ownership.py, then reply by SendMessage to $from with one line: SPECS $epic <spec numbers>. Do nothing else."
   fi
   local -a cmd
   if [ "$resume" = 1 ]; then

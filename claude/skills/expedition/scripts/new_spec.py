@@ -19,6 +19,10 @@ Epic tag mode, on go: python3 -I new_spec.py <release> --epic E<n> <spec numbers
 D id) gets the tag line "[E<n>]" directly under its heading in decisions.md, and the spec's
 Deliverables row gets E<n> in its Epic cell. An existing Epic line or epic tag is kept and
 reported. Each file is read right before its write.
+
+Both modes refuse a superseded decision (heading "(superseded by D<n>)", or named by a later
+"- Supersedes D<n>." bullet): create mode when the title, scope or template cites one, tag mode
+when a named spec cites one or a named D id is one.
 """
 import argparse
 import collections
@@ -187,6 +191,16 @@ def load_ownership():
     return mod
 
 
+def refuse_superseded(folder, nums, what):
+    """Die when any of the D numbers is superseded."""
+    heads, bullets = load_ownership().supersedes(folder)
+    gone = {**bullets, **heads}
+    hit = sorted(n for n in nums if n in gone)
+    if hit:
+        die(f"{what} cites superseded " + ", ".join(f"D{n} (by D{gone[n]})" for n in hit)
+            + ": cite the current decision")
+
+
 def tag_epic(folder, epic, items):
     """Write "- Epic: E<n>" into each named spec (a D id names the specs citing it) and
     "[E<n>]" under each decision those specs cite and each named D id."""
@@ -205,7 +219,9 @@ def tag_epic(folder, epic, items):
             specs.add(item)
         else:
             die(f"'{item}' is neither a spec number with a file nor a D id")
-    for num in specs:
+    refuse_superseded(folder, nums, "named D id")
+    for num in sorted(specs, key=own.num_key):
+        refuse_superseded(folder, own.spec_cites(files[num]), f"spec {files[num].name}")
         nums |= own.spec_cites(files[num])
     path = folder / "decisions.md"
     if not path.is_file():
@@ -324,6 +340,11 @@ def main():
     new_plan = insert_row(plan.read_text(encoding="utf-8"), a.num, row)
     rules = [] if a.template else find_rules(root)
     template = load_template(root, a.template, rules)
+    cited = set()
+    for text in (a.title, a.scope, template):
+        for m in re.finditer(r"\((D\d+[^)]*)\)", text):
+            cited |= {int(n) for n in re.findall(r"\bD(\d+)\b", m.group(1))}
+    refuse_superseded(folder, cited, f"spec {spec_name}")
 
     spec.write_text(set_heading(template, f"# {a.num}: {a.title}"), encoding="utf-8")
     print(spec)

@@ -25,14 +25,19 @@ The release's `process.md` (`.ai/plans/<release>/<owner>/process.md`) holds the 
 
 - Messages, one line each, nothing else in a message:
   - Lead to runner: `HELLO from <lead session name>`, typed by `runner.sh send` from a lead that starts fresh on a release with a live runner. No work starts.
-  - Lead to runner: `RUN E<n> <release folder> from <lead session name>`, typed into the runner window by `runner.sh send` (as `ultracode RUN ...`, so the turn is opted in to the Workflow tool)
+  - Lead to runner: `RUN E<n> <release folder> epic <release folder>/epics/E<n>.md from <lead session name>`, typed into the runner window by `runner.sh send` (as `ultracode RUN ...`, so the turn is opted in to the Workflow tool)
+  - Lead to runner, typed the same way: `HOLD E<n>`: launch nothing of that epic until its next RUN; running milestones continue.
+  - Lead to runner, typed: `SKIP <spec number>`: stop the Workflow of each running milestone of that spec, mark each unmerged row `[!]`, tracker `Status: skipped (D<new>)` (the D id from the epic file's SKIP note), branch left in place for salvage; reply `NOTE <spec>: skipped`.
+  - Lead to runner, typed: `NOTE E<n>: <note>`, a Notes line of that epic file. `RULES: <files>, <why>`: a rule file changed; re-read the files named, reply `ACK RULES`.
   - Runner to lead, by `SendMessage` to the name after `from`: `DONE E<n> <merge sha> attention <A ids or none>`, when every milestone of the epic has merged
   - Runner to lead, the same way: `BLOCKED E<n> <tracker path>`, when a bounce loop or a gate cannot be resolved
   - Spec writer to lead, by `SendMessage`: `SPECS E<n> <spec numbers>`, from the forked session `runner.sh fork` opened
   - Watcher to lead, typed into the lead window by `scripts/nudge-watch.sh`: `NUDGE <runner or fork name, or unknown>: <text>`, a You Should Know note shown to an unattended session. The lead treats it as owner feedback (SKILL.md, Owner input). The runner never sees nudges.
-  - Either direction: `NOTE <id>: <one line>`, only when the meaning of an id the other session may hold changes (a duplicate closed as another id, a decision superseded, an item moved to a fix milestone). Never status.
+  - Either direction: `NOTE <id>: <one line>`, only when the meaning of an id the other session may hold changes (a duplicate closed as another id, `NOTE D7: superseded by D15` from whoever supersedes, an item moved to a fix milestone). Never status.
 - Reply target: the name after `from` in the latest RUN or HELLO line; DONE and BLOCKED go there from then on.
-- RUN is idempotent: an epic whose `sprints.md` rows are already running or done is not started again; the runner replies with the current state.
+- On every RUN line, before launching anything: re-read the release's `process.md`, this file and the brief, then the epic's specs and its epic file.
+- On RUN and on every line typed to it: read the epic file of every epic it runs, re-read whatever a note names, append ` [ack HH:MM]` to each note it read, commit (Shared files rules). A note without ack is unread.
+- RUN is idempotent: an epic whose `sprints.md` rows are already running or done is not started again; the runner replies with the current state. A RUN for a held epic lifts the hold.
 - Several epics run at once, no slot limit. One worktree per milestone from the pool. Machine load as today: `process.md` P5, `SERIAL_GATES` when loaded.
 - On each merge the runner ticks the row and reruns `sprints.py`. When every milestone of an epic has merged it writes ATTENTION, `findings.md` and the handoff, tags `[Done]` on the epic's decisions, sends DONE.
 - Shared files (`decisions.md`, ATTENTION): the rules in [formats.md](formats.md), Shared files.
@@ -51,7 +56,7 @@ Environment blockers are the run manager's to fix, never to wait on: a stopped D
    - Read `sprints.md` and the trackers only. No `git status`, `diff` or `log` in worktrees; no pull unless a merge is due this tick.
    - A tick with work (tick a cell, merge, launch) reports one line per action.
    - A tick that ticks or merges nothing ends with exactly one line: `tick <HH:MM>: <milestone> <stage>, ..., <milestone> waiting on <dep>. Next <HH:MM>.` No table, no per-milestone bullets, no restating what was read.
-   - Messages to the lead are DONE, BLOCKED, NOTE and the reply to a HELLO only. Never a status line.
+   - Messages to the lead are DONE, BLOCKED, NOTE, ACK RULES and the reply to a HELLO only. Never a status line.
 
 Waiting on CI or a release run is never a foreground wait and never blocks the next milestone. Arm a background watcher: a shell loop over `gh pr checks <N> --json name,state` (or `gh run watch <id> --exit-status`) every 60 s that exits on any `FAILURE`, `ERROR` or `CANCELLED` and when nothing is `IN_PROGRESS`, `PENDING` or `QUEUED`. `SKIPPED` entries from a `labeled` event run are normal. Its completion notification wakes the loop; the fallback wakeup stays at 30 min. A milestone merges on local checks that pass; CI on the staging branch, after the one fast-forward, is the backstop, read in the integration milestone (`process.md` P1, P4).
 

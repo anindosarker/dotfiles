@@ -6,6 +6,7 @@
 - ATTENTION file
 - decisions.md
 - findings.md
+- Epic file
 - sprints.md
 - Tracker
 - process.md
@@ -17,7 +18,7 @@ Every item has an ID heading. Its first bullet is required and self-explanatory:
 
 ## Shared files
 
-`decisions.md` and the ATTENTION files are written by both sessions, lead and runner.
+`decisions.md`, the ATTENTION files and the epic files are written by both sessions, lead and runner.
 
 - `[E<n>]` is written by whoever sends RUN. `[Done]` is written by the runner on merge, or by the lead when a decision with nothing to run is recorded.
 - Re-read the file right before every write, make a targeted edit, commit at once. No held edits.
@@ -66,7 +67,7 @@ One file per release, template [../templates/decisions.md](../templates/decision
 ### D1 Rewrite internals on TanStack v9 primitives
 
 - First bullet, required: explains the decision.
-- Then what changes and what stays. A later ruling on the same decision is a dated addendum bullet under it, never a rewrite.
+- Then what changes and what stays.
 - Then anything: bullets, code blocks, examples, sub-bullets.
 
 ## Round 2: triage of ATTENTION-2026-10-28
@@ -93,10 +94,33 @@ One file per release, template [../templates/decisions.md](../templates/decision
   ```
 
 - Accepted decisions only. Questions stay in chat.
-- Superseded: the heading becomes `### D7 (superseded by D15) ...`. The text stays.
-- Small wording fixes: in place.
+- Built: a milestone citing the decision has a `[ ]` or `[x]` cell in `sprints.md`. Before that, a change is an edit in place, same id; from then on, a supersede.
+- Supersede marks both sides: the old heading becomes `### D7 (superseded by D15) ...`, the new decision's first bullet is `- Supersedes D7.` The heading mark is the only edit an old decision ever gets.
 - Deferred to another release: add the bullet `- Deferred to v0.5.x`. That release's specs cite it as `(v0.4.x D9)`.
 - Specs cite a decision as `(D7)`.
+
+## Epic file
+
+`epics/E<n>.md`, one per epic, written by `new_epic_file.py`; lifecycle in SKILL.md stage 1, reading and ack in [run.md](run.md), Epics.
+
+```
+# E6
+
+Decisions: D35, D36, D38.
+Specs: 09, 10.
+
+## Notes
+
+- process.md P3, P4 changed since E5: re-read before the first launch. [ack 14:05]
+- run.md tick rules changed: one line per idle tick. [ack 14:05]
+- Owner tried the dropdown version and disliked it; do not propose it back. [ack 14:05]
+- Spec 10 builds on 07 from E3; 07 merges first. [ack 14:05]
+- SKIP 09: D38 superseded by D41, rebuilt next epic.
+```
+
+- Notes hold only what the specs cannot say: rule changes since the last epic, owner context, cross-epic order, the lead's moves during the run (SKIP, HOLD). Nothing restates a decision, a spec or a tracker.
+- An urgent note starts with `Urgent:`; a RULES line is one.
+- ` [ack HH:MM]` is appended by the runner when it has read the note; a note without it is unread.
 
 ## findings.md
 
@@ -150,7 +174,7 @@ Checks:
 - Only what a later task, a resume or the owner would otherwise rediscover.
 ```
 
-- `Status:` is `planned`, `running` or `merged (<commit>)`.
+- `Status:` is `planned`, `running`, `merged (<commit>)` or `skipped (D<n>)` (a SKIP, `D<n>` the superseding decision).
 - Required: the header lines and one line per task, with the last commit and the workflow run id of the run that covered the task.
 - A fix milestone's tracker cites its findings on its first line, for example `# Component fixes (F3, F4), tracker`.
 - `Checks:` is followed by one bullet per check: command, commit, result. The integration milestone's suite run on the staging branch gets its own bullet.

@@ -478,6 +478,33 @@ def spec_epic(path):
     return None
 
 
+SUPERSEDED_HEAD_RE = re.compile(r"\(superseded by D(\d+)\)")
+SUPERSEDES_RE = re.compile(r"^\s*-\s*Supersedes D(\d+)\b")
+
+
+def supersedes(folder):
+    """(heads, bullets): {old D: new D} from "### D7 (superseded by D15)" heading marks and from
+    "- Supersedes D7." bullets under a later decision. A superseded decision is a key of either."""
+    path = folder / "decisions.md"
+    heads, bullets, cur = {}, {}, None
+    if not path.is_file():
+        return heads, bullets
+    for _, line in outside_fences(read(path)):
+        m = D_HEAD_RE.match(line)
+        if m:
+            cur = int(m.group(1))
+            s = SUPERSEDED_HEAD_RE.search(line)
+            if s:
+                heads[cur] = int(s.group(1))
+            continue
+        if line.startswith("#"):
+            cur = None
+        s = SUPERSEDES_RE.match(line)
+        if s and cur is not None:
+            bullets[int(s.group(1))] = cur
+    return heads, bullets
+
+
 def spec_epics(folder):
     """{spec number: (epic or None, sorted cited D numbers)}; epic from the spec's Epic line only."""
     return {num: (spec_epic(path), sorted(spec_cites(path))) for num, path in spec_files(folder)}

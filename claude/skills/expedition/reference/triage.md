@@ -9,7 +9,7 @@ Folded into stage 1: the items of an `attentions/ATTENTION-<YYYY-MM-DD>.md` file
 3. Record a decision only when the owner accepts it. It goes in `decisions.md` under a new heading `## Round <n>: triage of ATTENTION-<YYYY-MM-DD>`. Numbering continues. Each decision ends with `- Source: A<n>`. A ruling is a D item (fix) or an F item (defer); write the tag line `[D<n>]` or `[F<n>]` under the A heading. Format: [formats.md](formats.md).
 4. An item the owner accepts as it is still gets a short decision with its `Source:` line, so `status.py` sees it triaged.
 5. Record bugs found during triage in `findings.md`, under the same round heading.
-6. A decision that changes an earlier one supersedes it: mark the old heading `(superseded by D<n>)`.
+6. A decision that changes an earlier one: SKILL.md, Changing a decision.
 7. Route each piece of follow-up work (rules below).
 8. The new decisions join the next epic (SKILL.md, Epics): the spec writer (a forked session) writes their specs; a fix with no spec: `scripts/new_fix.py`.
 9. Handoff: only when the owner asks.

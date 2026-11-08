@@ -18,6 +18,10 @@ for a decision with nothing to run) puts the decision in an epic. The summary li
 (no tag), in E<n> (no row of the epic in sprints.md carries a run mark), running (one does)
 and done ([Done]). The stage line reports discuss and run together ("Stage: discuss, run
 (E2, E3)"); an open ATTENTION item counts as discuss, never as a stage of its own.
+Also under Epics: the decisions still editable in place (no citing spec has a sprints.md row
+with "[ ]" or "[x]", not superseded); a supersede marked on one side only; an unbuilt spec
+citing a superseded decision; for each epic not done, its epics/E<n>.md missing or Notes bullets
+without "[ack HH:MM]"; while an epic runs, the next epic file missing.
 
 Gaps reported for the layout: a plan section other than Goals and Deliverables; a
 Deliverables Scope cell over 120 characters; a spec with no "### Milestone:" block, a block without Files owned, a Task line without
@@ -48,7 +52,7 @@ LIST = r"(\d+(?:\s*(?:,|and|to)\s*\d+)*)"
 DEC_PAREN_RE = re.compile(r"\(decisions? " + LIST + r"\)")
 DEC_BARE_RE = re.compile(r"\bdecision (\d+)(?![\d-])", re.I)
 STATUS_RE = re.compile(r"^Status:\s*(.*?)\s*$", re.M)
-STATUS_VALUE_RE = re.compile(r"^(planned|running|done|merged)\b\s*(?:\(([^)]*)\))?")
+STATUS_VALUE_RE = re.compile(r"^(planned|running|done|merged|skipped)\b\s*(?:\(([^)]*)\))?")
 A_HEAD_RE = re.compile(r"^#{2,3}\s+A(\d+)\b")
 A_TAG_RE = re.compile(r"^\s*\[(?:D|F)\d+\]")
 SOURCE_RE = re.compile(r"Source:\s*(A\d+(?:\s*(?:,|and)\s*A\d+)*)")
@@ -535,6 +539,33 @@ def epic_marks(path):
     return out
 
 
+def built_specs(path):
+    """Spec numbers with a sprints.md row ("E<n> NN name") holding "[ ]" or "[x]"."""
+    if not path.is_file():
+        return set()
+    head, data = load_ownership().table_rows(read(path), "Milestone")
+    out = set()
+    for r in data if head else []:
+        m = re.match(r"^E\d+\s+(\d{2}(?:\.\d+)?)\s", r[0]) if r else None
+        if m and any(c in ("[ ]", "[x]") for c in r[1:]):
+            out.add(m.group(1))
+    return out
+
+
+ACK_RE = re.compile(r"\[ack \d{1,2}:\d{2}\]")
+
+
+def unacked_notes(path):
+    """Notes bullets of an epic file without an ack."""
+    out, notes = [], False
+    for _, line in outside_fences(read(path)):
+        if line.startswith("## "):
+            notes = line.strip() == "## Notes"
+        elif notes and line.startswith("- ") and not ACK_RE.search(line):
+            out.append(line[2:].strip())
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(usage="status.py <release> [--owner X] [--root PATH]")
     ap.add_argument("release")
@@ -649,6 +680,35 @@ def main():
             state = " running" if marks.get(e) else ""
             running.append(f"E{e}")
         print(f"  E{e}{state}: {', '.join(f'D{n}' for n in groups[e])}")
+    heads, bullets = own.supersedes(folder)
+    gone = {**bullets, **heads}
+    for old, new in sorted(bullets.items()):
+        if heads.get(old) != new:
+            print(f"  D{new} supersedes D{old}, but the D{old} heading lacks (superseded by D{new})")
+    for old, new in sorted(heads.items()):
+        if bullets.get(old) != new:
+            print(f"  D{old} heading says superseded by D{new}, but D{new} lacks '- Supersedes D{old}.'")
+    cited = {num: own.spec_cites(p) for num, p in docs}
+    built = built_specs(folder / "sprints.md")
+    for num, c in cited.items():
+        bad = sorted(c & set(gone)) if num not in built else []
+        if bad:
+            print(f"  spec {num} cites superseded {', '.join(f'D{n} (by D{gone[n]})' for n in bad)}")
+    editable = [n for n in nums if n not in gone
+                and not any(n in c for num, c in cited.items() if num in built)]
+    print(f"  editable in place: {', '.join(f'D{n}' for n in editable) or 'none'}; every other decision changes by supersede")
+    epics_dir = folder / "epics"
+    for e in running:
+        ef = epics_dir / f"{e}.md"
+        if not ef.is_file():
+            print(f"  {ef.relative_to(folder)} missing")
+            continue
+        for note in unacked_notes(ef):
+            print(f"  {e} note without ack: {note[:90]}")
+    if any(marks.get(int(e[1:])) for e in running):
+        nxt = f"E{max(groups) + 1}"
+        if not (epics_dir / f"{nxt}.md").is_file():
+            print(f"  epics/{nxt}.md missing: new_epic_file.py {a.release} {nxt}")
     parts = []
     if not dec_items or deciding or uncited:
         parts.append("discuss")
