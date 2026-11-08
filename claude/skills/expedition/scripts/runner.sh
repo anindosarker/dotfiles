@@ -4,10 +4,10 @@
 # typed into its window by "send", and replies "DONE ..." or "BLOCKED ..." by SendMessage
 # (reference/run.md).
 #
-# Usage: runner.sh start <release> [--model M] [--new]   reuse the live runner, resume a dead one, or open the next number; --new opens another runner beside the live one
+# Usage: runner.sh start <release> [--model M] [--new] [--from <lead>]   reuse the live runner, resume a dead one, or open the next number; --new opens another runner beside the live one
 #        runner.sh list                          registry entries with busy or idle
 #        runner.sh stop <release>                close the window, mark the entry stopped
-#        runner.sh send <release> "<line>"         type "ultracode <line>" into the runner window
+#        runner.sh send [--from <lead>] <release> "<line>"   type "ultracode <line>" into the runner window
 #                                                and submit it (typed prompts opt the turn in to
 #                                                ultracode; a SendMessage does not)
 #        runner.sh fork <release> E<n> "<D ids>" --from <lead> [--model M]
@@ -17,6 +17,14 @@
 #                                                its own --session-id is in the registry, and a
 #                                                fork whose window died is resumed, not forked again
 #        runner.sh stop "<window name>"          close a fork window ("<release> specs E<n>")
+#        runner.sh watch start|stop|status        the nudge watcher (scripts/nudge-watch.sh)
+#
+# Lead: start, send and fork run inside tmux record the calling window as registry key "lead"
+# ({"tmux": "<session>:<window id>", "session": $CLAUDE_CODE_SESSION_ID, "name": --from or the
+# "from <name>" of the sent line}). start also starts the nudge watcher (pid file
+# ~/.claude/expedition-runners/nudge-watch.pid), which types "NUDGE <source>: <text>" into the
+# lead window for each You Should Know note shown to a runner, a fork or an unknown session;
+# stop stops it once no runner or fork window is live.
 #
 # Registry: ~/.claude/expedition-runners.json, one entry per runner name
 # (name, uuid, tmux target, cwd, release, started, state). Status files:
@@ -32,11 +40,13 @@ REGISTRY="$HOME/.claude/expedition-runners.json"
 STATE_DIR="$HOME/.claude/expedition-runners"
 SETTINGS="$SKILL_DIR/templates/runner-settings.json"
 BRIEF_TEMPLATE="$SKILL_DIR/templates/runner-brief.md"
+WATCHER="$SKILL_DIR/scripts/nudge-watch.sh"
+WATCH_PID="$STATE_DIR/nudge-watch.pid"
 
 die() { echo "error: $*" >&2; exit 1; }
 
 usage() {
-  echo "usage: runner.sh start <release> [--model M] | list | stop <release or window name> | send <release> \"<line>\" | resume <release or window name> | fork <release> E<n> \"<D ids>\" --from <lead> [--model M]" >&2
+  echo "usage: runner.sh start <release> [--model M] [--new] [--from <lead>] | list | stop <release or window name> | send <release> \"<line>\" | resume <release or window name> | fork <release> E<n> \"<D ids>\" --from <lead> [--model M] | watch start|stop|status" >&2
   exit 2
 }
 
@@ -59,8 +69,14 @@ elif op == "put":
     data[sys.argv[3]] = e
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2) + "\n")
+elif op == "set":
+    data[sys.argv[3]] = json.loads(sys.argv[4])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2) + "\n")
 elif op == "all":
     for name, e in data.items():
+        if name == "lead":
+            continue
         print("\t".join([name, e.get("state", ""), e.get("uuid", "") or "-", e.get("tmux", ""),
                          e.get("release", ""), e.get("started", ""), e.get("cwd", ""),
                          e.get("kind", "runner")]))
@@ -97,6 +113,57 @@ next_runner_name() {
   echo "$1 runner$n"
 }
 
+# record_lead [name]: inside tmux, store the calling window as registry key "lead"; an empty
+# name keeps the recorded one.
+record_lead() {
+  [ -n "${TMUX:-}" ] || return 0
+  local target name="${1:-}"
+  target="$(tmux display-message -p -t "${TMUX_PANE:-}" '#{session_name}:#{window_id}')"
+  [ -n "$name" ] || name="$(python3 -I -c 'import json,sys; from pathlib import Path; p=Path(sys.argv[1]); d=json.loads(p.read_text()) if p.is_file() else {}; print((d.get("lead") or {}).get("name", ""))' "$REGISTRY")"
+  reg set lead "$(python3 -I -c 'import json,sys; print(json.dumps({"tmux": sys.argv[1], "session": sys.argv[2], "name": sys.argv[3]}))' "$target" "${CLAUDE_CODE_SESSION_ID:-}" "$name")"
+}
+
+watch_running() {
+  local pid
+  pid="$(cat "$WATCH_PID" 2>/dev/null || true)"
+  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
+
+watch_start() {
+  if watch_running; then echo "nudge watcher running (pid $(cat "$WATCH_PID"))"; return 0; fi
+  mkdir -p "$STATE_DIR"
+  nohup "$WATCHER" </dev/null >/dev/null 2>&1 &
+  echo $! > "$WATCH_PID"
+  disown 2>/dev/null || true
+  echo "nudge watcher started (pid $(cat "$WATCH_PID"))"
+}
+
+watch_stop() {
+  if watch_running; then kill "$(cat "$WATCH_PID")"; echo "nudge watcher stopped"; else echo "nudge watcher not running"; fi
+  rm -f "$WATCH_PID"
+}
+
+# any_live: a runner or fork entry not stopped whose window is alive.
+any_live() {
+  local name state uuid target rest
+  while IFS=$'\t' read -r name state uuid target rest; do
+    [ -n "$name" ] || continue
+    [ "$state" != stopped ] && window_alive "$target" && return 0
+  done <<< "$(reg all)"
+  return 1
+}
+
+cmd_watch() {
+  [ $# -eq 1 ] || usage
+  case "$1" in
+    start) watch_start ;;
+    stop) watch_stop ;;
+    status)
+      if watch_running; then echo "nudge watcher running (pid $(cat "$WATCH_PID"))"; else echo "nudge watcher not running"; fi ;;
+    *) usage ;;
+  esac
+}
+
 # Status and brief files: the name with spaces replaced by "-".
 file_of() { echo "$STATE_DIR/${1// /-}"; }
 
@@ -105,10 +172,11 @@ check_release() {
 }
 
 cmd_start() {
-  local release="" model="${EXPEDITION_RUNNER_MODEL:-fable}" new=0
+  local release="" model="${EXPEDITION_RUNNER_MODEL:-fable}" new=0 from=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --model) [ $# -ge 2 ] || usage; model="$2"; shift 2 ;;
+      --from) [ $# -ge 2 ] || usage; from="$2"; shift 2 ;;
       --new) new=1; shift ;;
       -*) usage ;;
       *) [ -z "$release" ] || usage; release="$1"; shift ;;
@@ -126,9 +194,11 @@ cmd_start() {
   state="$(reg field "$name" state)"
   uuid="$(reg field "$name" uuid)"
   target="$(reg field "$name" tmux)"
+  record_lead "$from"
   if [ -n "$uuid" ] && [ "$state" != "stopped" ]; then
     if window_alive "$target"; then
       echo "$name already running in $target (session $uuid)"
+      watch_start
       exit 0
     fi
     resume=1
@@ -171,6 +241,7 @@ cmd_start() {
   else
     echo "$name started in $target (session $uuid)"
   fi
+  watch_start
 }
 
 cmd_list() {
@@ -212,6 +283,7 @@ cmd_stop() {
     printf 'stopped' > "$(file_of "$name").status"
   fi
   echo "$name stopped"
+  if ! any_live && watch_running; then watch_stop; fi
 }
 
 cmd_fork() {
@@ -235,6 +307,7 @@ cmd_fork() {
   check_release "$release"
   [[ "$epic" =~ ^E[0-9]+$ ]] || die "bad epic '$epic', expected like E3"
   [ -n "$from" ] || die "--from <lead session name> is required"
+  record_lead "$from"
   local name="$release specs $epic" cwd target uuid resume=0 parent="${CLAUDE_CODE_SESSION_ID:-}"
   cwd="$(pwd)"
   uuid="$(reg field "$name" uuid)"
@@ -305,8 +378,13 @@ cmd_resume() {
 }
 
 cmd_send() {
+  local from=""
+  if [ "${1:-}" = --from ]; then [ $# -ge 2 ] || usage; from="$2"; shift 2; fi
   [ $# -eq 2 ] || usage
   local name line="ultracode $2" target i
+  # The lead name: --from, else the "from <name>" that ends a RUN or HELLO line.
+  [ -n "$from" ] || from="$(sed -nE 's/.* from ([^ ]+)$/\1/p' <<< "$2")"
+  record_lead "$from"
   if [[ "$1" =~ ^v[0-9]+\.[0-9]+\.x$ ]]; then name="$(runner_name "$1")"; else name="$1"; fi
   [ -n "$(reg field "$name" uuid)" ] || die "no registry entry for $name"
   [ "$(reg field "$name" state)" != "stopped" ] || die "$name is stopped: runner.sh start $1"
@@ -335,5 +413,6 @@ case "$sub" in
   send) cmd_send "$@" ;;
   resume) cmd_resume "$@" ;;
   fork) cmd_fork "$@" ;;
+  watch) cmd_watch "$@" ;;
   *) usage ;;
 esac

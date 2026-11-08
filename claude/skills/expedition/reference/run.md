@@ -29,6 +29,7 @@ The release's `process.md` (`.ai/plans/<release>/<owner>/process.md`) holds the 
   - Runner to lead, by `SendMessage` to the name after `from`: `DONE E<n> <merge sha> attention <A ids or none>`, when every milestone of the epic has merged
   - Runner to lead, the same way: `BLOCKED E<n> <tracker path>`, when a bounce loop or a gate cannot be resolved
   - Spec writer to lead, by `SendMessage`: `SPECS E<n> <spec numbers>`, from the forked session `runner.sh fork` opened
+  - Watcher to lead, typed into the lead window by `scripts/nudge-watch.sh`: `NUDGE <runner or fork name, or unknown>: <text>`, a You Should Know note shown to an unattended session. The lead treats it as owner feedback (SKILL.md, Owner input). The runner never sees nudges.
   - Either direction: `NOTE <id>: <one line>`, only when the meaning of an id the other session may hold changes (a duplicate closed as another id, a decision superseded, an item moved to a fix milestone). Never status.
 - Reply target: the name after `from` in the latest RUN or HELLO line; DONE and BLOCKED go there from then on.
 - RUN is idempotent: an epic whose `sprints.md` rows are already running or done is not started again; the runner replies with the current state.
