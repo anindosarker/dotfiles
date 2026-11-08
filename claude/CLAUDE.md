@@ -8,4 +8,4 @@
 - Ask only questions required to finish the current task.
 - Long multi-part work: `/expedition` (discuss, plan, run, triage).
 - Missing context after a handoff, compaction or a new session: `/recall` (transcript grep, ctx_search, ask the prior session).
-- Explain: simplest first, example over abstract flow, detail on follow-up.
+- "Explain" always means explain simply: 3 to 4 short bullets, plain words, one example, no ids or paths; detail only on a follow-up.
