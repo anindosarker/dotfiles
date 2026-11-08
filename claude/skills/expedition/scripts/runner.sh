@@ -23,7 +23,7 @@
 # ~/.claude/expedition-runners/<name>.status, written by the hooks in
 # templates/runner-settings.json ("idle" on Stop, "busy" on UserPromptSubmit); the hooks find
 # the name in EXPEDITION_RUNNER, exported here before exec.
-# Model: --model, else $EXPEDITION_RUNNER_MODEL, else opus. Fork model: --model, else
+# Model: --model, else $EXPEDITION_RUNNER_MODEL, else fable. Fork model: --model, else
 # $EXPEDITION_FORK_MODEL, else fable. Forks are registry entries of kind "fork", no status file.
 set -euo pipefail
 
@@ -36,7 +36,7 @@ BRIEF_TEMPLATE="$SKILL_DIR/templates/runner-brief.md"
 die() { echo "error: $*" >&2; exit 1; }
 
 usage() {
-  echo "usage: runner.sh start <release> [--model M] | list | stop <release or window name> | send <release> \"<line>\" | fork <release> E<n> \"<D ids>\" --from <lead> [--model M]" >&2
+  echo "usage: runner.sh start <release> [--model M] | list | stop <release or window name> | send <release> \"<line>\" | resume <release or window name> | fork <release> E<n> \"<D ids>\" --from <lead> [--model M]" >&2
   exit 2
 }
 
@@ -93,7 +93,7 @@ check_release() {
 }
 
 cmd_start() {
-  local release="" model="${EXPEDITION_RUNNER_MODEL:-opus}"
+  local release="" model="${EXPEDITION_RUNNER_MODEL:-fable}"
   while [ $# -gt 0 ]; do
     case "$1" in
       --model) [ $# -ge 2 ] || usage; model="$2"; shift 2 ;;
@@ -266,6 +266,31 @@ cmd_fork() {
   fi
 }
 
+# resume <release | "<window name>">: a live window gets the word "resume" typed in (the runner
+# with the ultracode prefix, a fork without); a dead runner is started again (start resumes it);
+# a dead fork prints its claude --resume line. Never stop a window on a usage limit.
+cmd_resume() {
+  [ $# -eq 1 ] || usage
+  local name target uuid state line
+  if [[ "$1" =~ ^v[0-9]+\.[0-9]+\.x$ ]]; then name="$(runner_name "$1")"; line="ultracode resume"; else name="$1"; line="resume"; fi
+  uuid="$(reg field "$name" uuid)"
+  [ -n "$uuid" ] || die "no registry entry for $name"
+  state="$(reg field "$name" state)"
+  target="$(reg field "$name" tmux)"
+  if window_alive "$target"; then
+    tmux send-keys -t "$target" -l "$line"
+    sleep 0.3
+    tmux send-keys -t "$target" Enter
+    echo "typed into $target: $line"
+  elif [[ "$1" =~ ^v[0-9]+\.[0-9]+\.x$ ]]; then
+    [ "$state" != "stopped" ] || reg put "$name" '{"state": "running"}'
+    cmd_start "$1"
+  else
+    echo "$name window is gone. Resume it in a terminal of its own:"
+    echo "cd $(printf '%q' "$(reg field "$name" cwd)") && claude -n $(printf '%q' "$name") --dangerously-skip-permissions --resume $uuid"
+  fi
+}
+
 cmd_send() {
   [ $# -eq 2 ] || usage
   check_release "$1"
@@ -296,6 +321,7 @@ case "$sub" in
   list) [ $# -eq 0 ] || usage; cmd_list ;;
   stop) cmd_stop "$@" ;;
   send) cmd_send "$@" ;;
+  resume) cmd_resume "$@" ;;
   fork) cmd_fork "$@" ;;
   *) usage ;;
 esac
