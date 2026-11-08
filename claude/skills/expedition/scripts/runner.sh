@@ -4,7 +4,7 @@
 # typed into its window by "send", and replies "DONE ..." or "BLOCKED ..." by SendMessage
 # (reference/run.md).
 #
-# Usage: runner.sh start <release> [--model M]   open the window, or resume a dead runner
+# Usage: runner.sh start <release> [--model M] [--new]   reuse the live runner, resume a dead one, or open the next number; --new opens another runner beside the live one
 #        runner.sh list                          registry entries with busy or idle
 #        runner.sh stop <release>                close the window, mark the entry stopped
 #        runner.sh send <release> "<line>"         type "ultracode <line>" into the runner window
@@ -74,15 +74,27 @@ window_alive() {
   tmux list-windows -a -F '#{session_name}:#{window_id}' 2>/dev/null | grep -qxF "$target"
 }
 
-# Window and session name of a release's runner: "<release> runner1". A live entry under the
-# older key "runner-<release>" keeps its name, so a running window is never renamed or restarted.
+# Runner names: "<release> runner<n>". runner_name <release> returns the newest runner that is
+# live or resumable (a live entry under the older key "runner-<release>" counts and keeps its
+# name); nothing live: the next unused number. A number is never reused within a release.
+# next_runner_name <release> always returns the next unused number (start --new).
 runner_name() {
-  local old="runner-$1"
+  local old="runner-$1" best="" n
   if [ -n "$(reg field "$old" uuid)" ] && [ "$(reg field "$old" state)" != stopped ]; then
-    echo "$old"
-  else
-    echo "$1 runner1"
+    echo "$old"; return
   fi
+  for n in $(seq 50 -1 1); do
+    if [ -n "$(reg field "$1 runner$n" uuid)" ] && [ "$(reg field "$1 runner$n" state)" != stopped ]; then
+      echo "$1 runner$n"; return
+    fi
+  done
+  next_runner_name "$1"
+}
+
+next_runner_name() {
+  local n=1
+  while [ -n "$(reg field "$1 runner$n" uuid)" ]; do n=$((n+1)); done
+  echo "$1 runner$n"
 }
 
 # Status and brief files: the name with spaces replaced by "-".
@@ -93,10 +105,11 @@ check_release() {
 }
 
 cmd_start() {
-  local release="" model="${EXPEDITION_RUNNER_MODEL:-fable}"
+  local release="" model="${EXPEDITION_RUNNER_MODEL:-fable}" new=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --model) [ $# -ge 2 ] || usage; model="$2"; shift 2 ;;
+      --new) new=1; shift ;;
       -*) usage ;;
       *) [ -z "$release" ] || usage; release="$1"; shift ;;
     esac
@@ -104,7 +117,7 @@ cmd_start() {
   [ -n "$release" ] || usage
   check_release "$release"
   local name
-  name="$(runner_name "$release")"
+  if [ "$new" = 1 ]; then name="$(next_runner_name "$release")"; else name="$(runner_name "$release")"; fi
   local cwd
   cwd="$(pwd)"
   mkdir -p "$STATE_DIR"
@@ -293,9 +306,8 @@ cmd_resume() {
 
 cmd_send() {
   [ $# -eq 2 ] || usage
-  check_release "$1"
   local name line="ultracode $2" target i
-  name="$(runner_name "$1")"
+  if [[ "$1" =~ ^v[0-9]+\.[0-9]+\.x$ ]]; then name="$(runner_name "$1")"; else name="$1"; fi
   [ -n "$(reg field "$name" uuid)" ] || die "no registry entry for $name"
   [ "$(reg field "$name" state)" != "stopped" ] || die "$name is stopped: runner.sh start $1"
   target="$(reg field "$name" tmux)"
