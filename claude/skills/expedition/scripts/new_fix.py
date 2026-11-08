@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Create a fix milestone in a release: trackers/fix-<slug>-tracker.md citing the findings
-on its first line, then ownership.md and sprints.md regenerated so the fix has a grid row
+"""Create a fix milestone in a release: run/trackers/fix-<slug>-tracker.md citing the findings
+on its first line, then status/ownership.md and status/sprints.md regenerated so the fix has a grid row
 in the running sprint column (the first column holding a "[ ]", else the last).
 
 Usage: python3 -I new_fix.py <release> <slug> "F3, F4" [--files a,b] [--depends "<names>"]
@@ -88,10 +88,10 @@ def main():
     own = load("ownership")
     root = own.repo_root(a.root)
     folder = own.release_folder(root, own.detect_owner(root, a.owner), a.release)
-    if not (folder / "specs").is_dir():
-        die(f"specs folder missing: {folder / 'specs'}")
-    trackers = folder / "trackers"
-    trackers.mkdir(exist_ok=True)
+    if not (folder / own.SPECS_DIR).is_dir():
+        die(f"specs folder missing: {folder / own.SPECS_DIR}")
+    trackers = folder / own.TRACKERS_DIR
+    trackers.mkdir(parents=True, exist_ok=True)
     tracker = trackers / f"fix-{a.slug}-tracker.md"
     if tracker.exists():
         die(f"refusing to overwrite {tracker}")
@@ -102,8 +102,9 @@ def main():
         tracker.unlink()
         die(f"ownership.py failed with the fix; {tracker.name} removed")
     print(tracker)
-    print(folder / "ownership.md")
+    print(folder / own.OWNERSHIP_MD)
     load("sprints").write(folder, a.release)
+    load("swimlanes").write(folder, a.release)
 
 
 if __name__ == "__main__":

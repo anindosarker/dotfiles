@@ -3,8 +3,9 @@
 
 Usage: python3 -I status.py <release> [--owner X] [--root PATH]
 
-Layout: <release>-plan.md (## Goals and ## Deliverables only), specs/NN-<slug>.md,
-ownership.md (ownership.py), sprints.md (sprints.py), trackers/ (one per milestone,
+Layout: <release>-plan.md (## Goals and ## Deliverables only), plan/specs/NN-<slug>.md,
+plan/epics/E<n>.md, run/attentions/, status/index.html,
+status/ownership.md (ownership.py), status/sprints.md (sprints.py), run/trackers/ (one per milestone,
 NN-<slug>-tracker.md or fix-<slug>-tracker.md).
 
 Decisions (### D<n>) and findings (### F<n>) get a derived state table from the spec files
@@ -15,20 +16,22 @@ with no placeholder left; (P<n>) citations must be defined.
 
 Epics: the tag line under each "### D<n>" heading ("[E<n>]", "[Done]  [E<n>]", or "[Done]"
 for a decision with nothing to run) puts the decision in an epic. The summary lists deciding
-(no tag), in E<n> (no row of the epic in sprints.md carries a run mark), running (one does)
+(no tag), in E<n> (no row of the epic in status/sprints.md carries a run mark), running (one does)
 and done ([Done]). The stage line reports discuss and run together ("Stage: discuss, run
 (E2, E3)"); an open ATTENTION item counts as discuss, never as a stage of its own.
-Also under Epics: the decisions still editable in place (no citing spec has a sprints.md row
+Also under Epics: the decisions still editable in place (no citing spec has a status/sprints.md row
 with "[ ]" or "[x]", not superseded); a supersede marked on one side only; an unbuilt spec
-citing a superseded decision; for each epic not done, its epics/E<n>.md missing or Notes bullets
+citing a superseded decision; for each epic not done, its plan/epics/E<n>.md missing or Notes bullets
 without "[ack HH:MM]"; while an epic runs, the next epic file missing.
 
 Gaps reported for the layout: a plan section other than Goals and Deliverables; a
 Deliverables Scope cell over 120 characters; a spec with no "### Milestone:" block, a block without Files owned, a Task line without
-Checks, no Acceptance line; ownership.md missing or older than a spec file ("run
-ownership.py"), or one ownership.py would refuse (collision, cycle); sprints.md missing,
+Checks, no Acceptance line; status/ownership.md missing or older than a spec file ("run
+ownership.py"), or one ownership.py would refuse (collision, cycle); status/sprints.md missing,
 without a "| Milestone" grid, with text under the grid, with a cell not one of [x], [ ],
-·, [!] or blank, or with rows that differ from ownership.md. A tracker Status of merged
+·, [!] or blank, or with rows that differ from status/ownership.md. Ownership also lists each
+tagged epic's line under "## Critical paths" and reports a missing section or line. A folder
+without plan/ is refused (migrate_layout.py). A tracker Status of merged
 counts as done. A fix tracker (and any tracker no milestone owns) counts as citing the
 findings named on its first line.
 """
@@ -62,6 +65,14 @@ PLAN_SECTIONS = ("Goals", "Deliverables")
 DELIVERABLES_HEAD = r"^## Deliverables\s*$(.*?)(?=^## |\Z)"
 SPRINT_MARKS = ("[x]", "[ ]", "·", "[!]", "")
 SCOPE_MAX = 120
+SPECS_DIR = "plan/specs"
+EPICS_DIR = "plan/epics"
+TRACKERS_DIR = "run/trackers"
+ATTENTIONS_DIR = "run/attentions"
+OWNERSHIP_MD = "status/ownership.md"
+SPRINTS_MD = "status/sprints.md"
+INDEX_HTML = "status/index.html"
+PATHS_HEAD = "## Critical paths"
 
 
 def die(msg):
@@ -205,9 +216,8 @@ def cites(text, letter, legacy):
 
 
 def tracker_path(folder, num):
-    """trackers/<num>-tracker.md, else the legacy flat <num>-tracker.md."""
-    p = folder / "trackers" / f"{num}-tracker.md"
-    return p if p.is_file() else folder / f"{num}-tracker.md"
+    """run/trackers/<num>-tracker.md."""
+    return folder / TRACKERS_DIR / f"{num}-tracker.md"
 
 
 def tracker_status(folder, num, p=None):
@@ -323,8 +333,8 @@ def spec_rows(plan):
 def other_trackers(folder, claimed, statuses):
     """Trackers no spec or milestone owns (fix milestones and the like): (key, path, first line)."""
     out = []
-    if (folder / "trackers").is_dir():
-        for p in sorted((folder / "trackers").glob("*-tracker.md")):
+    if (folder / TRACKERS_DIR).is_dir():
+        for p in sorted((folder / TRACKERS_DIR).glob("*-tracker.md")):
             if p.name not in claimed:
                 key = p.name[: -len("-tracker.md")]
                 lines = read(p).splitlines()
@@ -348,9 +358,9 @@ def aggregate(states):
 
 
 def milestone_tracker(folder, num, spec_slug, idx, name):
-    """trackers/NN-<milestone-slug>-tracker.md; the first milestone also takes NN-<spec-slug>
+    """run/trackers/NN-<milestone-slug>-tracker.md; the first milestone also takes NN-<spec-slug>
     and NN-tracker.md."""
-    t = folder / "trackers"
+    t = folder / TRACKERS_DIR
     cands = [t / f"{num}-{slugify(name)}-tracker.md"]
     if idx == 0:
         cands += [t / f"{num}-{spec_slug}-tracker.md", t / f"{num}-tracker.md"]
@@ -380,7 +390,7 @@ def new_collect(folder, plan, own):
                 states.append(("planned", ""))
                 missing.append(f"no tracker yet: milestone {b['name']} ({t.relative_to(folder)})")
         if not bl:
-            t = folder / "trackers" / f"{num}-tracker.md"
+            t = folder / TRACKERS_DIR / f"{num}-tracker.md"
             states = [tracker_status(folder, num, t)] if t.is_file() else [("planned", "")]
             if t.is_file():
                 claimed.add(t.name)
@@ -410,13 +420,13 @@ def new_print(folder, plan, d, own):
     for num, f in rows:
         if not f:
             print(f"  row {num}: no linked file")
-        elif not f.startswith("specs/"):
-            print(f"  row {num}: {f} outside specs/")
+        elif not f.startswith("plan/specs/"):
+            print(f"  row {num}: {f} outside plan/specs/")
         elif not (folder / f).is_file():
             print(f"  row {num}: {f} missing (waiting on decisions)")
     linked = {p.name for _, p in docs}
-    if (folder / "specs").is_dir():
-        for p in sorted((folder / "specs").iterdir(), key=lambda p: p.name):
+    if (folder / SPECS_DIR).is_dir():
+        for p in sorted((folder / SPECS_DIR).iterdir(), key=lambda p: p.name):
             if p.is_file() and p.suffix == ".md" and p.name not in linked:
                 print(f"  supporting: {p.relative_to(folder)}")
     for num, p in docs:
@@ -433,46 +443,52 @@ def new_print(folder, plan, d, own):
             print(f"  no Status line: {p.name}")
 
     print("Ownership:")
-    ownership = folder / "ownership.md"
+    ownership = folder / OWNERSHIP_MD
     owned = None
     if not docs and not ownership.is_file():
         print("  no specs yet")
     elif not ownership.is_file():
-        print("  ownership.md missing: run ownership.py")
+        print("  status/ownership.md missing: run ownership.py")
     else:
         newer = sorted(p.name for _, p in docs if p.stat().st_mtime > ownership.stat().st_mtime)
         if newer:
-            print(f"  ownership.md older than specs/{newer[0]}: run ownership.py")
+            print(f"  status/ownership.md older than plan/specs/{newer[0]}: run ownership.py")
         owned, err = own.read_ownership(ownership)
         if err:
             print(f"  {err}")
         current, errors = own.collect(folder)
         if not errors:
-            _, path, errors, _ = own.schedule(current)
+            _, _, errors, _ = own.schedule(current)
         for e in errors:
             print(f"  ownership.py would fail: {e}")
         if owned is not None and not errors:
             have = {m["name"] for m in owned}
             want = {m["name"] for m in current}
             for n in sorted(want - have):
-                print(f"  milestone not in ownership.md: {n} (run ownership.py)")
+                print(f"  milestone not in status/ownership.md: {n} (run ownership.py)")
             for n in sorted(have - want):
-                print(f"  ownership.md row with no milestone block or fix tracker: {n} (run ownership.py)")
+                print(f"  status/ownership.md row with no milestone block or fix tracker: {n} (run ownership.py)")
         if owned is not None:
-            cp = re.search(r"^Critical path:\s*(.*)$", read(ownership), re.M)
-            print(f"  {len(owned)} milestones; critical path: {cp.group(1) if cp else 'line missing'}")
+            paths = own.read_paths(ownership)
+            print(f"  {len(owned)} milestones; critical paths: {len(paths)} epics")
+            if PATHS_HEAD not in read(ownership):
+                print(f"  status/ownership.md has no '{PATHS_HEAD}' section: run ownership.py")
+            tagged = sorted({e for e, _ in own.spec_epics(folder).values() if e})
+            for e in tagged:
+                print(f"  E{e} path: {' > '.join(paths[e])}" if e in paths
+                      else f"  E{e} has no critical path line: run ownership.py")
 
     print("Sprints:")
-    sprints = folder / "sprints.md"
+    sprints = folder / SPRINTS_MD
     if owned is None:
-        print("  no ownership.md to compare with" if docs else "  no specs yet")
+        print("  no status/ownership.md to compare with" if docs else "  no specs yet")
     if not sprints.is_file():
         if docs:
-            print("  sprints.md missing: run sprints.py")
+            print("  status/sprints.md missing: run sprints.py")
     else:
         head, data = own.table_rows(read(sprints), "Milestone")
         if head is None:
-            print("  sprints.md has no grid whose header starts \"| Milestone\"")
+            print("  status/sprints.md has no grid whose header starts \"| Milestone\"")
         else:
             lines = read(sprints).splitlines()
             start = next(i for i, l in enumerate(lines) if re.match(r"^\s*\|\s*Milestone\s*\|", l))
@@ -480,11 +496,11 @@ def new_print(folder, plan, d, own):
             while end < len(lines) and lines[end].strip().startswith("|"):
                 end += 1
             if any(l.strip() for l in lines[end:]):
-                print("  sprints.md has text under the grid: grid only")
+                print("  status/sprints.md has text under the grid: grid only")
             for r in data:
                 for c in r[1:]:
                     if c not in SPRINT_MARKS:
-                        print(f"  sprints.md row {r[0]}: cell {c!r} not one of [x], [ ], ·, [!], blank")
+                        print(f"  status/sprints.md row {r[0]}: cell {c!r} not one of [x], [ ], ·, [!], blank")
             sp = load_ownership("sprints")
             grid = [sp.row_name(r[0]) for r in data if r and r[0]]
             ticked = sum(1 for r in data if "[x]" in r[1:])
@@ -494,10 +510,10 @@ def new_print(folder, plan, d, own):
                 names = [m["name"] for m in owned if m["name"] in in_epic or m["spec"] == own.FIX]
                 for n in names:
                     if n not in grid:
-                        print(f"  ownership.md row not in sprints.md: {n} (run sprints.py)")
+                        print(f"  status/ownership.md row not in status/sprints.md: {n} (run sprints.py)")
                 for n in grid:
                     if n not in names:
-                        print(f"  sprints.md row not in ownership.md or in no epic: {n}")
+                        print(f"  status/sprints.md row not in status/ownership.md or in no epic: {n}")
 
     print("Spec checks:")
     quiet = True
@@ -526,7 +542,7 @@ def new_print(folder, plan, d, own):
 
 
 def epic_marks(path):
-    """{epic number: True when a sprints.md row of that epic ("E<n> NN name") holds a run mark}."""
+    """{epic number: True when a status/sprints.md row of that epic ("E<n> NN name") holds a run mark}."""
     if not path.is_file():
         return {}
     head, data = load_ownership().table_rows(read(path), "Milestone")
@@ -540,7 +556,7 @@ def epic_marks(path):
 
 
 def built_specs(path):
-    """Spec numbers with a sprints.md row ("E<n> NN name") holding "[ ]" or "[x]"."""
+    """Spec numbers with a status/sprints.md row ("E<n> NN name") holding "[ ]" or "[x]"."""
     if not path.is_file():
         return set()
     head, data = load_ownership().table_rows(read(path), "Milestone")
@@ -576,9 +592,7 @@ def main():
         die(f"bad release '{a.release}', expected like v0.9.x")
     root = repo_root(a.root)
     owner = detect_owner(root, a.owner)
-    folder = root / ".ai" / "plans" / a.release / owner
-    if not folder.is_dir():
-        die(f"release folder missing: {folder}")
+    folder = load_ownership().release_folder(root, owner, a.release)
     rel = folder.relative_to(root)
     rules = find_rules(root)
     print(f"Planning rules: {', '.join(rules) if rules else 'none, bundled default'}")
@@ -589,8 +603,8 @@ def main():
     decisions = folder / "decisions.md"
     findings = folder / "findings.md"
     print("Files:")
-    for p in (plan, folder / "ownership.md", folder / "sprints.md", decisions, findings):
-        print(f"  {p.name}: {'present' if p.is_file() else 'missing'}")
+    for p in (plan, folder / OWNERSHIP_MD, folder / SPRINTS_MD, folder / INDEX_HTML, decisions, findings):
+        print(f"  {p.relative_to(folder)}: {'present' if p.is_file() else 'missing'}")
 
     own = load_ownership()
     d = new_collect(folder, plan, own)
@@ -628,7 +642,7 @@ def main():
         print(f"  cited but undefined: {', '.join(f'P{n}' for n in undefined_p)}")
 
     print("ATTENTION:")
-    attention = sorted(list(folder.glob("ATTENTION-*.md")) + list((folder / "attentions").glob("ATTENTION-*.md")))
+    attention = sorted((folder / ATTENTIONS_DIR).glob("ATTENTION-*.md"))
     a_ids = []
     if not attention:
         print("  none")
@@ -661,7 +675,7 @@ def main():
     tags = own.read_tags(folder)
     nums = [n for n, _, _ in dec_items]
     closed = lambda n: dec_states.get(n, "").startswith(("superseded", "deferred"))
-    marks = epic_marks(folder / "sprints.md")
+    marks = epic_marks(folder / SPRINTS_MD)
     untagged = lambda n: not tags.get(n, {}).get("epic") and not tags.get(n, {}).get("done")
     deciding = [n for n in nums if untagged(n) and not closed(n)]
     done_alone = [n for n in nums if tags.get(n, {}).get("done") and not tags[n].get("epic")]
@@ -689,7 +703,7 @@ def main():
         if bullets.get(old) != new:
             print(f"  D{old} heading says superseded by D{new}, but D{new} lacks '- Supersedes D{old}.'")
     cited = {num: own.spec_cites(p) for num, p in docs}
-    built = built_specs(folder / "sprints.md")
+    built = built_specs(folder / SPRINTS_MD)
     for num, c in cited.items():
         bad = sorted(c & set(gone)) if num not in built else []
         if bad:
@@ -697,7 +711,7 @@ def main():
     editable = [n for n in nums if n not in gone
                 and not any(n in c for num, c in cited.items() if num in built)]
     print(f"  editable in place: {', '.join(f'D{n}' for n in editable) or 'none'}; every other decision changes by supersede")
-    epics_dir = folder / "epics"
+    epics_dir = folder / EPICS_DIR
     for e in running:
         ef = epics_dir / f"{e}.md"
         if not ef.is_file():
@@ -708,7 +722,7 @@ def main():
     if any(marks.get(int(e[1:])) for e in running):
         nxt = f"E{max(groups) + 1}"
         if not (epics_dir / f"{nxt}.md").is_file():
-            print(f"  epics/{nxt}.md missing: new_epic_file.py {a.release} {nxt}")
+            print(f"  plan/epics/{nxt}.md missing: new_epic_file.py {a.release} {nxt}")
     parts = []
     if not dec_items or deciding or uncited:
         parts.append("discuss")

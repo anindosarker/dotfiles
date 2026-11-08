@@ -216,7 +216,7 @@ cmd_start() {
                 --settings "$SETTINGS" --append-system-prompt-file "$brief")
   if [ "$resume" = 1 ]; then
     cmd+=(--resume "$uuid")
-    prompt="ultracode. You are $name, resumed. Re-read the appended brief, then continue every epic that has a running row in sprints.md."
+    prompt="ultracode. You are $name, resumed. Re-read the appended brief, then continue every epic that has a running row in status/sprints.md."
   else
     cmd+=(--session-id "$uuid")
   fi
@@ -327,7 +327,7 @@ cmd_fork() {
   if [ "$resume" = 1 ]; then
     prompt="Resumed. Finish the task of the first prompt of this session, then stop."
   elif [ -z "$prompt" ]; then
-    prompt="You are the spec writer for epic $epic of $release, decisions $ids. You hold the lead's full context. First read the epic file epics/$epic.md in the release folder and every file its Notes name. Write one spec per decided item with new_spec.py per SKILL.md stage 2, run ownership.py, then reply by SendMessage to $from with one line: SPECS $epic <spec numbers>. Do nothing else."
+    prompt="You are the spec writer for epic $epic of $release, decisions $ids. You hold the lead's full context. First read the epic file plan/epics/$epic.md in the release folder and every file its Notes name. Write one spec per decided item with new_spec.py per SKILL.md stage 2, run ownership.py, then reply by SendMessage to $from with one line: SPECS $epic <spec numbers>. Do nothing else."
   fi
   local -a cmd
   if [ "$resume" = 1 ]; then

@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
-"""Write sprints.md for a release from ownership.md: the grid of milestones (rows) and
+"""Write status/sprints.md for a release from status/ownership.md: the grid of milestones (rows) and
 sprints (columns), ticked later by the run.
 
 Usage: python3 -I sprints.py <release> [--owner X] [--root PATH]
 
-Columns come from ownership.md (ownership.py's arithmetic: the longest chain ending at a
+Columns come from status/ownership.md (ownership.py's arithmetic: the longest chain ending at a
 milestone plus one). The file holds "# <release> sprints", an "Updated:" line and the grid
 "| Milestone | S1 | ... |" only: "·" in a milestone's own column, blank elsewhere. Cells
 are "·", "[ ]", "[x]" or "[!]".
 
-When sprints.md exists, a row that still exists keeps every cell as it is once it carries a
+When status/sprints.md exists, a row that still exists keeps every cell as it is once it carries a
 run mark ("[ ]", "[x]", "[!]"); a row with only "·" is placed again, except a fix
 row, which keeps its cells. New rows are added; a
 new fix milestone goes in the running column (the first column holding a "[ ]", else the
-last). A row no longer in ownership.md is dropped, unless it carries a run mark: then it is
+last). A row no longer in status/ownership.md is dropped, unless it carries a run mark: then it is
 kept with a warning.
 
 Rows: every milestone of a spec that carries a "- Epic: E<n>" line (new_spec.py --epic), and
 every fix milestone. A later epic's independent milestones join an existing column, a running
 one too; dependent ones open the next. Row text is the epic label, the spec number and the
 milestone name, "E1 01 Filtering" ("fix <name>" for a fix milestone); rows sorted by epic,
-spec number, then ownership.md order. The lead reruns it on go, the runner on merge.
+spec number, then status/ownership.md order. The lead reruns it on go, the runner on merge.
 """
 import argparse
 import datetime
@@ -83,7 +83,7 @@ def running_column(n, rows):
 
 
 def build(release, milestones, col, existing, num_key, label=None):
-    """Return (text, warnings) for sprints.md. label maps a milestone name to its epic number
+    """Return (text, warnings) for status/sprints.md. label maps a milestone name to its epic number
     (None for a fix milestone)."""
     n_old, rows_old = existing
     label = label or {}
@@ -107,7 +107,7 @@ def build(release, milestones, col, existing, num_key, label=None):
         if name not in col and marked(cells):
             kept.append(name)
             place[name] = list(cells)
-            warnings.append(f"row '{name}' is not in ownership.md or in no epic but carries a mark: kept")
+            warnings.append(f"row '{name}' is not in status/ownership.md or in no epic but carries a mark: kept")
     width = max([n_old] + [v for v in place.values() if isinstance(v, int)] + [1])
 
     def cells_of(name):
@@ -142,21 +142,22 @@ def epic_rows(folder, own, milestones):
 
 def write(folder, release, quiet=False):
     own = load_ownership()
-    ownership = folder / "ownership.md"
+    ownership = folder / own.OWNERSHIP_MD
     milestones, err = own.read_ownership(ownership)
     if err:
         die(err)
-    specs = folder / "specs"
+    specs = folder / own.SPECS_DIR
     if specs.is_dir():
         newer = [p for p in specs.glob("*.md") if p.stat().st_mtime > ownership.stat().st_mtime]
         if newer:
-            die(f"ownership.md older than specs/{newer[0].name}: run ownership.py first")
+            die(f"status/ownership.md older than plan/specs/{newer[0].name}: run ownership.py first")
     col, _, errors, _ = own.schedule(milestones)
     if errors:
         for e in errors:
             print(f"error: {e}", file=sys.stderr)
-        die("ownership.md does not schedule: run ownership.py")
-    path = folder / "sprints.md"
+        die("status/ownership.md does not schedule: run ownership.py")
+    path = folder / own.SPRINTS_MD
+    path.parent.mkdir(exist_ok=True)
     n_old, rows_old, _ = read_grid(path, own)
     label = epic_rows(folder, own, milestones)
     milestones = [m for m in milestones if m["name"] in label or m["spec"] == own.FIX]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create the epic file epics/E<n>.md of a release (reference/formats.md, Epic file) and commit it.
+"""Create the epic file plan/epics/E<n>.md of a release (reference/formats.md, Epic file) and commit it.
 
 Usage: python3 -I new_epic_file.py <release> E<n> [--owner X] [--root PATH]
 
@@ -46,10 +46,10 @@ def main():
     own = load_ownership()
     root = own.repo_root(a.root)
     folder = own.release_folder(root, own.detect_owner(root, a.owner), a.release)
-    path = folder / "epics" / f"{a.epic}.md"
+    path = folder / own.EPICS_DIR / f"{a.epic}.md"
     if path.exists():
         die(f"refusing to overwrite {path}")
-    path.parent.mkdir(exist_ok=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"# {a.epic}\n\nDecisions:\nSpecs:\n\n## Notes\n", encoding="utf-8")
     for args in (["add", "--", str(path)],
                  ["commit", "-q", "-m", f"docs(plan): {a.release} {a.epic} epic file", "--only", "--", str(path)]):

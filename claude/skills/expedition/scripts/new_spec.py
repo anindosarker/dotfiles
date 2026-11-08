@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Create a spec file (specs/NN-<slug>.md) and the tracker of its first milestone
-(trackers/NN-<slug>-tracker.md) in a release, and add the row
-"| NN | [Title](specs/NN-<slug>.md) |  | scope |" (Epic cell empty) to the Deliverables table of
+"""Create a spec file (plan/specs/NN-<slug>.md) and the tracker of its first milestone
+(run/trackers/NN-<slug>-tracker.md) in a release, and add the row
+"| NN | [Title](plan/specs/NN-<slug>.md) |  | scope |" (Epic cell empty) to the Deliverables table of
 <release>-plan.md.
 
 Usage: python3 -I new_spec.py <release> <num> <slug> "<Title>" "<scope>"
@@ -11,7 +11,7 @@ Template: --template PATH, else a contract stub when the project has planning
 rules (find_rules.py), else the bundled templates/spec.md. Section 2.1 holds one "### Milestone: [name]" block with
 the lines Files owned, Depends on, Review and its Task lines; write one block per
 milestone, then run ownership.py and sprints.py. A later milestone's tracker is
-trackers/NN-<milestone-slug>-tracker.md.
+run/trackers/NN-<milestone-slug>-tracker.md.
 
 Epic tag mode, on go: python3 -I new_spec.py <release> --epic E<n> <spec numbers or D ids>
 [--owner X] [--root PATH]. A D id resolves to the specs citing it. Each named spec gets the line
@@ -295,9 +295,7 @@ def main():
         if not items:
             die("--epic needs spec numbers or D ids")
         root = repo_root(a.root)
-        folder = root / ".ai" / "plans" / a.release / detect_owner(root, a.owner)
-        if not folder.is_dir():
-            die(f"release folder missing: {folder}")
+        folder = load_ownership().release_folder(root, detect_owner(root, a.owner), a.release)
         tag_epic(folder, a.epic, items)
         return
     if len(a.rest) != 4:
@@ -314,19 +312,17 @@ def main():
             die(f"{label} contains an em dash")
 
     root = repo_root(a.root)
-    owner = detect_owner(root, a.owner)
-    folder = root / ".ai" / "plans" / a.release / owner
-    if not folder.is_dir():
-        die(f"release folder missing: {folder}")
+    own = load_ownership()
+    folder = own.release_folder(root, detect_owner(root, a.owner), a.release)
     plan = folder / f"{a.release}-plan.md"
     if not plan.is_file():
         die(f"{plan.name} missing: {plan}")
 
     spec_name = f"{a.num}-{a.slug}.md"
-    specs_dir = folder / "specs"
-    trackers_dir = folder / "trackers"
+    specs_dir = folder / own.SPECS_DIR
+    trackers_dir = folder / own.TRACKERS_DIR
     for d in (specs_dir, trackers_dir):
-        d.mkdir(exist_ok=True)
+        d.mkdir(parents=True, exist_ok=True)
     spec = specs_dir / spec_name
     tracker = trackers_dir / f"{a.num}-{a.slug}-tracker.md"
     for p in (spec, tracker):
@@ -336,7 +332,7 @@ def main():
     if clash:
         die(f"spec {a.num} already has a file: {clash[0]}")
 
-    row = f"| {a.num} | [{a.title}](specs/{spec_name}) |  | {a.scope} |"
+    row = f"| {a.num} | [{a.title}](plan/specs/{spec_name}) |  | {a.scope} |"
     new_plan = insert_row(plan.read_text(encoding="utf-8"), a.num, row)
     rules = [] if a.template else find_rules(root)
     template = load_template(root, a.template, rules)

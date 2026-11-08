@@ -4,8 +4,8 @@
 //   build(p), filesCheck(p, build), reviewBounce(p, build) (only when p.review === 'fable'), verify(p),
 //   judges(p, src) (when p.judged is set), merge(p, verify), check(sprint), release(sprint).
 // The composition at the bottom runs the one MILESTONES entry (this milestone) build to merge. Only the release milestone's
-// script sets RELEASE_MILESTONE and composes check and release over MERGED_MILESTONES (the [x] rows of sprints.md).
-// The MILESTONES entry is one milestone: a "### Milestone:" block of an epic (a row of ownership.md and of sprints.md).
+// script sets RELEASE_MILESTONE and composes check and release over MERGED_MILESTONES (the [x] rows of status/sprints.md).
+// The MILESTONES entry is one milestone: a "### Milestone:" block of an epic (a row of status/ownership.md and of status/sprints.md).
 // Copy, then edit meta, INTEGRATION, RELEASE_LABEL, RELEASE_PREFIX, RELEASE_EPIC, GATE_JUDGED, MIRROR,
 // the RUN_* switches, SERIAL_GATES, SHIP_PARTIAL, RELEASE_MILESTONE, MERGED_MILESTONES, STOPPED_MILESTONES, MILESTONES, BASE_SHA
 // and SPECIFICS. Keep the rest.
@@ -27,7 +27,7 @@ const INTEGRATION = '<integration branch>'
 const MIRROR = 'dev' // the staging branch: untouched during the sprints, fast-forwarded to INTEGRATION once after the last feature column (process.md P1)
 const RELEASE_LABEL = '<release label>'
 const RELEASE_PREFIX = 'v<release>' // merge commit subject: `merge: <milestone> (<epic>)`
-const RELEASE_EPIC = `${PLANS}/specs/<release epic>.md` // the release milestone's check and release steps
+const RELEASE_EPIC = `${PLANS}/plan/specs/<release epic>.md` // the release milestone's check and release steps
 const GATE_JUDGED = null // { question: '...', captures: ['...'] | 'tracker' } when RELEASE_EPIC names a judged clause
 // Stage switches: a milestone turns a stage off here.
 const RUN_FILES_CHECK = true, RUN_REVIEW = true, RUN_VERIFY = true, RUN_JUDGES = true, RUN_MERGE = true, RUN_GATE = true, RUN_RELEASE = true
@@ -35,12 +35,12 @@ const SERIAL_GATES = false // true: check bases one after another (loaded machin
 const SHIP_PARTIAL = true // release what merged when some milestone stopped
 // Release milestone only: RELEASE_MILESTONE true runs check and release after this milestone's own stages.
 const RELEASE_MILESTONE = false
-const MERGED_MILESTONES = [] // release milestone: the milestones marked [x] in sprints.md, by their grid names
+const MERGED_MILESTONES = [] // release milestone: the milestones marked [x] in status/sprints.md, by their grid names
 const STOPPED_MILESTONES = [] // release milestone: { milestone: '<name>', status: 'blocked' | ... } for rows not merged
 const MILESTONES = [
   // One entry: this milestone (empty for a release milestone with no build of its own). `epic` is the epic number; `plan` is the epic file and `tracker` the milestone's tracker (a string or an array).
   // review: 'fable' runs the review bounce (the milestone block says `Review: fable`); judged: { question, captures: [...] | 'tracker' }, judgeCount (default 3).
-  { id: 'NN', epic: 'NN', wt: `${ROOT}.worktrees/<slug>`, branch: 'v<release>/<slug>', plan: `${PLANS}/specs/NN-<slug>.md`, tracker: `${PLANS}/trackers/NN-<milestone-slug>-tracker.md`, title: '<milestone name>', review: 'fable', judged: null },
+  { id: 'NN', epic: 'NN', wt: `${ROOT}.worktrees/<slug>`, branch: 'v<release>/<slug>', plan: `${PLANS}/plan/specs/NN-<slug>.md`, tracker: `${PLANS}/run/trackers/NN-<milestone-slug>-tracker.md`, title: '<milestone name>', review: 'fable', judged: null },
   // releaseLabel overrides RELEASE_LABEL for a milestone whose label differs (P6): { ..., releaseLabel: '<label>' }.
   // A shared run: several file sets, one branch. `lead` is the shared prework prompt on the run worktree,
   // `fileSets` one builder each; `plan` and `tracker` may be arrays, one per epic or milestone, joined by `list`.
@@ -86,7 +86,7 @@ const SPECIFICS = {
   'NN': `Milestone NN specifics: ...`,
 }
 
-const buildPrompt = (p, wt = p.wt, branch = p.branch) => `You are the coder for milestone ${p.id}. Implement its "### Milestone:" block of the epic ${list(p.plan)} (read the epic whole, plus ${PLANS}/plan.md, ${PLANS}/ownership.md and ${PLANS}/decisions.md) on worktree ${wt}.
+const buildPrompt = (p, wt = p.wt, branch = p.branch) => `You are the coder for milestone ${p.id}. Implement its "### Milestone:" block of the epic ${list(p.plan)} (read the epic whole, plus ${PLANS}/<release>-plan.md, ${PLANS}/status/ownership.md and ${PLANS}/decisions.md) on worktree ${wt}.
 ${RULES(p, wt, branch)}
 How to work:
 - The branch may already hold commits from an interrupted earlier attempt: read \`git log --oneline ${BASE_SHA}..HEAD\` and \`git status\` first and continue from that state; do not redo finished tasks.
@@ -281,7 +281,7 @@ async function runMilestone(p) {
 // One milestone per script: a throw becomes a blocked result. Other milestones of the sprint run in their own scripts.
 const milestone = MILESTONES[0] ? await runMilestone(MILESTONES[0]).catch(e => blocked(MILESTONES[0], `threw: ${e?.message || e}`)) : null
 const ownOk = !milestone || ['merged', 'done'].includes(milestone.status)
-// Release milestone only: check and release over the milestones sprints.md marks merged.
+// Release milestone only: check and release over the milestones status/sprints.md marks merged.
 const sprint = { merged: MERGED_MILESTONES, stopped: STOPPED_MILESTONES }
 const gateResult = RELEASE_MILESTONE && RUN_GATE && ownOk && sprint.merged.length ? await check(sprint) : null
 const ship = RELEASE_MILESTONE && RUN_RELEASE && ownOk && sprint.merged.length && (!RUN_GATE || gateResult?.pass) && (!sprint.stopped.length || SHIP_PARTIAL)

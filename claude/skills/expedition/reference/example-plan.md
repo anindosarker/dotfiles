@@ -1,8 +1,8 @@
-Example of a release `<release>-plan.md`, its `ownership.md` as ownership.py wrote it (first rows only) and its sprint grid from a real project. Its relative links point into that project's plan folder.
+Example of a release `<release>-plan.md` and its sprint grid (v0.8.x), and a `status/ownership.md` excerpt as ownership.py wrote it (v0.9.x), from a real project. Its relative links point into that project's plan folder.
 
 # v0.8.x plan
 
-Release 0.8.0 (D32). Decisions: [decisions.md](decisions.md) D1 to D40. Findings: [findings.md](findings.md) F1 to F6. Sprints: [sprints.md](sprints.md). Specs implement decisions and never re-decide.
+Release 0.8.0 (D32). Decisions: [decisions.md](decisions.md) D1 to D40. Findings: [findings.md](findings.md) F1 to F6. Sprints: [status/sprints.md](status/sprints.md). Specs implement decisions and never re-decide.
 
 ## Goals
 
@@ -14,32 +14,31 @@ Release 0.8.0 (D32). Decisions: [decisions.md](decisions.md) D1 to D40. Findings
 
 | # | Spec | Epic | Scope |
 |---|---|---|---|
-| 01 | [shared surface](specs/01-shared-surface.md) | E1 | Types, options, icon keys, strings, state slices and drag helpers every milestone builds on; no default flips. |
-| 02 | [frame and body](specs/02-frame-body.md) | E1 | Toolbar above the frame, row metrics, tokens, width rule, scroll cues, overflow text, pending-view script. |
-| 03 | [header, column menu and dragging](specs/03-header-menu-drag.md) | E1 | Quiet header, Notion column menu, hairline resize, header drag with animation and locked columns. |
-| 04 | [toolbar chrome](specs/04-toolbar-chrome.md) | E1 | Button group, filter chips, sort editor, view settings with pinned items, one search X, real triggers. |
-| 05 | [defaults and stories](specs/05-defaults-stories.md) | E1 | Stock defaults flipped to the new look; every story and play test follows; changelog lists each way back. |
-| 06 | [docs](specs/06-docs.md) | E1 | Guides rewritten for the new look and added for each new surface; ship with 0.8.0. |
-| 07 | [release 0.8.0](specs/07-release.md) | E1 | Checks rerun in throwaway apps per base; 0.8.0 released. |
+| 01 | [shared surface](plan/specs/01-shared-surface.md) | E1 | Types, options, icon keys, strings, state slices and drag helpers every milestone builds on; no default flips. |
+| 02 | [frame and body](plan/specs/02-frame-body.md) | E1 | Toolbar above the frame, row metrics, tokens, width rule, scroll cues, overflow text, pending-view script. |
+| 03 | [header, column menu and dragging](plan/specs/03-header-menu-drag.md) | E1 | Quiet header, Notion column menu, hairline resize, header drag with animation and locked columns. |
+| 04 | [toolbar chrome](plan/specs/04-toolbar-chrome.md) | E1 | Button group, filter chips, sort editor, view settings with pinned items, one search X, real triggers. |
+| 05 | [defaults and stories](plan/specs/05-defaults-stories.md) | E1 | Stock defaults flipped to the new look; every story and play test follows; changelog lists each way back. |
+| 06 | [docs](plan/specs/06-docs.md) | E1 | Guides rewritten for the new look and added for each new surface; ship with 0.8.0. |
+| 07 | [release 0.8.0](plan/specs/07-release.md) | E1 | Checks rerun in throwaway apps per base; 0.8.0 released. |
 
 ---
 
-# v0.8.x ownership
+# v0.9.x ownership
 
-Generated: 2026-11-06 by ownership.py
+Generated: 2026-11-09 by ownership.py (E4 rows only; `docs/` is `apps/shadcn-table-docs/`)
 
-| Milestone | Spec | Depends on | Files |
-|---|---|---|---|
-| Shared surface | 01 | none | `types.ts`, `features/stConfigFeature.ts`, `features/stFeatures.ts`, `features/stRefsFeature.ts`, `features/stColumnDraggingFeature.ts`, `features/stViewSettingsFeature.ts`, `features/stFilterChipsFeature.ts`, `hooks/useST_TableOptions.ts`, `hooks/useST_TableInstance.ts`, `shared/locales/en.ts`, `icons.ts`, `icons/*.ts`, `components/icons/ST_GridLineIcons.tsx`, `shared/utils/{drag,viewSettingsStorage,column,style}.utils.ts`, `components/head/ST_TableHeadCellGrabHandle.tsx`, `components/menus/ST_ShowHideColumnsMenuItems.tsx`, `components/toolbar/ST_ToolbarDropZone.tsx`, `components/table/ST_TableContainer.tsx`, `components/table/ST_Table.tsx`, `components/body/ST_TableBodyCell.tsx`, `shared/utils/displayColumn.utils.ts`, `components/head/ST_TableHeadCellFilterContainer.tsx`, `index.ts`, `packages/shadcn-table/package.json`, `pnpm-lock.yaml`, `CHANGELOG.md`, `stories/styling/DefaultLook.stories.tsx` |
-| Demo captures | 01 | none | `reference/01-*.png`, `reference/01-demo-commit.txt` |
-| Frame and body | 02 | Shared surface, Demo captures | `components/table/{ST_TableLayout,ST_TableContainer,ST_Table,ST_ViewPendingScript,ST_ScrollButtons}.tsx`, `components/body/*.tsx`, `components/toolbar/ST_BottomToolbar.tsx`, `hooks/useST_HorizontalOverflow.ts`, `hooks/useST_FullScreenContainer.ts`, `hooks/useST_RowVirtualizer.ts`, `hooks/display-columns/*.tsx`, `shared/utils/{style,displayColumn}.utils.ts`, `stories/styling/DefaultLook.stories.tsx`, `stories/fixed-bugs/RTL.stories.tsx`, `stories/styling/RenderCounts.stories.tsx`, `stories/features/{TableProvider,RowPinning,Virtualization}.stories.tsx`, `stories/styling/StickyHeader.stories.tsx` |
-| Header, column menu and dragging | 03 | Shared surface, Demo captures | `components/head/*.tsx`, `components/menus/{ST_ColumnActionMenu,ST_FilterOptionMenu,ST_ActionMenuItem}.tsx`, `hooks/useST_ColumnFlip.ts`, `hooks/useST_DragAutoScroll.ts`, `components/toolbar/ST_ToolbarDropZone.tsx`, `stories/features/{ColumnActions,ColumnDragging,Sorting,ColumnResizing}.stories.tsx`, `stories/fixed-bugs/AriaTooltips.stories.tsx` |
-| Toolbar chrome | 04 | Shared surface, Demo captures | `components/toolbar/*.tsx`, `components/menus/{ST_ShowHideColumnsMenu,ST_ShowHideColumnsMenuItems,ST_RowActionMenu}.tsx`, `components/buttons/{ST_ToggleGlobalFilterButton,ST_ShowHideColumnsButton,ST_ToggleDensePaddingButton,ST_ToggleFiltersButton,ST_ToggleRowActionMenuButton}.tsx`, `components/inputs/ST_GlobalFilterTextField.tsx`, `components/inputs/ST_FilterTextField.tsx`, `components/head/ST_TableHeadCellFilterLabel.tsx`, `hooks/useST_ViewPersistence.ts`, `hooks/useST_PopupResize.ts`, `hooks/useST_Effects.ts`, `shared/utils/filterSummary.utils.ts`, `stories/features/{FilterChips,SortPopover,ViewSettings,Search,ColumnHiding,DensePadding,Toolbar}.stories.tsx`, `stories/fixed-bugs/{SearchField,HeadlessFullScreen}.stories.tsx` |
-| Defaults and stories | 05 | Frame and body, Header, column menu and dragging, Toolbar chrome | `hooks/useST_TableOptions.ts`, `hooks/useST_TableInstance.ts`, `packages/shadcn-table/stories/`, `apps/shadcn-table-docs/examples/<base>/{customize-filter-variants,enable-filter-facet-values,customize-filter-modes,customize-filter-components,alternate-pagination}/TS.tsx`, `apps/shadcn-table-docs/scripts/page-checks/*.mjs`, `reference/05-check.mjs` |
-| Docs | 06 | Defaults and stories | `apps/shadcn-table-docs/`, `reference/06-check.mjs`, `reference/06-audit.md` |
-| Toolbar and filters | 06.1 | Check fixes (F8, F9) | `components/toolbar/*.tsx`, `components/menus/*.tsx`, `components/table/ST_TableLayout.tsx`, `shared/locales/en.ts`, `shared/locales/de.ts`, `index.ts`, `packages/shadcn-table/scripts/registry/{base,aria}-diff.json`, `stories/features/{SortPopover,ColumnHiding,FilterChips}.stories.tsx` |
+| Milestone | Spec | Depends on | Derived from | Files |
+|---|---|---|---|---|
+| Theme customizer | 04 | none | none | `docs/package.json`, `pnpm-lock.yaml`, `docs/lib/design-system/*`, `docs/components/design-system-provider.tsx`, `docs/components/theme-customizer.tsx`, `docs/components/theme-controls.tsx`, `docs/components/theme-preset-switcher.tsx`, `docs/components/ui-radix/sheet.tsx`, `docs/lib/theme-presets.ts`, `docs/themes/*`, `docs/styles/*`, `docs/app/global.css`, `docs/app/layout.tsx`, `docs/components/theme-demo/variants/no-step-3.tsx`, `docs/components/theme-demo/variants/matches.tsx`, `docs/components/dev-home/v12/dune.tsx`, `test/docs-e2e/lib/getting-started.mjs` |
+| Theme panel copy import | 08 | none | Theme customizer (`docs/components/design-system-provider.tsx`, `docs/components/theme-customizer.tsx`, `test/docs-e2e/lib/getting-started.mjs`) | `docs/components/theme-customizer.tsx`, `docs/components/design-system-provider.tsx`, `docs/lib/design-system/config.ts`, `test/docs-e2e/lib/getting-started.mjs` |
+| Theme panel shortcut row | 09 | Theme panel copy import | Theme customizer (`docs/components/design-system-provider.tsx`, `docs/components/theme-customizer.tsx`, `test/docs-e2e/lib/getting-started.mjs`) | `docs/components/theme-customizer.tsx`, `docs/components/design-system-provider.tsx`, `test/docs-e2e/lib/getting-started.mjs` |
+| Theme color picker | 10 | Theme panel shortcut row | Theme customizer (`docs/package.json`, `pnpm-lock.yaml`, `docs/components/design-system-provider.tsx`, `docs/components/theme-customizer.tsx`, `test/docs-e2e/lib/getting-started.mjs`) | `docs/package.json`, `pnpm-lock.yaml`, `docs/components/theme-customizer.tsx`, `docs/components/design-system-provider.tsx`, `docs/lib/design-system/tokens.ts`, `test/docs-e2e/lib/getting-started.mjs` |
 
-Critical path: Shared surface > Frame and body > Defaults and stories > Docs > Check fixes (F8, F9) > Toolbar and filters > Stories and DefaultLook > Last fixes (F19, F28, F30, F39, F40, F41, D56, D57) > Plays > View settings icons (D75) > Edition icons > Release 0.8.0
+## Critical paths
+
+- E1: 01 Filtering > 02 Pagination
+- E4: 08 Theme panel copy import > 09 Theme panel shortcut row > 10 Theme color picker
 
 ---
 

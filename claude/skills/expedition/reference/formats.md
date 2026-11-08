@@ -7,7 +7,7 @@
 - decisions.md
 - findings.md
 - Epic file
-- sprints.md
+- status/sprints.md
 - Tracker
 - process.md
 - Handoff
@@ -32,7 +32,7 @@ Every item has an ID heading. Its first bullet is required and self-explanatory:
 
 ## ATTENTION file
 
-`attentions/ATTENTION-<YYYY-MM-DD>.md`, template [../templates/attention.md](../templates/attention.md).
+`run/attentions/ATTENTION-<YYYY-MM-DD>.md`, template [../templates/attention.md](../templates/attention.md).
 
 ```md
 # Attention, 2026-10-28
@@ -94,14 +94,14 @@ One file per release, template [../templates/decisions.md](../templates/decision
   ```
 
 - Accepted decisions only. Questions stay in chat.
-- Built: a milestone citing the decision has a `[ ]` or `[x]` cell in `sprints.md`. Before that, a change is an edit in place, same id; from then on, a supersede.
+- Built: a milestone citing the decision has a `[ ]` or `[x]` cell in `status/sprints.md`. Before that, a change is an edit in place, same id; from then on, a supersede.
 - Supersede marks both sides: the old heading becomes `### D7 (superseded by D15) ...`, the new decision's first bullet is `- Supersedes D7.` The heading mark is the only edit an old decision ever gets.
 - Deferred to another release: add the bullet `- Deferred to v0.5.x`. That release's specs cite it as `(v0.4.x D9)`.
 - Specs cite a decision as `(D7)`.
 
 ## Epic file
 
-`epics/E<n>.md`, one per epic, written by `new_epic_file.py`; lifecycle in SKILL.md stage 1, reading and ack in [run.md](run.md), Epics.
+`plan/epics/E<n>.md`, one per epic, written by `new_epic_file.py`; lifecycle in SKILL.md stage 1, reading and ack in [run.md](run.md), Epics.
 
 ```
 # E6
@@ -137,9 +137,9 @@ One file per release, template [../templates/findings.md](../templates/findings.
 - The first bullet names the path and explains.
 - Specs cite a finding as `(F3)`.
 
-## sprints.md
+## status/sprints.md
 
-Columns are the sprints `S1`, `S2`, ... that `ownership.py` computes. Rows are the milestones of specs that carry a `- Epic: E<n>` line (written under the title line by `new_spec.py --epic`), plus fix milestones; row text is the epic label, the spec number and the milestone name; rows sorted by epic, then spec number, then `ownership.md` order.
+Columns are the sprints `S1`, `S2`, ... that `ownership.py` computes. Rows are the milestones of specs that carry a `- Epic: E<n>` line (written under the title line by `new_spec.py --epic`), plus fix milestones; row text is the epic label, the spec number and the milestone name; rows sorted by epic, then spec number, then `status/ownership.md` order.
 
 ```md
 | Milestone | S1 | S2 |
@@ -151,7 +151,7 @@ Columns are the sprints `S1`, `S2`, ... that `ownership.py` computes. Rows are t
 
 ## Tracker
 
-One per milestone: `trackers/NN-<slug>-tracker.md` for a milestone of spec NN, `trackers/fix-<slug>-tracker.md` for a fix milestone. Template [../templates/tracker.md](../templates/tracker.md).
+One per milestone: `run/trackers/NN-<slug>-tracker.md` for a milestone of spec NN, `run/trackers/fix-<slug>-tracker.md` for a fix milestone. Template [../templates/tracker.md](../templates/tracker.md).
 
 ```md
 # 01: examples per edition, tracker
@@ -212,7 +212,7 @@ Not in this file: commands (`package.json`), code rules (coding standards), orch
 Written with the `write-handoff` skill.
 
 - Attended stages (discuss, plan, triage): never written on your own. Only when the owner asks.
-- Unattended run: one file per run, `handoffs/handoff-<run start YYYY-MM-DD-HHMM>.md`. Create it with `write-handoff` at the first milestone boundary. Rewrite it in place at each later milestone boundary and at the end.
+- Unattended run: one file per run, `run/handoffs/handoff-<run start YYYY-MM-DD-HHMM>.md`. Create it with `write-handoff` at the first milestone boundary. Rewrite it in place at each later milestone boundary and at the end.
 - Every expedition handoff starts its State section with these three bullets:
 
   ```

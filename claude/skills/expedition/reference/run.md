@@ -25,7 +25,7 @@ The release's `process.md` (`.ai/plans/<release>/<owner>/process.md`) holds the 
 
 - Messages, one line each, nothing else in a message:
   - Lead to runner: `HELLO from <lead session name>`, typed by `runner.sh send` from a lead that starts fresh on a release with a live runner. No work starts.
-  - Lead to runner: `RUN E<n> <release folder> epic <release folder>/epics/E<n>.md from <lead session name>`, typed into the runner window by `runner.sh send` (as `ultracode RUN ...`, so the turn is opted in to the Workflow tool)
+  - Lead to runner: `RUN E<n> <release folder> epic <release folder>/plan/epics/E<n>.md from <lead session name>`, typed into the runner window by `runner.sh send` (as `ultracode RUN ...`, so the turn is opted in to the Workflow tool)
   - Lead to runner, typed the same way: `HOLD E<n>`: launch nothing of that epic until its next RUN; running milestones continue.
   - Lead to runner, typed: `SKIP <spec number>`: stop the Workflow of each running milestone of that spec, mark each unmerged row `[!]`, tracker `Status: skipped (D<new>)` (the D id from the epic file's SKIP note), branch left in place for salvage; reply `NOTE <spec>: skipped`.
   - Lead to runner, typed: `NOTE E<n>: <note>`, a Notes line of that epic file. `RULES: <files>, <why>`: a rule file changed; re-read the files named, reply `ACK RULES`.
@@ -37,23 +37,23 @@ The release's `process.md` (`.ai/plans/<release>/<owner>/process.md`) holds the 
 - Reply target: the name after `from` in the latest RUN or HELLO line; DONE and BLOCKED go there from then on.
 - On every RUN line, before launching anything: re-read the release's `process.md`, this file and the brief, then the epic's specs and its epic file.
 - On RUN and on every line typed to it: read the epic file of every epic it runs, re-read whatever a note names, append ` [ack HH:MM]` to each note it read, commit (Shared files rules). A note without ack is unread.
-- RUN is idempotent: an epic whose `sprints.md` rows are already running or done is not started again; the runner replies with the current state. A RUN for a held epic lifts the hold.
+- RUN is idempotent: an epic whose `status/sprints.md` rows are already running or done is not started again; the runner replies with the current state. A RUN for a held epic lifts the hold.
 - Several epics run at once, no slot limit. One worktree per milestone from the pool. Machine load as today: `process.md` P5, `SERIAL_GATES` when loaded.
-- On each merge the runner ticks the row and reruns `sprints.py`. When every milestone of an epic has merged it writes ATTENTION, `findings.md` and the handoff, tags `[Done]` on the epic's decisions, sends DONE.
+- On each merge the runner ticks the row and reruns `sprints.py`, then `swimlanes.py` (the page data under `status/`; nothing under `status/` is edited by hand). When every milestone of an epic has merged it writes ATTENTION, `findings.md` and the handoff, tags `[Done]` on the epic's decisions, sends DONE.
 - Shared files (`decisions.md`, ATTENTION): the rules in [formats.md](formats.md), Shared files.
 
 ## Each loop fire
 
-The loop prompt must be safe to fire at any time. Each fire reads this file, about 2k tokens. That is the cost of surviving compaction. Loop: the loop skill with no interval (`ScheduleWakeup` dynamic mode), 30 minute fallback; the workflow or watcher notification is the real wake signal. The tick reads `sprints.md` and the trackers of its `[ ]` rows, not transcripts.
+The loop prompt must be safe to fire at any time. Each fire reads this file, about 2k tokens. That is the cost of surviving compaction. Loop: the loop skill with no interval (`ScheduleWakeup` dynamic mode), 30 minute fallback; the workflow or watcher notification is the real wake signal. The tick reads `status/sprints.md` and the trackers of its `[ ]` rows, not transcripts.
 
 1. A turn is already working: do nothing.
-2. Find the release: the argument, else the release this session runs, else the `Next:` line of the newest handoff (`.ai/plans/v*.x/<owner>/handoffs/handoff-*.md`, newest by the date in the file name).
-3. Run `status.py <release>`, read `sprints.md` and the trackers of its `[ ]` rows.
+2. Find the release: the argument, else the release this session runs, else the `Next:` line of the newest handoff (`.ai/plans/v*.x/<owner>/run/handoffs/handoff-*.md`, newest by the date in the file name).
+3. Run `status.py <release>`, read `status/sprints.md` and the trackers of its `[ ]` rows.
 Environment blockers are the run manager's to fix, never to wait on: a stopped Docker daemon (`open -a Docker`, then poll `docker info`), a busy port, a missing image or dependency. The run nudges the owner only when the fix fails after one attempt (2026-11-08: a runner waited on Docker for an `act` run instead of starting it).
 
 4. Do the next step: a milestone merged or stopped ticks its cell; launch every `·` row whose dependencies in earlier columns have merged, from any epic that has been RUN; an epic whose every milestone is `[x]` or `[!]` gets the closing steps of Epics. A run whose tracker has not changed since the previous tick: ask the builder "what is blocking you" and fix the environment (a port, a server, a fixture, compute); do not read its code.
 5. Tick economy:
-   - Read `sprints.md` and the trackers only. No `git status`, `diff` or `log` in worktrees; no pull unless a merge is due this tick.
+   - Read `status/sprints.md` and the trackers only. No `git status`, `diff` or `log` in worktrees; no pull unless a merge is due this tick.
    - A tick with work (tick a cell, merge, launch) reports one line per action.
    - A tick that ticks or merges nothing ends with exactly one line: `tick <HH:MM>: <milestone> <stage>, ..., <milestone> waiting on <dep>. Next <HH:MM>.` No table, no per-milestone bullets, no restating what was read.
    - Messages to the lead are DONE, BLOCKED, NOTE, ACK RULES and the reply to a HELLO only. Never a status line.
@@ -62,11 +62,11 @@ Waiting on CI or a release run is never a foreground wait and never blocks the n
 
 ## Milestones and sprints
 
-The run follows `sprints.md` and `ownership.md` ([files.md](files.md)) and decides nothing the plan left out.
+The run follows `status/sprints.md` and `status/ownership.md` ([files.md](files.md)) and decides nothing the plan left out.
 
 - The run unit is the milestone, not the spec: one team, its own worktree, branch and tracker, one builder end to end. It edits only its files while it runs. The orchestration per column is the run manager's judgment: one Workflow per milestone, several per milestone, or one for several, whatever proves the Acceptance with the fewest wakes and agents.
-- A sprint is one column of the grid, computed by `ownership.py` across every epic. A running column accepts new `·` rows from a later epic. A milestone branches from the integration branch after the milestones it depends on have merged. The critical path is the `Critical path:` line of `ownership.md`, the longest chain ending at the release milestone.
-- The runner ticks `sprints.md` at each boundary: `[ ]` at launch, `[x]` at merge, `[!]` at a stop (the reason in the tracker's `## Attention`), and the `Updated:` line. A fix milestone added mid-run gets its row from `new_fix.py`.
+- A sprint is one column of the grid, computed by `ownership.py` across every epic. A running column accepts new `·` rows from a later epic. A milestone branches from the integration branch after the milestones it depends on have merged. Each epic's critical path is its line under `## Critical paths` in `status/ownership.md`, the longest chain inside that epic; launch its milestones first when a column is crowded.
+- The runner ticks `status/sprints.md` at each boundary: `[ ]` at launch, `[x]` at merge, `[!]` at a stop (the reason in the tracker's `## Attention`), and the `Updated:` line. A fix milestone added mid-run gets its row from `new_fix.py`.
 - The first sprint's shared milestone: everything two or more milestones need (dependency adds, lockfile, lint or tsconfig config, CI edits, shared new helpers, baseline captures). Later milestones never touch `package.json`, the lockfile, ESLint or CI config.
 - A fix found mid-sprint is a fix milestone added to the running column (`new_fix.py <release> <slug> "F3, F4"`). A bug in another milestone's merged file is a fix milestone on the integration branch, never an edit by the running milestone.
 - Shared files: per the release's `process.md`. Generated outputs (registry json, installed docs copies) are regenerated by whoever merges, never hand-merged. A comment-only hunk in conflict yields to the code change.
@@ -141,5 +141,5 @@ The runner then adds an ATTENTION item and continues with work that does not dep
 
 ## Handoff and end of run
 
-- One handoff per run, `handoffs/handoff-<run start YYYY-MM-DD-HHMM>.md`. Create it with the `write-handoff` skill at the first milestone boundary. Rewrite it in place at each later milestone boundary and at the end. Its State section starts with the `Stage:` and `Next:` bullets ([formats.md](formats.md)).
+- One handoff per run, `run/handoffs/handoff-<run start YYYY-MM-DD-HHMM>.md`. Create it with the `write-handoff` skill at the first milestone boundary. Rewrite it in place at each later milestone boundary and at the end. Its State section starts with the `Stage:` and `Next:` bullets ([formats.md](formats.md)).
 - Every epic merged or stopped and no RUN pending: rewrite the handoff, release resources (stop every server, watcher and browser the run started, remove worktrees only where `process.md` has no pool, delete throwaway apps, end finished sub-agents), then autopilot section 4 (commit, stop the loop, report).

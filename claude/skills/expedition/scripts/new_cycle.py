@@ -1,16 +1,25 @@
 #!/usr/bin/env python3
 """Create an expedition release folder: .ai/plans/<release>/<owner>/ with the <release>-plan.md
-(Goals and Deliverables), decisions.md and findings.md stubs, the specs, trackers, epics,
-attentions, handoffs and reference folders, and process.md copied from the newest earlier release
-(else the skill template). sprints.md is not written here: sprints.py makes it from
-ownership.md once the specs hold their milestone blocks.
+(Goals and Deliverables), decisions.md and findings.md stubs, process.md copied from the newest
+earlier release (else the skill template), and the sub-folders:
+
+  plan/specs/  plan/epics/              authored
+  run/trackers/  run/attentions/  run/handoffs/   written during the run
+  status/index.html  status/data/       generated; nothing under status/ is edited by hand
+
+status/index.html is copied from templates/swimlanes.html. status/index.html and status/data/
+are renders, never committed: the two .ai/plans/*/*/status/ lines are appended to the repo's
+.gitignore when missing. status/ownership.md, status/sprints.md
+and status/data/ are written later by ownership.py, sprints.py and swimlanes.py.
 
 Usage: python3 -I new_cycle.py <release> [--owner X] [--root PATH]
 """
 import argparse
 import collections
 import datetime
+import importlib.util
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -49,6 +58,15 @@ def detect_owner(root, flag):
     if not counts:
         die("no owner found under .ai/plans/v*.x/*/; pass --owner")
     return counts.most_common(1)[0][0]
+
+
+def load_ownership():
+    sys.dont_write_bytecode = True
+    path = Path(__file__).resolve().parent / "ownership.py"
+    spec = importlib.util.spec_from_file_location("ownership", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 def write_new(path, text):
@@ -96,6 +114,25 @@ def process_text(root, owner, release):
     return tpl.read_text(encoding="utf-8").replace("[project]", release, 1)
 
 
+
+def ensure_gitignore(folder):
+    """Append the status render ignores to the repo's .gitignore when missing."""
+    import subprocess
+    try:
+        root = subprocess.run(["git", "-C", str(folder), "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True).stdout.strip()
+    except Exception:
+        return
+    gi = Path(root) / ".gitignore"
+    lines = [".ai/plans/*/*/status/index.html", ".ai/plans/*/*/status/data/"]
+    have = gi.read_text().splitlines() if gi.is_file() else []
+    missing = [l for l in lines if l not in have]
+    if missing:
+        with gi.open("a") as f:
+            if have and not have[-1].strip() == "":
+                f.write("\n")
+            f.write("\n".join(missing) + "\n")
+
+
 def main():
     ap = argparse.ArgumentParser(usage="new_cycle.py <release> [--owner X] [--root PATH]")
     ap.add_argument("release")
@@ -111,14 +148,22 @@ def main():
         die(f"release folder exists: {folder}")
     folder.mkdir(parents=True)
     print(folder)
-    for sub in ("specs", "trackers", "epics", "attentions", "handoffs", "reference"):
-        (folder / sub).mkdir()
+    for sub in ("plan/specs", "plan/epics", "run/trackers", "run/attentions", "run/handoffs",
+                "status/data"):
+        (folder / sub).mkdir(parents=True)
         print(folder / sub)
+    tpl = Path(__file__).resolve().parent.parent / "templates" / "swimlanes.html"
+    if not tpl.is_file():
+        die(f"template missing: {tpl}")
+    shutil.copyfile(tpl, folder / "status" / "index.html")
+    ensure_gitignore(folder)
+    print(folder / "status" / "index.html")
+    load_ownership().ignore_renders(folder)
     write_new(folder / "process.md", process_text(root, owner, a.release))
     c = a.release
     write_new(folder / f"{c}-plan.md", (
         f"# {c} plan\n\n"
-        "Decisions: [decisions.md](decisions.md). Sprints: [sprints.md](sprints.md). "
+        "Decisions: [decisions.md](decisions.md). Sprints: [status/sprints.md](status/sprints.md). "
         "Specs implement decisions and never re-decide.\n\n"
         "## Goals\n\n- \n\n"
         "## Deliverables\n\n| # | Spec | Epic | Scope |\n|---|---|---|---|\n"

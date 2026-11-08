@@ -8,7 +8,7 @@ Usage: python3 -I new_item.py <release> D|F|A "<title>" [--owner X] [--root PATH
 Under an exclusive lock on <release folder>/.ids.lock: re-read the files, take the highest
 number of that kind across the release (A: every ATTENTION file), append the heading
 (D in decisions.md and F in findings.md under the last "## Round" heading, A in today's
-attentions/ATTENTION-<YYYY-MM-DD>.md), then the first bullet if given, and commit that one
+run/attentions/ATTENTION-<YYYY-MM-DD>.md), then the first bullet if given, and commit that one
 file. Prints the id alone, e.g. F11.
 """
 import argparse
@@ -39,9 +39,9 @@ def load(name):
     return mod
 
 
-def attention_files(folder):
-    """Every ATTENTION file of the release, current layout and the older flat one."""
-    return sorted(folder.glob("attentions/ATTENTION-*.md")) + sorted(folder.glob("ATTENTION-*.md"))
+def attention_files(folder, own):
+    """Every ATTENTION file of the release, under run/attentions/."""
+    return sorted((folder / own.ATTENTIONS_DIR).glob("ATTENTION-*.md"))
 
 
 def highest(paths, kind):
@@ -141,8 +141,8 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_EX)
         exclude_lock(root)
         if a.kind == "A":
-            scan = attention_files(folder)
-            target = folder / "attentions" / f"ATTENTION-{today}.md"
+            scan = attention_files(folder, own)
+            target = folder / own.ATTENTIONS_DIR / f"ATTENTION-{today}.md"
         else:
             target = folder / ("decisions.md" if a.kind == "D" else "findings.md")
             if not target.is_file():
@@ -157,7 +157,7 @@ def main():
             block.append(a.bullet if a.bullet.startswith("- ") else f"- {a.bullet}")
 
         if a.kind == "A":
-            target.parent.mkdir(exist_ok=True)
+            target.parent.mkdir(parents=True, exist_ok=True)
             text = target.read_text(encoding="utf-8") if target.is_file() else f"# Attention, {today}\n"
             target.write_text(appended(text, block), encoding="utf-8")
         else:
