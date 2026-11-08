@@ -50,7 +50,7 @@ Writing a rule: one rule per topic, two to five bullets; each bullet a full sent
 
 Interactive. You research and propose; the owner gives feedback and accepts.
 
-- Read the last handoff and the open attention file in full before saying anything.
+- Read the last handoff and the open attention file in full before saying anything. Something the work needs is not in them: `/recall` (transcript grep, ctx_search, ask the prior session named in the handoff), never re-derive it from the code.
 - A lead that starts fresh on a release with a live runner (`runner.sh list`) first sends `runner.sh send <release> "HELLO from <lead>"`, before anything else.
 - Questions and options stay in chat, never in a file.
 - `decisions.md` holds accepted decisions only, as `### D<n>` items under a round heading. A number is never reused or renumbered.
@@ -72,7 +72,7 @@ Item format, one item per message, the next item only after the owner rules on t
 ```
 
 No question at the end; the options are the question. A "makes sense" or a follow-up question is still discussion; write the decision into `decisions.md` only on the owner's explicit confirmation ("record it", "accepted", "record D<n>", or "k" right after the complete item that ends with `Say "record it" to write D<n>, or add to it.`), in that same turn, then post the next item. A message of specifics or a chosen option is not a confirmation: repost the item with them folded in and wait.
-- Handoff: only when the owner asks.
+- Handoff: only when the owner asks. State and Open only, what the next session needs; never history. State names the runner window and the writer's session name and uuid (formats.md, Handoff).
 
 Epics:
 

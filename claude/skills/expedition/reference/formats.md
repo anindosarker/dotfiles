@@ -190,6 +190,7 @@ Written with the `write-handoff` skill.
   - Stage: <the Stage line of status.py, e.g. discuss, run (S2)>
   - Next: `/expedition <stage> <release>`, <where to start, e.g. A1 or spec 04.1>
   - Runner: window `<release> runner1` in tmux session <name>, or none; registry `~/.claude/expedition-runners.json`
+- Writer: session `<name>` `<uuid from $CLAUDE_CODE_SESSION_ID>`, so the next session can ask it or grep its transcript (`/recall`).
   ```
 
 - No release line: the folder gives the release.
