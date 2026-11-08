@@ -44,6 +44,8 @@ The loop prompt must be safe to fire at any time. Each fire reads this file, abo
 1. A turn is already working: do nothing.
 2. Find the release: the argument, else the release this session runs, else the `Next:` line of the newest handoff (`.ai/plans/v*.x/<owner>/handoffs/handoff-*.md`, newest by the date in the file name).
 3. Run `status.py <release>`, read `sprints.md` and the trackers of its `[ ]` rows.
+Environment blockers are the run manager's to fix, never to wait on: a stopped Docker daemon (`open -a Docker`, then poll `docker info`), a busy port, a missing image or dependency. The run nudges the owner only when the fix fails after one attempt (2026-11-08: a runner waited on Docker for an `act` run instead of starting it).
+
 4. Do the next step: a milestone merged or stopped ticks its cell; launch every `·` row whose dependencies in earlier columns have merged, from any epic that has been RUN; an epic whose every milestone is `[x]` or `[!]` gets the closing steps of Epics. A run whose tracker has not changed since the previous tick: ask the builder "what is blocking you" and fix the environment (a port, a server, a fixture, compute); do not read its code.
 5. Tick economy:
    - Read `sprints.md` and the trackers only. No `git status`, `diff` or `log` in worktrees; no pull unless a merge is due this tick.
