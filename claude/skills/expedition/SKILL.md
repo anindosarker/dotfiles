@@ -35,10 +35,10 @@ Writing a rule: one rule per topic, two to five bullets; each bullet a full sent
 
 ## Owner input
 
-- Owner words: `record it`, `accepted`, `record D<n>`, `k`, `epic`, `hold D<n>`, `go`.
+- Owner words: `record it`, `accepted`, `k`, `epic`, `hold D<n>`, `go`.
 - `resume` (or "resume E<n>", "resume the runner"): the named session stopped (usage limit, crash, closed window); send it the one word `resume` (`runner.sh resume <release>` for the runner, `runner.sh resume "<release> specs E<n>"` for a fork) and post the next item. No status checks, no audits, no re-reading of files around it; the lead does its own work only when the owner says so.
 - A runner or fork window that hits a usage limit is never stopped, replaced or re-forked: it continues by itself when the limit resets, and `resume` typed into it (or `claude --resume <uuid>` after a crash) brings it back. `runner.sh stop` marks the entry stopped, after which `fork` cannot resume it. A decision with nothing to run is tagged `[Done]` when recorded.
-- Owner comments are feedback for discussion, not decisions. An owner message that picks an option, adds specifics or corrects the item is still discussion: fold it into the item and post the item again. Write a decision only on an explicit confirmation ("record it", "accepted", "record D<n>"), or on "k" when the agent's last message was the complete item ending with the line `Say "record it" to write D<n>, or add to it.`; "k" on an item still being shaped, "fix it", "makes sense" or a message of specifics never counts. A message that carries a question is discussion whatever else it says ("lgtm, also X right?"): answer the question, fold the answer into the item, and wait for the next message.
+- Owner comments are feedback for discussion, not decisions. An owner message that picks an option, adds specifics or corrects the item is still discussion: fold it into the item and post the item again. Write a decision only on an explicit confirmation ("record it", "accepted"), or on "k" when the agent's last message was the complete item ending with the line `Say "record it" to record it, or add to it.`; "k" on an item still being shaped, "fix it", "makes sense" or a message of specifics never counts. A message that carries a question is discussion whatever else it says ("lgtm, also X right?"): answer the question, fold the answer into the item, and wait for the next message.
 - Only a real choice reaches the owner: a visible behavior or look, a public API, a re-decided decision, a scope change. Spec wording that follows shipped code, tracker and process gaps, tooling with one right answer, a deviation that keeps the decided behavior: the agent settles them, records a short decision and moves on. The owner does not read spec files.
 - A decision can be revisited. A new decision supersedes it; the old one stays in the file, marked.
 - A run agent follows accepted decisions. A decision that no longer fits becomes an ATTENTION item, never a silent change.
@@ -71,7 +71,8 @@ Item format, one item per message, the next item only after the owner rules on t
 - ...
 ```
 
-No question at the end; the options are the question. A "makes sense" or a follow-up question is still discussion; write the decision into `decisions.md` only on the owner's explicit confirmation ("record it", "accepted", "record D<n>", or "k" right after the complete item that ends with `Say "record it" to write D<n>, or add to it.`), in that same turn, then post the next item. A message of specifics or a chosen option is not a confirmation: repost the item with them folded in and wait.
+No question at the end; the options are the question. A "makes sense" or a follow-up question is still discussion; write the decision into `decisions.md` only on the owner's explicit confirmation ("record it", "accepted", or "k" right after the complete item that ends with `Say "record it" to record it, or add to it.`), in that same turn, then post the next item.
+- Recording: run `python3 -I ${CLAUDE_SKILL_DIR}/scripts/new_item.py <release> D "<title>"`, write the bullets under the heading it made (targeted edit, then commit), and reply with the id it printed. The item has no D number before that. A message of specifics or a chosen option is not a confirmation: repost the item with them folded in and wait.
 - Handoff: only when the owner asks. State and Open only, what the next session needs; never history. State names the runner window and the writer's session name and uuid (formats.md, Handoff).
 
 Epics:

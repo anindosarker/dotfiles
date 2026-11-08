@@ -22,6 +22,11 @@ Every item has an ID heading. Its first bullet is required and self-explanatory:
 - `[E<n>]` is written by whoever sends RUN. `[Done]` is written by the runner on merge, or by the lead when a decision with nothing to run is recorded.
 - Re-read the file right before every write, make a targeted edit, commit at once. No held edits.
 - The next D, F or A number is read from the file at write time, never from memory.
+- Ids come only from `python3 -I <skill>/scripts/new_item.py <release> D|F|A "<title>"`, never typed. It locks, appends the heading, commits and prints the id; the session then writes the bullets under that heading.
+- No id is mentioned in chat or a tracker before it is allocated: refer to the item by its title.
+- An id never changes after allocation.
+- A duplicate filed twice keeps both ids. The later one gets `- Same as F<n>.` as its first bullet and closes.
+- Fallback rule: a session that finds its own id taken renumbers its own item only, never the other's. With `new_item.py` this no longer happens.
 - Agents on milestone branches never edit `decisions.md`.
 
 ## ATTENTION file

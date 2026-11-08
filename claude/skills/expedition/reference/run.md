@@ -29,6 +29,7 @@ The release's `process.md` (`.ai/plans/<release>/<owner>/process.md`) holds the 
   - Runner to lead, by `SendMessage` to the name after `from`: `DONE E<n> <merge sha> attention <A ids or none>`, when every milestone of the epic has merged
   - Runner to lead, the same way: `BLOCKED E<n> <tracker path>`, when a bounce loop or a gate cannot be resolved
   - Spec writer to lead, by `SendMessage`: `SPECS E<n> <spec numbers>`, from the forked session `runner.sh fork` opened
+  - Either direction: `NOTE <id>: <one line>`, only when the meaning of an id the other session may hold changes (a duplicate closed as another id, a decision superseded, an item moved to a fix milestone). Never status.
 - Reply target: the name after `from` in the latest RUN or HELLO line; DONE and BLOCKED go there from then on.
 - RUN is idempotent: an epic whose `sprints.md` rows are already running or done is not started again; the runner replies with the current state.
 - Several epics run at once, no slot limit. One worktree per milestone from the pool. Machine load as today: `process.md` P5, `SERIAL_GATES` when loaded.
@@ -47,7 +48,7 @@ The loop prompt must be safe to fire at any time. Each fire reads this file, abo
    - Read `sprints.md` and the trackers only. No `git status`, `diff` or `log` in worktrees; no pull unless a merge is due this tick.
    - A tick with work (tick a cell, merge, launch) reports one line per action.
    - A tick that ticks or merges nothing ends with exactly one line: `tick <HH:MM>: <milestone> <stage>, ..., <milestone> waiting on <dep>. Next <HH:MM>.` No table, no per-milestone bullets, no restating what was read.
-   - Messages to the lead are DONE, BLOCKED and the reply to a HELLO only. Never a status line.
+   - Messages to the lead are DONE, BLOCKED, NOTE and the reply to a HELLO only. Never a status line.
 
 Waiting on CI or a release run is never a foreground wait and never blocks the next milestone. Arm a background watcher: a shell loop over `gh pr checks <N> --json name,state` (or `gh run watch <id> --exit-status`) every 60 s that exits on any `FAILURE`, `ERROR` or `CANCELLED` and when nothing is `IN_PROGRESS`, `PENDING` or `QUEUED`. `SKIPPED` entries from a `labeled` event run are normal. Its completion notification wakes the loop; the fallback wakeup stays at 30 min. A milestone merges on local checks that pass; CI on the staging branch, after the one fast-forward, is the backstop, read in the integration milestone (`process.md` P1, P4).
 
@@ -124,6 +125,7 @@ The runner then adds an ATTENTION item and continues with work that does not dep
 - `attention`: what needs the owner. `notes`: what a later task, a resume or the owner would otherwise rediscover. Both are usually empty.
 - Sub-agents write the tracker: the builder fills it and sets `Status: running`, the fixer and the verifier update it. They stage owner items in its `## Attention` section.
 - The runner writes the ATTENTION file at each milestone boundary and when an epic has merged. It condenses the trackers' `## Attention` sections and the results, and merges duplicates.
+- Findings and ATTENTION items are filed through `new_item.py <release> F|A "<title>"`: the runner and its sub-agents stage them by title in the tracker, the runner files them at the boundary. Never a hand-typed `### F<n>` or `## A<n>` heading.
 - The run reports; it does not solve. Do not research solutions for an ATTENTION item. A deviation is reported as keep or revert with the exact strings, never as an implementation question.
 - An accepted decision that no longer fits: an ATTENTION item, never a silent change.
 - Nothing needs the owner: no ATTENTION file.
