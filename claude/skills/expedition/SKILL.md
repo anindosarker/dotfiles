@@ -68,8 +68,9 @@ Interactive. You research and propose; the owner gives feedback and accepts.
 Item format, one item per message, the next item only after the owner rules on this one (or while this one waits on a lookup, see above):
 
 ```
-# <n>. <Title>: one plain sentence that says what is wrong today, where, and what the change is.
-- optional bullets: facts, file:line, how the common references do it (measured or read, never assumed)
+# <n>. <Title>: one plain sentence a non-expert reads in one pass, in everyday words, no ids, paths or jargon.
+- the first bullet, required: what is wrong today, where, and what the change is (file:line, ids, measurements)
+- optional bullets: facts, how the common references do it (measured or read, never assumed)
 ## Options:
 - recommended: ...
 - ...
