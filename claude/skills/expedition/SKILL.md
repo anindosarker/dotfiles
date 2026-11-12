@@ -60,20 +60,19 @@ Interactive. You research and propose; the owner gives feedback and accepts.
 - A lead that starts fresh on a release with a live runner (`runner.sh list`) first sends `runner.sh send <release> "HELLO from <lead>"`, before anything else.
 - Options are written once, in chat, when the item is posted; never in a file.
 - `decisions.md` holds accepted decisions only, as `### D<n>` items under a round heading. A number is never reused or renumbered.
-- `queue.md` holds every item not decided yet that cannot be discussed now, as `### Q<n>` entries ([reference/formats.md](reference/formats.md), queue.md).
+- `queue.md` holds every item raised in the release, as `### Q<n>` entries ([reference/formats.md](reference/formats.md), queue.md): entries with an empty Tags value are the queue, the rest are the history.
 - Research: inline, or one or two agents for lookups. The lead never launches a Workflow.
 - One item is open in chat at a time. The next item is posted only after the owner rules on the open one.
-- An item goes to `queue.md` only when it cannot be discussed now: an extra owner remark while another item is open (an owner message with five remarks: the first is discussed directly, the other four are filed in that same turn), a lead proposal that must wait, a side-find from a lookup. File it with `new_item.py <release> Q "<title>" --from <owner|lead|lookup>`.
-- The item open in chat has no entry, and an item raised and ruled in the same message gets none. Its outcomes: "record it" turns it into a decision (`new_item.py <release> D "<title>"`); "later" files it with `- Tags: Later`; "drop it" keeps nothing; a switch files it with Tags empty (next bullet).
-- The owner switches to another item while one is open and unruled ("let's do Q14 first"): in that same turn, file the open item with `new_item.py <release> Q`, `--from` set to whoever raised it, the points made so far as fact bullets, Tags empty; then post the item the owner asked for. The filed item comes back in queue order like any other.
-- The lead never invents an item number: the open item has none, a waiting item has its Q id, a settled item its D id.
-- An item that needs a lookup: file it, start the lookup agent and give it the Q id and the `queue.md` path. The agent appends its facts as bullets under the entry and reports one line. The lead skips that entry while its lookup runs. A lookup that returns while another item is open gets exactly one line in chat, `Q15 ready`, never a full item.
-- Next item: `status.py <release> --next` prints the first open entry in full, or `none`. No session reads the whole file to find what is next.
-- A ruling on a queued item sets its Tags value in the same turn: `D<n>` (`new_item.py <release> D "<title>" --source Q<n>` writes it and the decision's last bullet `- Source: Q<n>`), `Later` or `Dropped`. A parked entry is reopened by clearing its Tags value.
+- Every item raised by the owner, the lead, a lookup or the run is filed with `new_item.py <release> Q "<title>" --from <owner|lead|lookup|run E<n>>` in the turn it is raised, before it is posted. An owner message with five remarks files five entries. The only item with no entry is one raised and ruled in the same owner message ("fix the link right now"): it goes straight to a decision.
+- Outcomes for the open item: "record it" runs `new_item.py <release> D "<title>" --source Q<n>` (sets Tags to the D id and writes the decision's last bullet `- Source: Q<n>`); "later" sets Tags `Later`; "drop it" sets Tags `Dropped`. A parked entry is reopened by clearing its Tags value.
+- The owner switches to another item while one is open and unruled ("let's do Q14 first"): append the points made so far as fact bullets under the open item's entry, leave its Tags empty, and post the item the owner asked for. The switched-from item comes back in queue order like any other.
+- The lead never invents an item number: every item carries the Q id `new_item.py` printed, a settled item also its D id.
+- An item that needs a lookup: start the lookup agent and give it the Q id and the `queue.md` path. The agent appends its facts as bullets under the entry and reports one line. The lead skips that entry while its lookup runs. A lookup that returns while another item is open gets exactly one line in chat, `Q15 ready`, never a full item.
+- Next item: `status.py <release> --next` prints the first entry with an empty Tags value in full, or `none`. The open item's entry also has an empty Tags value, so the lead asks for the next item only after the owner rules on the open one. No session reads the whole file to find what is next.
 - Both sessions may discuss and record decisions, under the shared-file rules in [reference/formats.md](reference/formats.md).
 - A finished lookup agent stays idle, not stopped: it costs nothing idle, and a follow-up on the same area goes to it by name (`SendMessage`) so its context is reused. Stop agents only when the owner says so.
 
-Item format, one item per message, the next item only after the owner rules on this one. A queued item is headed `# Q15. <sentence>`, an item discussed directly `# <sentence>`:
+Item format, one item per message, the next item only after the owner rules on this one. Every item is headed `# Q<n>. <sentence>`; there is no unnumbered item header:
 
 ```
 # Q<n>. <Title>: one plain sentence a non-expert reads in one pass, in everyday words, no ids, paths or jargon.

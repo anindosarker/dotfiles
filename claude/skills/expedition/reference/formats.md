@@ -31,7 +31,7 @@ Every item has an ID heading. Its first bullet is required and self-explanatory:
 
 ## queue.md
 
-One file per release, in the release folder root, template [../templates/queue.md](../templates/queue.md). It holds every item not decided yet that cannot be discussed now; the item open in chat has no entry. Flat list in the order raised, no round headings.
+One file per release, in the release folder root, template [../templates/queue.md](../templates/queue.md). It holds every item raised in the release, filed in the turn it is raised (the only exception: an item raised and ruled in the same owner message goes straight to a decision). Entries with an empty Tags value are the queue, the rest are the history. Flat list in the order raised, no round headings.
 
 ```md
 # v0.9.x queue

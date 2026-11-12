@@ -6,7 +6,7 @@
 .ai/plans/v0.<n>.x/<owner>/
 ├── <release>-plan.md       ← authored: ## Goals, ## Deliverables
 ├── decisions.md            ← accepted decisions, D<n> items under round headings, each with its epic tag line
-├── queue.md                ← every item not decided yet, Q<n> entries in the order raised, each with its Tags and From bullets
+├── queue.md                ← every item raised in the release, Q<n> entries in the order raised, each with its Tags and From bullets
 ├── process.md              ← this project's facts for the release, about ten P<n> rules, two to five explicit bullets each (branches, milestone branch and worktree, merge, release, checks on the shared machine, agent sandbox, public surface, commits, shared files, plans); copied from the previous release by new_cycle.py, audited and rewritten rule by rule with the owner before the run (SKILL.md Process notes)
 ├── plan/specs/NN-<slug>.md ← authored: one spec; follow-up specs NN.M-<slug>.md; section 2.1 holds one ### Milestone: <name> block per milestone
 ├── plan/epics/E<n>.md     ← one per epic, from new_epic_file.py: Decisions and Specs lines, Notes the specs cannot hold, acked by the runner
