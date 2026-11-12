@@ -5,7 +5,7 @@ sprints (columns), ticked later by the run.
 Usage: python3 -I sprints.py <release> [--owner X] [--root PATH]
 
 Columns come from status/ownership.md (ownership.py's arithmetic: the longest chain ending at a
-milestone plus one). The file holds "# <release> sprints", an "Updated:" line and the grid
+milestone plus one, never before its epic's "Starts: S<n>" line in plan/epics/E<n>.md). The file holds "# <release> sprints", an "Updated:" line and the grid
 "| Milestone | S1 | ... |" only: "·" in a milestone's own column, blank elsewhere. Cells
 are "·", "[ ]", "[x]" or "[!]".
 
@@ -17,8 +17,8 @@ last). A row no longer in status/ownership.md is dropped, unless it carries a ru
 kept with a warning.
 
 Rows: every milestone of a spec that carries a "- Epic: E<n>" line (new_spec.py --epic), and
-every fix milestone. A later epic's independent milestones join an existing column, a running
-one too; dependent ones open the next. Row text is the epic label, the spec number and the
+every fix milestone. An epic's milestones start at its start sprint (the current sprint at its
+go); dependent ones open the next column. Row text is the epic label, the spec number and the
 milestone name, "E1 01 Filtering" ("fix <name>" for a fix milestone); rows sorted by epic,
 spec number, then status/ownership.md order. The lead reruns it on go, the runner on merge.
 """
@@ -151,7 +151,7 @@ def write(folder, release, quiet=False):
         newer = [p for p in specs.glob("*.md") if p.stat().st_mtime > ownership.stat().st_mtime]
         if newer:
             die(f"status/ownership.md older than plan/specs/{newer[0].name}: run ownership.py first")
-    col, _, errors, _ = own.schedule(milestones)
+    col, _, errors, _ = own.schedule(milestones, own.floors(folder, milestones))
     if errors:
         for e in errors:
             print(f"error: {e}", file=sys.stderr)

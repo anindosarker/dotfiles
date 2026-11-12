@@ -28,7 +28,8 @@ and done ([Done]). The stage line reports discuss and run together ("Stage: disc
 Also under Epics: the decisions still editable in place (no citing spec has a status/sprints.md row
 with "[ ]" or "[x]", not superseded); a supersede marked on one side only; an unbuilt spec
 citing a superseded decision; for each epic not done, its plan/epics/E<n>.md missing or Notes bullets
-without "[ack HH:MM]"; while an epic runs, the next epic file missing.
+without "[ack HH:MM]"; an epic file whose epic has grid rows and no "Starts:" value, or a
+Starts value that is not S<number>; while an epic runs, the next epic file missing.
 
 Gaps reported for the layout: a plan section other than Goals and Deliverables; a
 Deliverables Scope cell over 120 characters; a spec with no "### Milestone:" block, a block without Files owned, a Task line without
@@ -519,7 +520,7 @@ def new_print(folder, plan, d, own):
             print(f"  {err}")
         current, errors = own.collect(folder)
         if not errors:
-            _, _, errors, _ = own.schedule(current)
+            _, _, errors, _ = own.schedule(current, own.floors(folder, current))
         for e in errors:
             print(f"  ownership.py would fail: {e}")
         if owned is not None and not errors:
@@ -756,6 +757,13 @@ def main():
             continue
         for note in unacked_notes(ef):
             print(f"  {e} note without ack: {note[:90]}")
+    starts = own.epic_starts(folder)
+    for e in sorted(set(marks) | {n for n, v in starts.items() if v}):
+        v = starts.get(e)
+        if e in marks and e in starts and not v:
+            print(f"  E{e} has rows in status/sprints.md and no Starts value: ownership.py {a.release} --backfill-starts")
+        elif v and not own.SPRINT_VALUE_RE.match(v):
+            print(f"  plan/epics/E{e}.md: Starts '{v}' is not S<number>")
     if any(marks.get(int(e[1:])) for e in running):
         nxt = f"E{max(groups) + 1}"
         if not (epics_dir / f"{nxt}.md").is_file():

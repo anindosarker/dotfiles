@@ -17,8 +17,11 @@ Epic tag mode, on go: python3 -I new_spec.py <release> --epic E<n> <spec numbers
 [--owner X] [--root PATH]. A D id resolves to the specs citing it. Each named spec gets the line
 "- Epic: E<n>" directly under its title line; each decision those specs cite (and each named
 D id) gets the tag line "[E<n>]" directly under its heading in decisions.md, and the spec's
-Deliverables row gets E<n> in its Epic cell. An existing Epic line or epic tag is kept and
-reported. Each file is read right before its write.
+Deliverables row gets E<n> in its Epic cell, and plan/epics/E<n>.md gets "Starts: S<n>" under
+its Specs: line: the current sprint of status/sprints.md as it is at that moment, before the
+epic's rows exist (the first column holding a "[ ]" or "·" cell, else the column after the
+last; S1 for an empty grid). An existing Epic line, epic tag or Starts value is kept and
+reported; a missing epic file is refused. Each file is read right before its write.
 
 Both modes refuse a superseded decision (heading "(superseded by D<n>)", or named by a later
 "- Supersedes D<n>." bullet): create mode when the title, scope or template cites one, tag mode
@@ -202,9 +205,13 @@ def refuse_superseded(folder, nums, what):
 
 
 def tag_epic(folder, epic, items):
-    """Write "- Epic: E<n>" into each named spec (a D id names the specs citing it) and
-    "[E<n>]" under each decision those specs cite and each named D id."""
+    """Write "- Epic: E<n>" into each named spec (a D id names the specs citing it),
+    "[E<n>]" under each decision those specs cite and each named D id, and the epic's
+    "Starts: S<n>" line."""
     own = load_ownership()
+    epic_file = folder / own.EPICS_DIR / f"{epic}.md"
+    if not epic_file.is_file():
+        die(f"{epic_file} missing: run new_epic_file.py first")
     files = dict(own.spec_files(folder))
     nums, specs = set(), set()
     for item in items:
@@ -245,6 +252,9 @@ def tag_epic(folder, epic, items):
         files[num].write_text("".join(elines), encoding="utf-8")
         marked.append(num)
     print(f"{epic} specs: {', '.join(marked) or 'none'}")
+    start = f"S{own.current_sprint(folder)}"
+    kept_start = own.set_starts(epic_file, start)
+    print(f"{epic} Starts: {kept_start} kept" if kept_start else f"{epic} Starts: {start}")
     plan = folder / f"{folder.parent.name}-plan.md"
     if plan.is_file():
         plines = plan.read_text(encoding="utf-8").splitlines(keepends=True)

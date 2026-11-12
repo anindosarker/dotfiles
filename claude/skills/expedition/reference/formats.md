@@ -138,6 +138,7 @@ One file per release, template [../templates/decisions.md](../templates/decision
 
 Decisions: D35, D36, D38.
 Specs: 09, 10.
+Starts: S4
 
 ## Notes
 
@@ -148,6 +149,7 @@ Specs: 09, 10.
 - SKIP 09: D38 superseded by D41, rebuilt next epic.
 ```
 
+- `Starts: S<n>` is the epic's start sprint, written once on go by `new_spec.py --epic` and never changed: no milestone of the epic sits in an earlier column.
 - Notes hold only what the specs cannot say: rule changes since the last epic, owner context, cross-epic order, the lead's moves during the run (SKIP, HOLD). Nothing restates a decision, a spec or a tracker.
 - An urgent note starts with `Urgent:`; a RULES line is one.
 - ` [ack HH:MM]` is appended by the runner when it has read the note; a note without it is unread.

@@ -2,6 +2,7 @@
 """Generate status/ownership.md for a release from the milestone blocks of its specs.
 
 Usage: python3 -I ownership.py <release> [--epic E<n> <spec numbers>] [--owner X] [--root PATH]
+       python3 -I ownership.py <release> --backfill-starts [--dry-run]
 
 Reads every plan/specs/NN-<slug>.md for "### Milestone: <name>" blocks ("#### Milestone:"
 is accepted too) with the lines "- Files owned: a, b", "- Depends on: <milestone names,
@@ -15,7 +16,13 @@ while neither depends on the other are a collision; a dependency cycle is an err
 Fix milestones take part through Depends on only: the run places them in the
 running sprint column (sprints.py, new_fix.py).
 
-A milestone's column is the longest chain ending at it plus one, over every epic. The
+A milestone's column is the longest chain ending at it plus one, over every epic, and never
+before its epic's start sprint: the "Starts: S<n>" line of plan/epics/E<n>.md (new_spec.py
+--epic writes it on go). The floor propagates along the edges; an epic file without a Starts
+value means no floor; fix milestones have none. --epic E<n> <spec numbers> uses the current
+sprint as a provisional floor for an epic with no Starts value yet, writing no Starts line.
+The current sprint is the first column of status/sprints.md holding a "[ ]" or "·" cell; when
+there is none, the column after the last (S1 for an empty grid). The
 "Derived from" cell lists the shared-file edges the scheduler added into that milestone, as
 "<milestone> (`file`, ...)"; explicit edges are the Depends on cell.
 
@@ -24,6 +31,12 @@ line; fix milestones are in no epic), with the Depends on and shared-file edges 
 epic; the longest chain, ties by lower spec number. One line per epic under "## Critical
 paths": "- E6: 09 Theme panel shortcut row > 10 Theme color picker". --epic E<n> <spec
 numbers> counts those untagged specs as E<n> (the lead, after the fork, before go).
+
+Backfill: ownership.py <release> --backfill-starts [--dry-run] writes "Starts: S<n>" into the
+epic file of every epic that has rows in status/sprints.md and no Starts value: the lowest
+column among its started rows ("[x]", "[ ]", "[!]"), else the current sprint. It commits
+nothing and prints the value per epic and every not-started row whose column changes at the
+next ownership.py and sprints.py run. Started rows never move: sprints.py keeps their cells.
 
 status/ownership.md holds a title, the Generated line, the table
 "| Milestone | Spec | Depends on | Derived from | Files |" and the "## Critical paths" section.
@@ -327,8 +340,10 @@ def collect(folder):
     return out, errors
 
 
-def schedule(milestones):
+def schedule(milestones, floor=None):
     """Return (columns, graph, errors, warnings) for milestones with resolved deps.
+
+    floor: {name: lowest column} (the epic's start sprint); the column is never below it.
 
     milestones: list of dicts name, spec, order, deps, files (spec 'fix' for a fix milestone).
     graph: {"succ": {name: set of successors}, "derived": {name: {pred: [files]}}}, the
@@ -397,9 +412,10 @@ def schedule(milestones):
         errors.append("dependency cycle: " + " > ".join(find_cycle(left, succ)))
         return {}, {}, errors, warnings
 
+    floor = floor or {}
     col, prev = {}, {}
     for n in topo:
-        col.setdefault(n, 1)
+        col[n] = max(col.get(n, 1), floor.get(n, 1))
         for b in succ[n]:
             if col[n] + 1 > col.get(b, 1):
                 col[b] = col[n] + 1
@@ -448,6 +464,137 @@ def epic_of_milestones(folder, milestones, assume=None):
     assume = assume or {}
     epics = {num: spec_epic(path) for num, path in spec_files(folder)}
     return {m["name"]: assume.get(m["spec"]) or epics.get(m["spec"]) for m in milestones}
+
+
+STARTS_RE = re.compile(r"^Starts:[ \t]*(.*?)\s*$", re.M)
+SPRINT_VALUE_RE = re.compile(r"^S(\d+)$")
+
+
+def epic_starts(folder):
+    """{epic number: Starts value as written ("" when empty, None when the line is missing)}
+    for every plan/epics/E<n>.md."""
+    out = {}
+    for p in sorted((folder / EPICS_DIR).glob("E*.md")):
+        m = re.match(r"^E(\d+)\.md$", p.name)
+        if m:
+            s = STARTS_RE.search(read(p))
+            out[int(m.group(1))] = s.group(1) if s else None
+    return out
+
+
+def grid(folder):
+    """(column count, [(row label, cells)]) of status/sprints.md; (0, []) when missing."""
+    path = folder / SPRINTS_MD
+    if not path.is_file():
+        return 0, []
+    head, data = table_rows(read(path), "Milestone")
+    if head is None:
+        return 0, []
+    n = len(head) - 1
+    return n, [(r[0], (r[1:] + [""] * n)[:n]) for r in data if r and r[0]]
+
+
+def current_sprint(folder):
+    """The first column holding a "[ ]" or "·" cell, else the column after the last (1-based)."""
+    n, rows = grid(folder)
+    for i in range(n):
+        if any(cells[i] in ("[ ]", "·") for _, cells in rows):
+            return i + 1
+    return n + 1
+
+
+def floors(folder, milestones, assume=None):
+    """{milestone name: start sprint} from the epic files; an epic named by assume with no
+    Starts value gets the current sprint (the pre-go preview)."""
+    starts = epic_starts(folder)
+    provisional = set((assume or {}).values())
+    cur = None
+    out = {}
+    for name, epic in epic_of_milestones(folder, milestones, assume).items():
+        if not epic:
+            continue
+        v = SPRINT_VALUE_RE.match(starts.get(epic) or "")
+        if v:
+            out[name] = int(v.group(1))
+        elif epic in provisional:
+            cur = cur or current_sprint(folder)
+            out[name] = cur
+    return out
+
+
+def set_starts(path, value):
+    """Write "Starts: <value>" under the Specs: line of an epic file. Returns the value kept when
+    one is already there, else None."""
+    text = read(path)
+    m = STARTS_RE.search(text)
+    if m and m.group(1):
+        return m.group(1)
+    lines = text.split("\n")
+    if m:
+        i = text[:m.start()].count("\n")
+        lines[i] = f"Starts: {value}"
+    else:
+        i = next((k for k, l in enumerate(lines) if l.startswith("Specs:")), None)
+        if i is None:
+            i = next((k for k, l in enumerate(lines) if l.startswith("Decisions:")), 0)
+        lines.insert(i + 1, f"Starts: {value}")
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return None
+
+
+def backfill_starts(folder, dry_run=False):
+    """--backfill-starts: Starts for every epic with grid rows and an epic file without one."""
+    n, rows = grid(folder)
+    cur = current_sprint(folder)
+    starts = epic_starts(folder)
+    by_epic = collections.defaultdict(list)
+    for label, cells in rows:
+        m = re.match(r"^E(\d+)\s", label)
+        if m:
+            by_epic[int(m.group(1))].append((label, cells))
+    written = {}
+    for e in sorted(by_epic):
+        path = folder / EPICS_DIR / f"E{e}.md"
+        if not path.is_file():
+            print(f"E{e}: no epic file, no floor")
+            continue
+        if starts.get(e):
+            print(f"E{e}: Starts: {starts[e]} kept")
+            continue
+        started = [i + 1 for _, cells in by_epic[e] for i, c in enumerate(cells) if c in ("[x]", "[ ]", "[!]")]
+        value = f"S{min(started)}" if started else f"S{cur}"
+        why = "lowest started column" if started else "current sprint"
+        print(f"E{e}: Starts: {value} ({why})")
+        written[e] = value
+        if not dry_run:
+            set_starts(path, value)
+    milestones, errors = collect(folder)
+    if errors:
+        for e in errors:
+            print(f"error: {e}", file=sys.stderr)
+        return
+    fl = floors(folder, milestones)
+    for name, epic in epic_of_milestones(folder, milestones).items():
+        if epic in written:
+            fl[name] = int(written[epic][1:])
+    col, _, errs, _ = schedule(milestones, fl)
+    for e in errs:
+        print(f"error: {e}", file=sys.stderr)
+    label_of = {re.sub(r"^(?:E\d+\s+\d{2}(?:\.\d+)?|fix)\s+", "", l): (l, c) for l, c in rows}
+    moved = []
+    for name, c in col.items():
+        if name not in label_of:
+            continue
+        label, cells = label_of[name]
+        if any(x in ("[x]", "[ ]", "[!]") for x in cells) or label.startswith("fix "):
+            continue
+        now = next((i + 1 for i, x in enumerate(cells) if x), None)
+        if now != c:
+            moved.append(f"  {label}: S{now} to S{c}")
+    print(f"rows that move: {len(moved) or 'none'}")
+    for line in moved:
+        print(line)
+    print("dry run; nothing written" if dry_run else "nothing committed")
 
 
 def path_text(names, by_name):
@@ -670,7 +817,8 @@ def generate(folder, release, quiet=False, assume=None):
     milestones, errors = collect(folder)
     if not milestones and not errors:
         errors.append("no '### Milestone:' blocks in plan/specs/*.md and no run/trackers/fix-*-tracker.md")
-    col, graph, errs, warnings = schedule(milestones) if not errors else ({}, {}, [], [])
+    col, graph, errs, warnings = (schedule(milestones, floors(folder, milestones, assume))
+                                  if not errors else ({}, {}, [], []))
     errors += errs
     for w in warnings:
         print(f"warning: {w}", file=sys.stderr)
@@ -697,12 +845,15 @@ def generate(folder, release, quiet=False, assume=None):
 def main():
     ap = argparse.ArgumentParser(
         usage="ownership.py <release> [--overlap <spec or D ids> ...] [--epic E<n> <spec numbers>] "
-              "[--owner X] [--root PATH]")
+              "[--backfill-starts [--dry-run]] [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("--overlap", nargs="+", metavar="ID",
                     help="check mode: files the named specs or D ids share with running epics")
     ap.add_argument("--epic", nargs="+", metavar="ARG",
                     help="E<n> then spec numbers: count those untagged specs as E<n> for the path")
+    ap.add_argument("--backfill-starts", action="store_true",
+                    help="write Starts into epic files that have grid rows and none yet")
+    ap.add_argument("--dry-run", action="store_true", help="with --backfill-starts: write nothing")
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: git top level)")
     a = ap.parse_args()
@@ -710,6 +861,9 @@ def main():
         die(f"bad release '{a.release}', expected like v0.9.x")
     root = repo_root(a.root)
     folder = release_folder(root, detect_owner(root, a.owner), a.release)
+    if a.backfill_starts:
+        backfill_starts(folder, a.dry_run)
+        return
     assume = {}
     if a.epic:
         m = re.match(r"^E(\d+)$", a.epic[0])

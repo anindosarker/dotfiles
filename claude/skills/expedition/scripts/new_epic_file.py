@@ -3,7 +3,7 @@
 
 Usage: python3 -I new_epic_file.py <release> E<n> [--owner X] [--root PATH]
 
-Writes the stub "# E<n>", an empty "Decisions:" and "Specs:" line and "## Notes", then commits
+Writes the stub "# E<n>", an empty "Decisions:", "Specs:" and "Starts:" line and "## Notes", then commits
 that one file. Refuses when the file exists. The lead runs it the moment the previous epic's RUN
 is sent.
 """
@@ -50,7 +50,7 @@ def main():
     if path.exists():
         die(f"refusing to overwrite {path}")
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(f"# {a.epic}\n\nDecisions:\nSpecs:\n\n## Notes\n", encoding="utf-8")
+    path.write_text(f"# {a.epic}\n\nDecisions:\nSpecs:\nStarts:\n\n## Notes\n", encoding="utf-8")
     for args in (["add", "--", str(path)],
                  ["commit", "-q", "-m", f"docs(plan): {a.release} {a.epic} epic file", "--only", "--", str(path)]):
         r = subprocess.run(["git", "-C", str(root)] + args, capture_output=True, text=True)
