@@ -3,9 +3,8 @@
 ## Contents
 - Shared rule
 - Shared files
-- ATTENTION file
+- queue.md
 - decisions.md
-- findings.md
 - Epic file
 - status/sprints.md
 - Tracker
@@ -18,42 +17,63 @@ Every item has an ID heading. Its first bullet is required and self-explanatory:
 
 ## Shared files
 
-`decisions.md`, the ATTENTION files and the epic files are written by both sessions, lead and runner.
+`decisions.md`, `queue.md` and the epic files are written by both sessions, lead and runner.
 
 - `[E<n>]` is written by whoever sends RUN. `[Done]` is written by the runner on merge, or by the lead when a decision with nothing to run is recorded.
 - Re-read the file right before every write, make a targeted edit, commit at once. No held edits.
-- The next D, F or A number is read from the file at write time, never from memory.
-- Ids come only from `python3 -I <skill>/scripts/new_item.py <release> D|F|A "<title>"`, never typed. It locks, appends the heading, commits and prints the id; the session then writes the bullets under that heading.
+- The next D or Q number is read from the file at write time, never from memory.
+- Ids come only from `python3 -I <skill>/scripts/new_item.py <release> D|Q "<title>"`, never typed. It locks, appends the heading, commits and prints the id; the session then writes the bullets under that heading.
 - No id is mentioned in chat or a tracker before it is allocated: refer to the item by its title.
 - An id never changes after allocation.
-- A duplicate filed twice keeps both ids. The later one gets `- Same as F<n>.` as its first bullet and closes.
+- A duplicate filed twice keeps both ids. The later one gets `- Tags: Dropped` and a fact bullet `- Same as Q<n>.`.
 - Fallback rule: a session that finds its own id taken renumbers its own item only, never the other's. With `new_item.py` this no longer happens.
 - Agents on milestone branches never edit `decisions.md`.
 
-## ATTENTION file
+## queue.md
 
-`run/attentions/ATTENTION-<YYYY-MM-DD>.md`, template [../templates/attention.md](../templates/attention.md).
+One file per release, in the release folder root, template [../templates/queue.md](../templates/queue.md). It holds every item not decided yet that cannot be discussed now; the item open in chat has no entry. Flat list in the order raised, no round headings.
 
 ```md
-# Attention, 2026-10-28
+# v0.9.x queue
 
-## A2 Setters hand on*Change a function updater
+### Q1 Home title is too technical
+- Tags: D71
+- From: owner.
 
-- One line, no jargon: the situation and why it needs the owner.
-- More lines only when needed: clarification, example, path:line.
+### Q2 Example text is hard to read
+- Tags:
+- From: owner.
+- Lookup: TanStack has no intro text; Material React Table uses one or two plain sentences.
 
-- Options (optional):
-  - a) Recommended: ...
-  - b) ...
+### Q3 Setter passes a function, spec says a value
+- Tags:
+- From: run E10.
+- Keep or revert; `features/stRowPinning.ts:42`.
+
+### Q4 Row pinning drops hand-pinned rows on unselect all
+- Tags: Later
+- From: run E8.
 ```
 
-- First bullet: one line, no jargon. It explains the situation and why it needs the owner. More lines are discouraged, but allowed.
-- One tag line once ruled, directly under the heading: `[D107]` (a fix decision) or `[F40]` (deferred as a finding). Nothing else is edited after the run.
-- A-numbers continue across the whole release. A second ATTENTION file starts after the last A of the previous one.
-- The run reports; it does not solve. Do not research solutions for an item.
-- Not an ATTENTION item: spec text that lags shipped code, a tracker gap, a process lesson, a tooling fact with one right answer. Those go to the tracker Notes, a decision or the spec file directly (`process.md` holds project facts only); the owner sees choices only.
-- Only the runner writes its items; the tag line is written by whoever records the ruling. It condenses the trackers' `## Attention` sections and the workflow and agent results, merges duplicates, and appends at each milestone boundary, not in one sprint at the end.
-- An item is triaged when it has a tag line, a decision cites it (`- Source: A2`) or a spec file cites it (`(A2)`).
+- Heading `### Q<n> <title>`: a plain sentence naming the problem or idea. The id comes only from `new_item.py` and never changes.
+- First bullet, always: `- Tags: <value>`, one word. Second bullet, always: `- From:` with `owner`, `lead`, `lookup` or `run E<n>`. `new_item.py` writes both, Tags empty.
+- Further bullets: facts only (path:line, measurement, lookup result). Options are never written in the file.
+- Tags values, nothing else (`status.py` flags any other):
+
+  | Tag | Meaning |
+  |---|---|
+  | (empty) | Open, waiting to be discussed |
+  | `D<n>` | Decided; the number is the decision |
+  | `Later` | Parked; reopened by clearing the tag |
+  | `Dropped` | Will not be done |
+  | `Autofix` | Fixed without a decision |
+
+- `Autofix` is written by `new_fix.py` on each entry a fix milestone cites; the fix is traced through the fix tracker's first line, for example `(Q9)`.
+- A lookup agent appends its facts as bullets under the entry it was given.
+- Citations elsewhere: `(Q3)` in specs and trackers; a decision that came from an entry ends with `- Source: Q3`; a fix tracker's first line cites `(Q3, Q4)`.
+- The run reports; it does not solve. Do not research solutions for a run entry.
+- Not a queue entry: spec text that lags shipped code, a tracker gap, a process lesson, a tooling fact with one right answer. Those go to the tracker Notes, a decision or the spec file directly (`process.md` holds project facts only); the owner sees choices only.
+- Only the Tags value is edited after filing, plus fact bullets appended.
 
 ## decisions.md
 
@@ -70,12 +90,12 @@ One file per release, template [../templates/decisions.md](../templates/decision
 - Then what changes and what stays.
 - Then anything: bullets, code blocks, examples, sub-bullets.
 
-## Round 2: triage of ATTENTION-2026-10-28
+## Round 2: triage of E1
 
 ### D9 Setters pass on*Change a function updater, like core
 
 - ...
-- Source: A2
+- Source: Q2
 ```
 
 - Tag line, directly under the heading: none (deciding), in an epic, done, or done with nothing to run:
@@ -122,21 +142,6 @@ Specs: 09, 10.
 - An urgent note starts with `Urgent:`; a RULES line is one.
 - ` [ack HH:MM]` is appended by the runner when it has read the note; a note without it is unread.
 
-## findings.md
-
-One file per release, template [../templates/findings.md](../templates/findings.md). Same round headings as `decisions.md`.
-
-```md
-### F3 Row pinning drops hand-pinned rows on unselect all
-
-- `features/stRowPinning.ts:42`: what goes wrong and when.
-- Then anything.
-```
-
-- The heading names the problem, not the file.
-- The first bullet names the path and explains.
-- Specs cite a finding as `(F3)`.
-
 ## status/sprints.md
 
 Columns are the sprints `S1`, `S2`, ... that `ownership.py` computes. Rows are the milestones of specs that carry a `- Epic: E<n>` line (written under the title line by `new_spec.py --epic`), plus fix milestones; row text is the epic label, the spec number and the milestone name; rows sorted by epic, then spec number, then `status/ownership.md` order.
@@ -167,7 +172,7 @@ Checks:
 
 ## Attention
 
-- Staging for the ATTENTION file, one bullet per item, self-explanatory first line.
+- Staging for queue.md, one bullet per item, self-explanatory first line.
 
 ## Notes
 
@@ -176,12 +181,12 @@ Checks:
 
 - `Status:` is `planned`, `running`, `merged (<commit>)` or `skipped (D<n>)` (a SKIP, `D<n>` the superseding decision).
 - Required: the header lines and one line per task, with the last commit and the workflow run id of the run that covered the task.
-- A fix milestone's tracker cites its findings on its first line, for example `# Component fixes (F3, F4), tracker`.
+- A fix milestone's tracker cites its queue entries on its first line, for example `# Component fixes (Q3, Q4), tracker`.
 - `Checks:` is followed by one bullet per check: command, commit, result. The integration milestone's suite run on the staging branch gets its own bullet.
 - `## Attention` and `## Notes` are optional. Empty is the normal case. Do not spend tokens on notes.
 - Never: review-round narration, check output, commit lists.
 - Writers: `new_fix.py` creates a fix milestone's tracker with `Status: planned`; `new_spec.py` creates the spec's first milestone's tracker with `Status: planned`; the spec writer creates every further milestone's tracker from the template with `Status: planned` in stage 2, when the milestone block is written. In the run, the builder fills it, the fixer and the verifier update it. One worktree per milestone, so no conflicts.
-- The runner writes the ATTENTION file and handoffs. Both sessions write `decisions.md` and `findings.md` (Shared files).
+- The runner writes handoffs. Both sessions write `decisions.md` and `queue.md` (Shared files).
 
 ## process.md
 
@@ -217,7 +222,7 @@ Written with the `write-handoff` skill.
 
   ```
   - Stage: <the Stage line of status.py, e.g. discuss, run (S2)>
-  - Next: `/expedition <stage> <release>`, <where to start, e.g. A1 or spec 04.1>
+  - Next: `/expedition <stage> <release>`, <where to start, e.g. Q1 or spec 04.1>
   - Runner: window `<release> runner<n>` in tmux session <name>, or none; registry `~/.claude/expedition-runners.json`
 - Writer: session `<name>` `<uuid from $CLAUDE_CODE_SESSION_ID>`, so the next session can ask it or grep its transcript (`/recall`).
   ```

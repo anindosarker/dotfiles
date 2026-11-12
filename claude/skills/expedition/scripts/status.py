@@ -1,24 +1,29 @@
 #!/usr/bin/env python3
 """Read-only status report for an expedition release folder.
 
-Usage: python3 -I status.py <release> [--owner X] [--root PATH]
+Usage: python3 -I status.py <release> [--next] [--owner X] [--root PATH]
+
+--next prints only the first queue.md entry whose "- Tags:" value is empty, in full; "none"
+when no entry is open.
 
 Layout: <release>-plan.md (## Goals and ## Deliverables only), plan/specs/NN-<slug>.md,
-plan/epics/E<n>.md, run/attentions/, status/index.html,
+plan/epics/E<n>.md, queue.md, status/index.html,
 status/ownership.md (ownership.py), status/sprints.md (sprints.py), run/trackers/ (one per milestone,
 NN-<slug>-tracker.md or fix-<slug>-tracker.md).
 
-Decisions (### D<n>) and findings (### F<n>) get a derived state table from the spec files
-that cite them and the Status lines of those specs' milestone trackers. ATTENTION items
-(## A<n> or ### A<n>) are untriaged until a decision (Source: A<n>) or a spec cites them,
-or a tag line "[D<n>]" or "[F<n>]" sits under the heading. process.md (## P<n>) must exist
-with no placeholder left; (P<n>) citations must be defined.
+Decisions (### D<n>) get a derived state table from the spec files that cite them and the
+Status lines of those specs' milestone trackers. Queue entries (### Q<n> in queue.md) get a
+state from their "- Tags:" bullet: empty is open, D<n> decided, Later later, Dropped dropped,
+Autofix autofix. Queue gaps: an entry whose first bullet is not "- Tags:" or whose second is
+not "- From:", any other Tags value, a D<n> value naming a missing decision, a (Q<n>) or
+"Source: Q<n>" citation of a missing entry. process.md (## P<n>) must
+exist with no placeholder left; (P<n>) citations must be defined.
 
 Epics: the tag line under each "### D<n>" heading ("[E<n>]", "[Done]  [E<n>]", or "[Done]"
 for a decision with nothing to run) puts the decision in an epic. The summary lists deciding
 (no tag), in E<n> (no row of the epic in status/sprints.md carries a run mark), running (one does)
 and done ([Done]). The stage line reports discuss and run together ("Stage: discuss, run
-(E2, E3)"); an open ATTENTION item counts as discuss, never as a stage of its own.
+(E2, E3)"); an open queue entry counts as discuss, never as a stage of its own.
 Also under Epics: the decisions still editable in place (no citing spec has a status/sprints.md row
 with "[ ]" or "[x]", not superseded); a supersede marked on one side only; an unbuilt spec
 citing a superseded decision; for each epic not done, its plan/epics/E<n>.md missing or Notes bullets
@@ -31,9 +36,9 @@ ownership.py"), or one ownership.py would refuse (collision, cycle); status/spri
 without a "| Milestone" grid, with text under the grid, with a cell not one of [x], [ ],
 ·, [!] or blank, or with rows that differ from status/ownership.md. Ownership also lists each
 tagged epic's line under "## Critical paths" and reports a missing section or line. A folder
-without plan/ is refused (migrate_layout.py). A tracker Status of merged
-counts as done. A fix tracker (and any tracker no milestone owns) counts as citing the
-findings named on its first line.
+without plan/ is refused (migrate_layout.py), a folder still on the old queue files too
+(migrate_queue.py). A tracker Status of merged counts as done. A fix tracker (and any tracker
+no milestone owns) counts as citing the queue entries named on its first line.
 """
 import argparse
 import collections
@@ -56,9 +61,7 @@ DEC_PAREN_RE = re.compile(r"\(decisions? " + LIST + r"\)")
 DEC_BARE_RE = re.compile(r"\bdecision (\d+)(?![\d-])", re.I)
 STATUS_RE = re.compile(r"^Status:\s*(.*?)\s*$", re.M)
 STATUS_VALUE_RE = re.compile(r"^(planned|running|done|merged|skipped)\b\s*(?:\(([^)]*)\))?")
-A_HEAD_RE = re.compile(r"^#{2,3}\s+A(\d+)\b")
-A_TAG_RE = re.compile(r"^\s*\[(?:D|F)\d+\]")
-SOURCE_RE = re.compile(r"Source:\s*(A\d+(?:\s*(?:,|and)\s*A\d+)*)")
+Q_SOURCE_RE = re.compile(r"Source:\s*(Q\d+(?:\s*(?:,|and)\s*Q\d+)*)")
 HEADING_RE = re.compile(r"^#{1,6}\s+(.*)$")
 GATES_LINE_RE = re.compile(r"^\s*-\s*Checks:")
 PLAN_SECTIONS = ("Goals", "Deliverables")
@@ -68,7 +71,7 @@ SCOPE_MAX = 120
 SPECS_DIR = "plan/specs"
 EPICS_DIR = "plan/epics"
 TRACKERS_DIR = "run/trackers"
-ATTENTIONS_DIR = "run/attentions"
+QUEUE_MD = "queue.md"
 OWNERSHIP_MD = "status/ownership.md"
 SPRINTS_MD = "status/sprints.md"
 INDEX_HTML = "status/index.html"
@@ -299,13 +302,61 @@ def table_rows(text):
 
 
 
-def a_cites(text, source_only):
-    nums = set()
-    for m in SOURCE_RE.finditer(text):
-        nums |= {int(n) for n in re.findall(r"A(\d+)", m.group(1))}
-    if not source_only:
-        nums |= cites(text, "A", False)
+def q_cites(text):
+    """Queue numbers cited as (Q3), (Q3, Q4) or Source: Q3."""
+    nums = cites(text, "Q", False)
+    for m in Q_SOURCE_RE.finditer(text):
+        nums |= {int(n) for n in re.findall(r"Q(\d+)", m.group(1))}
     return nums
+
+
+def queue_report(folder, entries, docs, extra, dec_nums):
+    """Print the Queue section: one row per entry with its citing specs and state, then gaps."""
+    print(f"Queue: {len(entries)} in {QUEUE_MD}")
+    texts = {num: read(p) for num, p in docs}
+    texts.update({key: first for key, _, first in extra})
+    cited = {num: q_cites(t) for num, t in texts.items()}
+    rows = []
+    for e in entries:
+        citing = sorted((num for num, c in cited.items() if e["num"] in c), key=num_key)
+        rows.append((f"Q{e['num']}", ", ".join(citing) or "-", load_ownership().queue_state(e)))
+    if rows:
+        w1 = max(len(r[0]) for r in rows) + 2
+        w2 = max(len(r[1]) for r in rows) + 2
+        for a, b, c in rows:
+            print(f"  {a.ljust(w1)}{b.ljust(w2)}{c}")
+    own = load_ownership()
+    have = {e["num"] for e in entries}
+    for e in entries:
+        bullets = [l for l in e["body"] if l.strip()]
+        if e["tag"] is None:
+            print(f"  Q{e['num']}: first bullet is not '- Tags:'")
+        if len(bullets) < 2 or not own.Q_FROM_RE.match(bullets[1 if e["tag"] is not None else 0]):
+            print(f"  Q{e['num']}: second bullet is not '- From:'")
+        t = e["tag"] or ""
+        if not own.Q_TAG_OK_RE.match(t):
+            print(f"  Q{e['num']}: unknown Tags value '{t}': empty, D<n>, Later, Dropped or Autofix")
+        elif t.startswith("D") and int(t[1:]) not in dec_nums:
+            print(f"  Q{e['num']}: Tags {t} names a missing decision")
+    sources = [folder / "decisions.md", folder / QUEUE_MD, folder / f"{folder.parent.name}-plan.md"]
+    sources += sorted((folder / TRACKERS_DIR).glob("*.md")) + sorted((folder / EPICS_DIR).glob("*.md"))
+    sources += [p for _, p in docs]
+    missing = collections.defaultdict(set)
+    for p in sources:
+        if p.is_file():
+            for n in q_cites(read(p)) - have:
+                missing[n].add(p.relative_to(folder).as_posix())
+    for n in sorted(missing):
+        print(f"  Q{n} cited but undefined: {', '.join(sorted(missing[n]))}")
+    dups = sorted(n for n, c in collections.Counter(e["num"] for e in entries).items() if c > 1)
+    if dups:
+        print(f"  duplicate numbers: {', '.join(f'Q{n}' for n in dups)}")
+
+
+def print_next(entries):
+    """--next: the first open entry (empty Tags value) in full, or none."""
+    ready = next((e for e in entries if e["tag"] == ""), None)
+    print(ready["text"] if ready else "none")
 
 
 def slugify(name):
@@ -583,8 +634,9 @@ def unacked_notes(path):
 
 
 def main():
-    ap = argparse.ArgumentParser(usage="status.py <release> [--owner X] [--root PATH]")
+    ap = argparse.ArgumentParser(usage="status.py <release> [--next] [--owner X] [--root PATH]")
     ap.add_argument("release")
+    ap.add_argument("--next", action="store_true")
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: git top level)")
     a = ap.parse_args()
@@ -593,6 +645,11 @@ def main():
     root = repo_root(a.root)
     owner = detect_owner(root, a.owner)
     folder = load_ownership().release_folder(root, owner, a.release)
+    queue = folder / QUEUE_MD
+    q_entries = load_ownership().parse_queue(queue)
+    if a.next:
+        print_next(q_entries)
+        return
     rel = folder.relative_to(root)
     rules = find_rules(root)
     print(f"Planning rules: {', '.join(rules) if rules else 'none, bundled default'}")
@@ -601,9 +658,8 @@ def main():
     plan = folder / f"{a.release}-plan.md"
     index = plan
     decisions = folder / "decisions.md"
-    findings = folder / "findings.md"
     print("Files:")
-    for p in (plan, folder / OWNERSHIP_MD, folder / SPRINTS_MD, folder / INDEX_HTML, decisions, findings):
+    for p in (plan, folder / OWNERSHIP_MD, folder / SPRINTS_MD, folder / INDEX_HTML, decisions, queue):
         print(f"  {p.relative_to(folder)}: {'present' if p.is_file() else 'missing'}")
 
     own = load_ownership()
@@ -611,8 +667,7 @@ def main():
     docs, statuses = d["docs"], d["statuses"]
 
     dec_items, dec_states = state_table("Decisions", "D", decisions, docs, statuses, True)
-    state_table("Findings", "F", findings, docs, statuses, False,
-                [(key, first) for key, _, first in d["extra"]])
+    queue_report(folder, q_entries, docs, d["extra"], {n for n, _, _ in dec_items})
 
     new_print(folder, plan, d, own)
 
@@ -641,35 +696,7 @@ def main():
     if undefined_p:
         print(f"  cited but undefined: {', '.join(f'P{n}' for n in undefined_p)}")
 
-    print("ATTENTION:")
-    attention = sorted((folder / ATTENTIONS_DIR).glob("ATTENTION-*.md"))
-    a_ids = []
-    if not attention:
-        print("  none")
-    ruled = set()
-    for p in attention:
-        lines = [l for _, l in outside_fences(read(p))]
-        ids = [int(m.group(1)) for l in lines if (m := A_HEAD_RE.match(l))]
-        for i, l in enumerate(lines):
-            m = A_HEAD_RE.match(l)
-            nxt = next((x for x in lines[i + 1:] if x.strip()), "") if m else ""
-            if m and A_TAG_RE.match(nxt):
-                ruled.add(int(m.group(1)))
-        if ids:
-            a_ids += ids
-            print(f"  {p.name}: {len(ids)} items, A{min(ids)} to A{max(ids)}")
-        else:
-            bullets = sum(1 for l in lines if l.startswith("- "))
-            print(f"  {p.name}: legacy format, {bullets} bullets")
-    cited_a = a_cites(read(decisions), True) if decisions.is_file() else set()
-    for _, p in docs:
-        cited_a |= a_cites(read(p), False)
-    uncited = sorted(set(a_ids) - cited_a - ruled)
-    if a_ids:
-        print(f"  untriaged: {', '.join(f'A{n}' for n in uncited) or 'none'}")
-    dups = sorted(n for n, c in collections.Counter(a_ids).items() if c > 1)
-    if dups:
-        print(f"  duplicate numbers: {', '.join(f'A{n}' for n in dups)}")
+    untagged = [e["num"] for e in q_entries if not e["tag"]]
 
     print("Epics:")
     tags = own.read_tags(folder)
@@ -724,7 +751,7 @@ def main():
         if not (epics_dir / f"{nxt}.md").is_file():
             print(f"  plan/epics/{nxt}.md missing: new_epic_file.py {a.release} {nxt}")
     parts = []
-    if not dec_items or deciding or uncited:
+    if not dec_items or deciding or untagged:
         parts.append("discuss")
     if running:
         parts.append(f"run ({', '.join(running)})")

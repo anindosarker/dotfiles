@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Create a fix milestone in a release: run/trackers/fix-<slug>-tracker.md citing the findings
-on its first line, then status/ownership.md and status/sprints.md regenerated so the fix has a grid row
-in the running sprint column (the first column holding a "[ ]", else the last).
+"""Create a fix milestone in a release: run/trackers/fix-<slug>-tracker.md citing its queue
+entries on its first line, "- Tags: Autofix" on each cited queue.md entry, then
+status/ownership.md and status/sprints.md regenerated so the fix has a grid row in the running
+sprint column (the first column holding a "[ ]", else the last).
 
-Usage: python3 -I new_fix.py <release> <slug> "F3, F4" [--files a,b] [--depends "<names>"]
+Usage: python3 -I new_fix.py <release> <slug> "Q3, Q4" [--files a,b] [--depends "<names>"]
        [--title "<Title>"] [--owner X] [--root PATH]
 
 A fix milestone has a tracker and a grid row, no spec. Its name is the tracker title
-without ", tracker": --title, else the slug in words, followed by the findings.
+without ", tracker": --title, else the slug in words, followed by the cited ids. A D id may be
+cited too (a fix a decision asks for); it gets no tag. Commits nothing.
 """
 import argparse
 import importlib.util
@@ -17,7 +19,7 @@ from pathlib import Path
 
 RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
 SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
-FINDINGS_RE = re.compile(r"^[FDA]\d+(\s*,\s*[FDA]\d+)*$")
+CITES_RE = re.compile(r"^[QD]\d+(\s*,\s*[QD]\d+)*$")
 
 
 def die(msg):
@@ -56,12 +58,12 @@ def tracker_text(title, files, depends):
 
 def main():
     ap = argparse.ArgumentParser(
-        usage='new_fix.py <release> <slug> "F3, F4" [--files a,b] [--depends "<names>"] '
+        usage='new_fix.py <release> <slug> "Q3, Q4" [--files a,b] [--depends "<names>"] '
               '[--title "<Title>"] [--owner X] [--root PATH]'
     )
     ap.add_argument("release")
     ap.add_argument("slug")
-    ap.add_argument("findings")
+    ap.add_argument("cites")
     ap.add_argument("--files", default="")
     ap.add_argument("--depends", default="")
     ap.add_argument("--title")
@@ -72,10 +74,11 @@ def main():
         die(f"bad release '{a.release}', expected like v0.9.x")
     if not SLUG_RE.match(a.slug):
         die(f"bad slug '{a.slug}', expected lowercase-with-dashes")
-    findings = a.findings.strip()
-    if not FINDINGS_RE.match(findings):
-        die(f"bad findings '{a.findings}', expected like \"F3, F4\"")
-    findings = ", ".join(s.strip() for s in findings.split(","))
+    cites = a.cites.strip()
+    if not CITES_RE.match(cites):
+        die(f"bad ids '{a.cites}', expected like \"Q3, Q4\"")
+    ids = [s.strip() for s in cites.split(",")]
+    cites = ", ".join(ids)
     for label, val in (("title", a.title or ""), ("files", a.files), ("depends", a.depends)):
         if "|" in val:
             die(f"{label} must not contain '|'")
@@ -83,7 +86,7 @@ def main():
             die(f"{label} contains an em dash")
     files = [f.strip() for f in a.files.split(",") if f.strip()]
     words = a.title or a.slug.replace("-", " ").capitalize()
-    title = f"{words} ({findings})"
+    title = f"{words} ({cites})"
 
     own = load("ownership")
     root = own.repo_root(a.root)
@@ -95,13 +98,22 @@ def main():
     tracker = trackers / f"fix-{a.slug}-tracker.md"
     if tracker.exists():
         die(f"refusing to overwrite {tracker}")
+    queue = folder / own.QUEUE_MD
+    have = {e["num"] for e in own.parse_queue(queue)}
+    missing = [i for i in ids if i.startswith("Q") and int(i[1:]) not in have]
+    if missing:
+        die(f"not in {queue.name}: {', '.join(missing)}")
     tracker.write_text(tracker_text(title, files, a.depends.strip()), encoding="utf-8")
     try:
         own.generate(folder, a.release, quiet=True)
     except SystemExit:
         tracker.unlink()
         die(f"ownership.py failed with the fix; {tracker.name} removed")
+    for i in ids:
+        if i.startswith("Q"):
+            own.set_queue_tag(queue, int(i[1:]), "Autofix")
     print(tracker)
+    print(queue)
     print(folder / own.OWNERSHIP_MD)
     load("sprints").write(folder, a.release)
     load("swimlanes").write(folder, a.release)

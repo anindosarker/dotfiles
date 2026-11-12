@@ -1,0 +1,437 @@
+#!/usr/bin/env python3
+"""Move a release folder from findings.md and the ATTENTION files to one queue.md.
+
+Usage: python3 -I migrate_queue.py <release> [--dry-run] [--owner X] [--root PATH]
+
+For a folder that still has findings.md (### F<n> items) or run/attentions/ (also a flat
+attentions/) with ATTENTION-<YYYY-MM-DD>.md files (## A<n> items):
+
+- Builds queue.md: the title, then every F item in file order and every A
+  item in file-date then file order, numbered Q1.. in that order. Each entry gets "- Tags:"
+  and "- From:" as its first two bullets; the old bullets follow as they are (blank lines
+  inside an item dropped). Attribution is not
+  recoverable from the old files, so it is kept simple: "run" for every A item; for an F item
+  "run" when it sits under a triage round heading or cites a tracker, else "lead".
+- Tags value, one word: an A item tagged [D<n>] gets D<n>. An A item tagged [F<n>] is the same
+  item as that finding: it maps to that finding's Q id, gets no entry of its own, and its D
+  tags and bullets join that entry. An F item whose first bullet is "- Same as F<n>." maps the
+  same way. An F item a decision cites with "- Source: F<n>" or a first bullet "- Fixes F<n>"
+  gets D<n>. An F item cited on the first line of a fix tracker gets Autofix. An F item with a
+  "Deferred to" bullet, or one an A item deferred into, gets Later. When several apply, the
+  first of D (the highest number when several decisions name the entry), Autofix, Later wins.
+  Everything else stays empty (open).
+- Rewrites every reference in the release folder (decisions.md, specs, trackers, epic files,
+  handoffs, the plan file, process.md, status/*.md; never reference/): "(F3)", "(A2)", id lists
+  inside parentheses such as "(F3, F4)" or "(milestone 24, A20)", "Source: A2", "Fixes F5 and
+  F7", "[F40]", "Same as F<n>". A parenthesis that names another release ("(v0.4.x F9)") is
+  never touched. Mentions of findings.md and of the ATTENTION files become queue.md.
+- Deletes findings.md and the attentions folder with git rm. Commits nothing.
+- Prints the old-id to Q-id mapping, the entries left untagged, and every bare F<digits> or
+  A<digits> token it did not rewrite as "path:line: text", for a person to settle.
+
+--dry-run prints the same and writes nothing. Refuses a folder that already has queue.md and
+neither old file, and a folder that has both queue.md and an old file.
+
+old_files(folder) is also used by the other scripts to refuse an unmigrated folder.
+"""
+import argparse
+import collections
+import importlib.util
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
+HERE = Path(__file__).resolve().parent
+FINDINGS = "findings.md"
+ATT_DIRS = ("run/attentions", "attentions")
+QUEUE = "queue.md"
+F_HEAD_RE = re.compile(r"^###\s+F(\d+)\b\s*(.*?)\s*$")
+A_HEAD_RE = re.compile(r"^#{2,3}\s+A(\d+)\b\s*(.*?)\s*$")
+D_HEAD_RE = re.compile(r"^###\s+D(\d+)\b")
+TAG_LINE_RE = re.compile(r"^\s*(?:\[[^\]\n]+\]\s*)+$")
+TAG_RE = re.compile(r"\[([^\]\n]+)\]")
+ID = r"[DFAPQ]\d+"
+ID_LIST = ID + r"(?:\s*(?:,|and|to)\s*" + ID + r")*"
+ID_LIST_RE = re.compile(r"^\s*(" + ID_LIST + r")\s*$")
+LEAD_LIST_RE = re.compile(r"^(\s*)(" + ID_LIST + r")")
+OTHER_RELEASE_RE = re.compile(r"\bv\d+\.\d+\.x\b")
+PAREN_RE = re.compile(r"\(([^()\n]*)\)")
+SOURCE_RE = re.compile(r"(Source:\s*)(" + ID_LIST + r")")
+FIXES_RE = re.compile(r"^(\s*-\s*Fixes\s+)(" + ID_LIST + r")")
+SAME_RE = re.compile(r"\bSame as ([FA]\d+)\b")
+BRACKET_RE = re.compile(r"\[([FA]\d+)\]")
+FA_RE = re.compile(r"\b([FA]\d+)\b")
+ATT_NAME_RE = re.compile(r"(?:(?:run/)?attentions/)?ATTENTION-\d{4}-\d{2}-\d{2}\.md")
+FINDINGS_NAME_RE = re.compile(r"([\w./-]*?)\bfindings\.md\b")
+BARE_SKIP_RE = re.compile(r"\bv\d+\.\d+\.x\s+$")
+FIX_TRACKER_RE = re.compile(r"^fix-(.+)-tracker\.md$")
+
+
+def old_files(folder):
+    """The old queue files a folder still has, as names for a message: [] when migrated."""
+    out = [FINDINGS] if (Path(folder) / FINDINGS).is_file() else []
+    out += [d + "/" for d in ATT_DIRS if (Path(folder) / d).is_dir()]
+    return out
+
+
+def refusal(folder, release):
+    """One line for the other scripts: the folder still has the old files and no queue.md."""
+    old = old_files(folder)
+    if old and not (Path(folder) / QUEUE).is_file():
+        return (f"{folder} has {' and '.join(old)} and no {QUEUE}: run python3 -I "
+                f"{HERE / 'migrate_queue.py'} {release}")
+    return None
+
+
+def die(msg):
+    print(f"error: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def load(name):
+    sys.dont_write_bytecode = True
+    spec = importlib.util.spec_from_file_location(name, HERE / f"{name}.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def read(p):
+    return p.read_text(encoding="utf-8", errors="replace")
+
+
+def fenced(lines):
+    """Yield (line, inside a code fence) for every line."""
+    fence = None
+    for line in lines:
+        s = line.lstrip()
+        m = re.match(r"^(`{3,}|~{3,})", s)
+        if m:
+            if fence is None:
+                fence = m.group(1)
+            elif m.group(1)[0] == fence[0] and s.strip() == m.group(1):
+                fence = None
+            yield line, True
+            continue
+        yield line, fence is not None
+
+
+def parse_items(path, head_re):
+    """[{num, title, tags, body, round}] of one file; body keeps fenced blank lines only."""
+    items, cur, round_head = [], None, ""
+    for line, inside in fenced(read(path).splitlines()):
+        m = None if inside else head_re.match(line)
+        if m:
+            cur = {"num": int(m.group(1)), "title": m.group(2), "tags": [], "body": [],
+                   "round": round_head, "tagline": True}
+            items.append(cur)
+            continue
+        if not inside and re.match(r"^#{1,3}\s", line):
+            if line.startswith("## "):
+                round_head = line[3:].strip()
+            cur = None
+            continue
+        if cur is None:
+            continue
+        if cur["tagline"]:
+            cur["tagline"] = False
+            if not inside and TAG_LINE_RE.match(line):
+                cur["tags"] = TAG_RE.findall(line)
+                continue
+        if not line.strip() and not inside:
+            continue
+        cur["body"].append(line.rstrip())
+    return items
+
+
+def attention_files(folder):
+    out = []
+    for d in ATT_DIRS:
+        if (folder / d).is_dir():
+            out += sorted((folder / d).glob("ATTENTION-*.md"))
+    return sorted(out, key=lambda p: p.name)
+
+
+def ids_in(text):
+    return re.findall(r"[FA]\d+", text)
+
+
+def decision_cites(folder):
+    """{old id: {D numbers}} from Source: lines and first-bullet Fixes lines of decisions.md."""
+    out = collections.defaultdict(set)
+    path = folder / "decisions.md"
+    if not path.is_file():
+        return out
+    d, first = None, False
+    for line, inside in fenced(read(path).splitlines()):
+        if inside:
+            continue
+        m = D_HEAD_RE.match(line)
+        if m:
+            d, first = int(m.group(1)), True
+            continue
+        if line.startswith("#"):
+            d = None
+            continue
+        if d is None:
+            continue
+        for s in SOURCE_RE.finditer(line):
+            for i in ids_in(s.group(2)):
+                out[i].add(d)
+        if first and line.lstrip().startswith("- "):
+            f = FIXES_RE.match(line)
+            if f:
+                for i in ids_in(f.group(2)):
+                    out[i].add(d)
+            first = False
+    return out
+
+
+def fix_cites(folder):
+    """{old id: [fix slugs]} from the first line of each fix tracker."""
+    out = collections.defaultdict(list)
+    for p in sorted(folder.glob("run/trackers/fix-*-tracker.md")) + sorted(folder.glob("trackers/fix-*-tracker.md")):
+        lines = read(p).splitlines()
+        slug = FIX_TRACKER_RE.match(p.name).group(1)
+        for g in PAREN_RE.finditer(lines[0] if lines else ""):
+            for i in ids_in(g.group(1)):
+                if slug not in out[i]:
+                    out[i].append(slug)
+    return out
+
+
+def build(folder):
+    """Return (entries, mapping, notes): entries [{q, title, tags, body}], mapping {old: Q id}."""
+    f_items = parse_items(folder / FINDINGS, F_HEAD_RE) if (folder / FINDINGS).is_file() else []
+    a_items = []
+    for p in attention_files(folder):
+        for it in parse_items(p, A_HEAD_RE):
+            it["file"] = p.name
+            a_items.append(it)
+    f_nums = {it["num"] for it in f_items}
+    later = set()
+    order = []
+    for it in f_items:
+        it["old"] = f"F{it['num']}"
+        first = it["body"][0] if it["body"] else ""
+        same = re.match(r"^\s*-\s*Same as F(\d+)\b", first)
+        it["merge"] = f"F{same.group(1)}" if same and int(same.group(1)) in f_nums else None
+        triage = "triage" in it["round"].lower()
+        tracker = any(re.search(r"tracker", l) for l in it["body"])
+        it["from"] = "run" if triage or tracker else "lead"
+        if any(re.match(r"^\s*-\s*Deferred to\b", l) for l in it["body"]):
+            later.add(it["old"])
+        order.append(it)
+    for it in a_items:
+        it["old"] = f"A{it['num']}"
+        fs = [t for t in it["tags"] if re.fullmatch(r"F\d+", t) and int(t[1:]) in f_nums]
+        it["merge"] = fs[0] if fs else None
+        if fs:
+            later.add(fs[0])
+        it["from"] = "run"
+        order.append(it)
+
+    mapping, entries, by_old = {}, [], {}
+    for it in order:
+        if it["merge"]:
+            continue
+        q = f"Q{len(entries) + 1}"
+        e = {"q": q, "title": it["title"], "from": it["from"], "body": list(it["body"]),
+             "d": set(), "fix": [], "later": False, "olds": [it["old"]]}
+        entries.append(e)
+        mapping[it["old"]] = q
+        by_old[it["old"]] = e
+    for it in order:
+        if it["merge"]:
+            if it["merge"] not in mapping:
+                die(f"{it['old']} merges into {it['merge']}, which has no entry yet: fix the old file")
+            e = by_old[mapping_owner(it["merge"], mapping, by_old)]
+            mapping[it["old"]] = e["q"]
+            e["olds"].append(it["old"])
+            if it["old"].startswith("A"):
+                e["body"] += [l for l in it["body"] if not re.match(r"^\s*-\s*Same as\b", l)]
+    for it in order:
+        e = by_old[mapping_owner(it["old"], mapping, by_old)]
+        e["d"] |= {int(t[1:]) for t in it["tags"] if re.fullmatch(r"D\d+", t)}
+    for old, ds in decision_cites(folder).items():
+        if old in mapping:
+            by_old[mapping_owner(old, mapping, by_old)]["d"] |= ds
+    for old, slugs in fix_cites(folder).items():
+        if old in mapping:
+            e = by_old[mapping_owner(old, mapping, by_old)]
+            e["fix"] += [s for s in slugs if s not in e["fix"]]
+    for old in later:
+        if old in mapping:
+            by_old[mapping_owner(old, mapping, by_old)]["later"] = True
+    for e in entries:
+        e["tag"] = (f"D{max(e['d'])}" if e["d"] else "Autofix" if e["fix"]
+                    else "Later" if e["later"] else "")
+    return entries, mapping
+
+
+def mapping_owner(old, mapping, by_old):
+    """The old id whose entry holds old's Q id."""
+    if old in by_old:
+        return old
+    q = mapping[old]
+    return next(o for o, e in by_old.items() if e["q"] == q)
+
+
+def rewrite_ids(text, mapping):
+    """Rewrite the F and A ids of an id list."""
+    return FA_RE.sub(lambda m: mapping.get(m.group(1), m.group(1)), text)
+
+
+def rewrite_paren(m, mapping):
+    inner = m.group(1)
+    if OTHER_RELEASE_RE.search(inner):
+        return m.group(0)
+    lead = LEAD_LIST_RE.match(inner)
+    if lead:
+        inner = lead.group(1) + rewrite_ids(lead.group(2), mapping) + inner[lead.end():]
+    parts = re.split(r"([,;])", inner)
+    parts = [rewrite_ids(p, mapping) if ID_LIST_RE.match(p) else p for p in parts]
+    return "(" + "".join(parts) + ")"
+
+
+def rewrite_line(line, mapping, prefix):
+    line = PAREN_RE.sub(lambda m: rewrite_paren(m, mapping), line)
+    line = SOURCE_RE.sub(lambda m: m.group(1) + rewrite_ids(m.group(2), mapping), line)
+    line = FIXES_RE.sub(lambda m: m.group(1) + rewrite_ids(m.group(2), mapping), line)
+    line = SAME_RE.sub(lambda m: "Same as " + mapping.get(m.group(1), m.group(1)), line)
+    line = BRACKET_RE.sub(lambda m: "[" + mapping.get(m.group(1), m.group(1)) + "]", line)
+    line = ATT_NAME_RE.sub(QUEUE, line)
+
+    def findings_name(m):
+        pre = m.group(1)
+        if pre and pre != "./" and not pre.endswith(prefix):
+            return m.group(0)
+        return pre + QUEUE
+    return FINDINGS_NAME_RE.sub(findings_name, line)
+
+
+def rewrite_text(text, mapping, prefix):
+    out = []
+    for line, inside in fenced(text.split("\n")):
+        out.append(line if inside else rewrite_line(line, mapping, prefix))
+    return "\n".join(out)
+
+
+def bare_tokens(rel, text):
+    out = []
+    for i, line in enumerate(text.splitlines(), 1):
+        for m in FA_RE.finditer(line):
+            if BARE_SKIP_RE.search(line[: m.start()]):
+                continue
+            if re.search(r"\bof\s+v\d+\.\d+\.x\b", line[m.end(): m.end() + 12]):
+                continue
+            out.append(f"{rel}:{i}: {line.strip()[:160]}")
+            break
+    return out
+
+
+def queue_text(release, entries):
+    out = [f"# {release} queue"]
+    for e in entries:
+        out += ["", f"### {e['q']} {e['title']}", f"- Tags: {e['tag']}".rstrip(),
+                f"- From: {e['from']}."]
+        out += e["body"]
+    return "\n".join(out) + "\n"
+
+
+def targets(folder):
+    """Every Markdown file of the release folder the rewrite covers."""
+    skip_dirs = ("reference", "status/data") + ATT_DIRS
+    out = []
+    for p in sorted(folder.rglob("*.md")):
+        rel = p.relative_to(folder).as_posix()
+        if rel in (FINDINGS, QUEUE) or any(rel.startswith(d + "/") for d in skip_dirs):
+            continue
+        out.append(p)
+    return out
+
+
+def git_rm(root, path):
+    r = subprocess.run(["git", "-C", str(root), "rm", "-r", "-q", "--", str(path)],
+                       capture_output=True, text=True)
+    if r.returncode:
+        if path.is_dir():
+            shutil.rmtree(path)
+        elif path.exists():
+            path.unlink()
+
+
+def main():
+    ap = argparse.ArgumentParser(usage="migrate_queue.py <release> [--dry-run] [--owner X] [--root PATH]")
+    ap.add_argument("release")
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--owner")
+    ap.add_argument("--root", help="repository root (default: git top level)")
+    a = ap.parse_args()
+    if not RELEASE_RE.match(a.release):
+        die(f"bad release '{a.release}', expected like v0.9.x")
+    own = load("ownership")
+    root = own.repo_root(a.root)
+    owner = own.detect_owner(root, a.owner)
+    folder = root / ".ai" / "plans" / a.release / owner
+    if not folder.is_dir():
+        die(f"release folder missing: {folder}")
+    old = old_files(folder)
+    has_queue = (folder / QUEUE).is_file()
+    if has_queue and not old:
+        die(f"{folder / QUEUE} exists and no old file is left: already migrated")
+    if has_queue:
+        die(f"{folder} has both {QUEUE} and {' and '.join(old)}: merge them by hand")
+
+    entries, mapping = build(folder)
+    prefix = f"{a.release}/{owner}/"
+    queue = rewrite_text(queue_text(a.release, entries), mapping, prefix)
+    changed, leftovers = [], []
+    for p in targets(folder):
+        text = read(p)
+        new = rewrite_text(text, mapping, prefix)
+        rel = p.relative_to(folder).as_posix()
+        if new != text:
+            changed.append((p, new))
+        leftovers += bare_tokens(rel, new)
+    leftovers = bare_tokens(QUEUE, queue) + leftovers
+
+    print("Mapping:")
+    for o, q in mapping.items():
+        print(f"  {o} -> {q}")
+    counts = collections.Counter(e["tag"].rstrip("0123456789") for e in entries if e["tag"])
+    several = [f"{e['q']} ({', '.join(f'D{n}' for n in sorted(e['d']))})" for e in entries if len(e["d"]) > 1]
+    f_count = sum(1 for o in mapping if o.startswith("F"))
+    a_count = sum(1 for o in mapping if o.startswith("A"))
+    print(f"Counts: {f_count} F items, {a_count} A items, {f_count + a_count - len(entries)} merged, "
+          f"{len(entries)} entries; tags: "
+          + (", ".join(f"{k} {v}" for k, v in sorted(counts.items())) or "none"))
+    untagged = [e["q"] for e in entries if not e["tag"]]
+    print(f"Untagged: {', '.join(untagged) or 'none'}")
+    if several:
+        print(f"Several decisions, highest kept: {'; '.join(several)}")
+    print(f"Files rewritten: {len(changed)}")
+    for p, _ in changed:
+        print(f"  {p.relative_to(folder).as_posix()}")
+    print(f"Bare F or A tokens left ({len(leftovers)} lines):")
+    for l in leftovers:
+        print(f"  {l}")
+    if a.dry_run:
+        print("dry run; nothing written")
+        return
+    (folder / QUEUE).write_text(queue, encoding="utf-8")
+    for p, new in changed:
+        p.write_text(new, encoding="utf-8")
+    if (folder / FINDINGS).exists():
+        git_rm(root, folder / FINDINGS)
+    for d in ATT_DIRS:
+        if (folder / d).exists():
+            git_rm(root, folder / d)
+    print(f"wrote {folder / QUEUE}; removed {' and '.join(old)}; nothing committed")
+
+
+if __name__ == "__main__":
+    main()

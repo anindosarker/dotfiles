@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Create an expedition release folder: .ai/plans/<release>/<owner>/ with the <release>-plan.md
-(Goals and Deliverables), decisions.md and findings.md stubs, process.md copied from the newest
+(Goals and Deliverables), decisions.md and queue.md stubs, process.md copied from the newest
 earlier release (else the skill template), and the sub-folders:
 
   plan/specs/  plan/epics/              authored
-  run/trackers/  run/attentions/  run/handoffs/   written during the run
+  run/trackers/  run/handoffs/   written during the run
   status/index.html  status/data/       generated; nothing under status/ is edited by hand
 
 status/index.html is copied from templates/swimlanes.html. status/index.html and status/data/
@@ -77,7 +77,8 @@ def write_new(path, text):
 
 
 def from_template(name, release, today):
-    """Template head up to its Round heading, as Round 1 of a new release."""
+    """Template head up to its Round heading, as Round 1 of a new release (the whole template
+    when it has no Round heading)."""
     path = Path(__file__).resolve().parent.parent / "templates" / name
     if not path.is_file():
         die(f"template missing: {path}")
@@ -148,8 +149,7 @@ def main():
         die(f"release folder exists: {folder}")
     folder.mkdir(parents=True)
     print(folder)
-    for sub in ("plan/specs", "plan/epics", "run/trackers", "run/attentions", "run/handoffs",
-                "status/data"):
+    for sub in ("plan/specs", "plan/epics", "run/trackers", "run/handoffs", "status/data"):
         (folder / sub).mkdir(parents=True)
         print(folder / sub)
     tpl = Path(__file__).resolve().parent.parent / "templates" / "swimlanes.html"
@@ -170,7 +170,7 @@ def main():
     ))
     today = datetime.date.today().isoformat()
     write_new(folder / "decisions.md", from_template("decisions.md", c, today))
-    write_new(folder / "findings.md", from_template("findings.md", c, today))
+    write_new(folder / "queue.md", from_template("queue.md", c, today))
 
 
 if __name__ == "__main__":

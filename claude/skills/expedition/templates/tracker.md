@@ -9,7 +9,7 @@ Checks:
 
 ## Attention
 
-- [Staging for the ATTENTION file, one bullet per item, self-explanatory first line.]
+- [Staging for queue.md, one bullet per item, self-explanatory first line.]
 
 ## Notes
 

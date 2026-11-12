@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
-"""Allocate the next D, F or A id of a release and file the item under it, so two sessions
+"""Allocate the next D or Q id of a release and file the item under it, so two sessions
 on one checkout never pick the same number.
 
-Usage: python3 -I new_item.py <release> D|F|A "<title>" [--owner X] [--root PATH]
-       [--source A<n>] [--bullet "<first bullet>"]
+Usage: python3 -I new_item.py <release> D|Q "<title>" [--from <text>] [--source Q<n>]
+       [--bullet "<text>"] [--owner X] [--root PATH]
 
-Under an exclusive lock on <release folder>/.ids.lock: re-read the files, take the highest
-number of that kind across the release (A: every ATTENTION file), append the heading
-(D in decisions.md and F in findings.md under the last "## Round" heading, A in today's
-run/attentions/ATTENTION-<YYYY-MM-DD>.md), then the first bullet if given, and commit that one
-file. Prints the id alone, e.g. F11.
+Under an exclusive lock on <release folder>/.ids.lock: re-read the file, take the highest
+number of that kind, and append the item.
+
+- D: under the last "## Round" heading of decisions.md: the heading, the --bullet line if
+  given, then "- Source: Q<n>" if --source is given. With --source, the "- Tags:" bullet of
+  that queue entry gets the new D id in the same commit, unless it already names a decision.
+- Q: at the end of queue.md (created from templates/queue.md when missing): the heading,
+  "- Tags:" (empty, the entry is open), "- From: <text>." (--from, required), then the
+  --bullet line if given.
+
+Commits the files it wrote and prints the id alone, e.g. Q11.
 """
 import argparse
 import datetime
@@ -21,7 +27,7 @@ import sys
 from pathlib import Path
 
 RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
-SOURCE_RE = re.compile(r"^A\d+$")
+SOURCE_RE = re.compile(r"^Q\d+$")
 ROUND_RE = re.compile(r"^## Round\b")
 
 
@@ -37,11 +43,6 @@ def load(name):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
-
-
-def attention_files(folder, own):
-    """Every ATTENTION file of the release, under run/attentions/."""
-    return sorted((folder / own.ATTENTIONS_DIR).glob("ATTENTION-*.md"))
 
 
 def highest(paths, kind):
@@ -108,25 +109,34 @@ def exclude_lock(root):
 
 def main():
     ap = argparse.ArgumentParser(
-        usage='new_item.py <release> D|F|A "<title>" [--owner X] [--root PATH] '
-              '[--source A<n>] [--bullet "<first bullet>"]'
+        usage='new_item.py <release> D|Q "<title>" [--from <text>] [--source Q<n>] '
+              '[--bullet "<text>"] [--owner X] [--root PATH]'
     )
     ap.add_argument("release")
-    ap.add_argument("kind", choices=["D", "F", "A"])
+    ap.add_argument("kind")
     ap.add_argument("title")
+    ap.add_argument("--from", dest="source_of")
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: git top level)")
     ap.add_argument("--source")
     ap.add_argument("--bullet")
     a = ap.parse_args()
+    if a.kind not in ("D", "Q"):
+        die(f"bad kind '{a.kind}': the kinds are D and Q")
     if not RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
+    if a.kind == "Q" and not (a.source_of or "").strip():
+        die("a Q item needs --from: owner, lead, lookup or run E<n>")
+    if a.kind == "Q" and a.source:
+        die("--source is for a D item")
+    if a.source_of and a.kind == "D":
+        die("--from is for a Q item")
     title = a.title.strip()
     if not title:
         die("empty title")
     if a.source and not SOURCE_RE.match(a.source):
-        die(f"bad source '{a.source}', expected like A3")
-    for label, val in (("title", title), ("bullet", a.bullet or "")):
+        die(f"bad source '{a.source}', expected like Q3")
+    for label, val in (("title", title), ("bullet", a.bullet or ""), ("from", a.source_of or "")):
         if "\n" in val:
             die(f"{label} must be one line")
         if "—" in val:
@@ -140,32 +150,45 @@ def main():
     with open(folder / ".ids.lock", "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         exclude_lock(root)
-        if a.kind == "A":
-            scan = attention_files(folder, own)
-            target = folder / own.ATTENTIONS_DIR / f"ATTENTION-{today}.md"
+        if a.kind == "Q":
+            target = folder / own.QUEUE_MD
+            if not target.is_file():
+                tpl = Path(__file__).resolve().parent.parent / "templates" / "queue.md"
+                target.write_text(tpl.read_text(encoding="utf-8").replace("[release]", a.release),
+                                  encoding="utf-8")
         else:
-            target = folder / ("decisions.md" if a.kind == "D" else "findings.md")
+            target = folder / "decisions.md"
             if not target.is_file():
                 die(f"missing: {target}")
-            scan = [target]
-        ident = f"{a.kind}{highest(scan, a.kind) + 1}"
+        ident = f"{a.kind}{highest([target], a.kind) + 1}"
+        bullet = (a.bullet if a.bullet.startswith("- ") else f"- {a.bullet}") if a.bullet else None
+        written = [target]
 
-        block = [f"{'##' if a.kind == 'A' else '###'} {ident} {title}", ""]
-        if a.source:
-            block.append(f"- Source: {a.source}")
-        if a.bullet:
-            block.append(a.bullet if a.bullet.startswith("- ") else f"- {a.bullet}")
-
-        if a.kind == "A":
-            target.parent.mkdir(parents=True, exist_ok=True)
-            text = target.read_text(encoding="utf-8") if target.is_file() else f"# Attention, {today}\n"
-            target.write_text(appended(text, block), encoding="utf-8")
+        if a.kind == "Q":
+            who = a.source_of.strip().rstrip(".")
+            block = [f"### {ident} {title}", "- Tags:", f"- From: {who}."] + ([bullet] if bullet else [])
+            target.write_text(appended(target.read_text(encoding="utf-8"), block), encoding="utf-8")
         else:
-            text = target.read_text(encoding="utf-8")
-            target.write_text(under_last_round(text, block, today), encoding="utf-8")
+            if a.source:
+                queue = folder / own.QUEUE_MD
+                if not any(e["num"] == int(a.source[1:]) for e in own.parse_queue(queue)):
+                    die(f"{a.source} is not in {queue}")
+            block = [f"### {ident} {title}", ""] + ([bullet] if bullet else [])
+            if a.source:
+                block.append(f"- Source: {a.source}")
+            target.write_text(under_last_round(target.read_text(encoding="utf-8"), block, today),
+                              encoding="utf-8")
+            if a.source:
+                entry = next(e for e in own.parse_queue(queue) if e["num"] == int(a.source[1:]))
+                if re.fullmatch(r"D\d+", entry["tag"] or ""):
+                    print(f"{a.source} keeps Tags {entry['tag']}", file=sys.stderr)
+                else:
+                    own.set_queue_tag(queue, int(a.source[1:]), ident)
+                    written.append(queue)
 
-        git(root, "add", "--", str(target))
-        git(root, "commit", "-q", "-m", f"docs(plan): {a.release} {ident} {title}", "--only", "--", str(target))
+        paths = [str(p) for p in written]
+        git(root, "add", "--", *paths)
+        git(root, "commit", "-q", "-m", f"docs(plan): {a.release} {ident} {title}", "--only", "--", *paths)
         fcntl.flock(lock, fcntl.LOCK_UN)
     print(ident)
 

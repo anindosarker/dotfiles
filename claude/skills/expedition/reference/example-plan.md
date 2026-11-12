@@ -2,7 +2,7 @@ Example of a release `<release>-plan.md` and its sprint grid (v0.8.x), and a `st
 
 # v0.8.x plan
 
-Release 0.8.0 (D32). Decisions: [decisions.md](decisions.md) D1 to D40. Findings: [findings.md](findings.md) F1 to F6. Sprints: [status/sprints.md](status/sprints.md). Specs implement decisions and never re-decide.
+Release 0.8.0 (D32). Decisions: [decisions.md](decisions.md) D1 to D40. Queue: [queue.md](queue.md) Q1 to Q6. Sprints: [status/sprints.md](status/sprints.md). Specs implement decisions and never re-decide.
 
 ## Goals
 
@@ -54,6 +54,6 @@ Updated: 2026-11-04 16:35
 | E1 03 Header, menu, drag  | ·   | [x] | ·   | ·   | ·   |
 | E1 04 Toolbar chrome      | ·   | [x] | ·   | ·   | ·   |
 | E1 05 Defaults and stories | ·   | ·   | [x] | ·   | ·   |
-| fix Component fixes F3 to F6 | ·   | ·   | [x] | ·   | ·   |
+| fix Component fixes Q3 to Q6 | ·   | ·   | [x] | ·   | ·   |
 | E1 06 Docs                | ·   | ·   | ·   | [x] | ·   |
 | E1 07 Release 0.8.0       | ·   | ·   | ·   | ·   | [ ] |

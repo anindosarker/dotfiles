@@ -30,8 +30,9 @@ status/ownership.md holds a title, the Generated line, the table
 It is never edited by hand. On any error nothing is written and the exit code is 1.
 
 Layout: the release folder must hold plan/ (plan/specs, plan/epics), run/ (run/trackers,
-run/attentions, run/handoffs) and status/. A folder without plan/ is refused with one line
-naming migrate_layout.py.
+run/handoffs), status/ and queue.md. A folder without plan/ is refused with one line naming
+migrate_layout.py; a folder still on the old queue files is refused with one line naming
+migrate_queue.py.
 
 Check mode: ownership.py <release> --overlap <spec numbers or D ids> writes nothing. It
 reports every file the named specs' milestones own (for a D id: the specs citing it) that a
@@ -42,6 +43,7 @@ Exit code 1 when a file is shared, 0 otherwise.
 import argparse
 import collections
 import datetime
+import importlib.util
 import re
 import subprocess
 import sys
@@ -58,7 +60,7 @@ OWNERSHIP_COLS = ["Milestone", "Spec", "Depends on", "Derived from", "Files"]
 SPECS_DIR = "plan/specs"
 EPICS_DIR = "plan/epics"
 TRACKERS_DIR = "run/trackers"
-ATTENTIONS_DIR = "run/attentions"
+QUEUE_MD = "queue.md"
 HANDOFFS_DIR = "run/handoffs"
 STATUS_DIR = "status"
 OWNERSHIP_MD = "status/ownership.md"
@@ -135,7 +137,80 @@ def release_folder(root, owner, release):
     if not (folder / "plan").is_dir():
         die(f"{folder} has the old layout (no plan/): run python3 -I "
             f"{Path(__file__).resolve().parent / 'migrate_layout.py'} {release}")
+    old = load_sibling("migrate_queue").refusal(folder, release)
+    if old:
+        die(old)
     return folder
+
+
+def load_sibling(name):
+    sys.dont_write_bytecode = True
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / f"{name}.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+Q_HEAD_RE = re.compile(r"^###\s+Q(\d+)\b\s*(.*?)\s*$")
+Q_TAGS_RE = re.compile(r"^\s*-\s*Tags:\s*(.*?)\s*$")
+Q_FROM_RE = re.compile(r"^\s*-\s*From:")
+Q_TAG_OK_RE = re.compile(r"^(?:D\d+|Later|Dropped|Autofix)?$")
+
+
+def parse_queue(path):
+    """Entries of queue.md in file order: {num, title, tag, body, line, end, text}.
+
+    An entry is its "### Q<n> <title>" heading, the bullet "- Tags: <value>" (value empty while
+    open), the bullet "- From: <who>", then free fact bullets. tag is the Tags value ("" when
+    open, None when the bullet is missing); body the lines after the heading; line the
+    heading's 0-based index, end the index after the entry's last line; text the entry as
+    written."""
+    if not path.is_file():
+        return []
+    text = read(path)
+    lines = text.splitlines()
+    outside = {i - 1 for i, _ in outside_fences(text)}
+    heads = [i for i in sorted(outside) if Q_HEAD_RE.match(lines[i])]
+    out = []
+    for k, i in enumerate(heads):
+        stop = heads[k + 1] if k + 1 < len(heads) else len(lines)
+        end = next((j for j in range(i + 1, stop) if j in outside and HEADING_RE.match(lines[j])), stop)
+        while end > i + 1 and not lines[end - 1].strip():
+            end -= 1
+        m = Q_HEAD_RE.match(lines[i])
+        body = lines[i + 1:end]
+        first = next((l for l in body if l.strip()), "")
+        t = Q_TAGS_RE.match(first)
+        out.append({"num": int(m.group(1)), "title": m.group(2), "tag": t.group(1) if t else None,
+                    "body": body, "line": i, "end": end, "text": "\n".join(lines[i:end])})
+    return out
+
+
+def queue_state(entry):
+    """open, decided, later, dropped, autofix, or the raw value when it is not one of them."""
+    tag = entry["tag"] or ""
+    if not tag:
+        return "open"
+    if re.fullmatch(r"D\d+", tag):
+        return "decided"
+    return {"Later": "later", "Dropped": "dropped", "Autofix": "autofix"}.get(tag, tag)
+
+
+def set_queue_tag(path, num, value):
+    """Write value into the "- Tags:" bullet of entry Q<num> (adds the bullet when missing).
+    Returns False when the entry is missing."""
+    entry = next((e for e in parse_queue(path) if e["num"] == num), None)
+    if entry is None:
+        return False
+    lines = read(path).splitlines()
+    line = f"- Tags: {value}".rstrip()
+    if entry["tag"] is None:
+        lines.insert(entry["line"] + 1, line)
+    else:
+        i = next(j for j in range(entry["line"] + 1, entry["end"]) if Q_TAGS_RE.match(lines[j]))
+        lines[i] = line
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return True
 
 
 def num_key(num):

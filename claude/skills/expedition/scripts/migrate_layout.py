@@ -3,11 +3,12 @@
 
 Usage: python3 -I migrate_layout.py <release> [--owner X] [--root PATH]
 
-git mv: specs/ and epics/ into plan/; trackers/, attentions/ and handoffs/ into run/;
+git mv: specs/ and epics/ into plan/; trackers/ and handoffs/ into run/;
 ownership.md and sprints.md into status/ (a plain move when a path is untracked). Copies
 templates/swimlanes.html to status/index.html. Rewrites links: specs/ to plan/specs/ (and the
-sprints.md link) in <release>-plan.md; specs/, epics/, trackers/, attentions/, handoffs/,
+sprints.md link) in <release>-plan.md; specs/, epics/, trackers/, handoffs/,
 ownership.md and sprints.md paths of this release inside the handoffs and the epic files.
+A folder without queue.md then goes through migrate_queue.py before the reruns.
 Appends the status/index.html and status/data/ render lines to the repo's .gitignore when
 missing (renders, never committed). Then reruns ownership.py, sprints.py, swimlanes.py and status.py. Commits nothing. Refuses a
 folder that already has plan/specs/; a target folder that exists already (an epic file
@@ -26,9 +27,9 @@ from pathlib import Path
 RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
 HERE = Path(__file__).resolve().parent
 MOVES = [("specs", "plan/specs"), ("epics", "plan/epics"), ("trackers", "run/trackers"),
-         ("attentions", "run/attentions"), ("handoffs", "run/handoffs"),
+         ("handoffs", "run/handoffs"),
          ("ownership.md", "status/ownership.md"), ("sprints.md", "status/sprints.md")]
-DIRS = {"specs": "plan", "epics": "plan", "trackers": "run", "attentions": "run", "handoffs": "run"}
+DIRS = {"specs": "plan", "epics": "plan", "trackers": "run", "handoffs": "run"}
 
 
 def die(msg):
@@ -155,7 +156,7 @@ def main():
             s.rmdir()
         else:
             move(root, folder, s, d)
-    for sub in ("plan/specs", "plan/epics", "run/trackers", "run/attentions", "run/handoffs", "status/data"):
+    for sub in ("plan/specs", "plan/epics", "run/trackers", "run/handoffs", "status/data"):
         (folder / sub).mkdir(parents=True, exist_ok=True)
     tpl = HERE.parent / "templates" / "swimlanes.html"
     if not tpl.is_file():
@@ -173,6 +174,11 @@ def main():
         edit(path, lambda t: rewrite_paths(t, prefix))
 
     args = [a.release, "--owner", owner, "--root", str(root)]
+    if not (folder / "queue.md").is_file():
+        print("== migrate_queue.py")
+        r = subprocess.run([sys.executable, "-I", str(HERE / "migrate_queue.py")] + args, cwd=str(root))
+        if r.returncode:
+            die(f"migrate_queue.py failed (exit {r.returncode}); the moves stay, fix and rerun it")
     for script in ("ownership.py", "sprints.py", "swimlanes.py", "status.py"):
         print(f"== {script}")
         r = subprocess.run([sys.executable, "-I", str(HERE / script)] + args, cwd=str(root))
