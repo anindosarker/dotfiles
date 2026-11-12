@@ -14,15 +14,16 @@ Edges: A to B when B lists A (or A's spec number) under Depends on, or when A an
 share a file (lower spec number first). Two milestones of one spec that share a file
 while neither depends on the other are a collision; a dependency cycle is an error.
 Fix milestones take part through Depends on only: the run places them in the
-running sprint column (sprints.py, new_fix.py).
+current sprint column (sprints.py, new_fix.py).
 
 A milestone's column is the longest chain ending at it plus one, over every epic, and never
 before its epic's start sprint: the "Starts: S<n>" line of plan/epics/E<n>.md (new_spec.py
 --epic writes it on go). The floor propagates along the edges; an epic file without a Starts
 value means no floor; fix milestones have none. --epic E<n> <spec numbers> uses the current
 sprint as a provisional floor for an epic with no Starts value yet, writing no Starts line.
-The current sprint is the first column of status/sprints.md holding a "[ ]" or "·" cell; when
-there is none, the column after the last (S1 for an empty grid). The
+The current sprint is the first column of status/sprints.md holding a "[ ]" or "·" cell of an
+epic row; when there is none, the column after the last column holding an epic row (S1 for an
+empty grid). Fix rows never count, and for an epic's own start its own rows are ignored. The
 "Derived from" cell lists the shared-file edges the scheduler added into that milestone, as
 "<milestone> (`file`, ...)"; explicit edges are the Depends on cell.
 
@@ -34,9 +35,10 @@ numbers> counts those untagged specs as E<n> (the lead, after the fork, before g
 
 Backfill: ownership.py <release> --backfill-starts [--dry-run] writes "Starts: S<n>" into the
 epic file of every epic that has rows in status/sprints.md and no Starts value: the lowest
-column among its started rows ("[x]", "[ ]", "[!]"), else the current sprint. It commits
-nothing and prints the value per epic and every not-started row whose column changes at the
-next ownership.py and sprints.py run. Started rows never move: sprints.py keeps their cells.
+column among its finished rows ("[x]", "[!]"), else the current sprint (that epic's own rows
+ignored). It commits nothing and prints the value per epic and every row whose column changes
+at the next ownership.py and sprints.py run, with its old and new column. Finished rows never
+move: sprints.py keeps their cells; a running row carries its "[ ]" to its new column.
 
 status/ownership.md holds a title, the Generated line, the table
 "| Milestone | Spec | Depends on | Derived from | Files |" and the "## Critical paths" section.
@@ -494,13 +496,21 @@ def grid(folder):
     return n, [(r[0], (r[1:] + [""] * n)[:n]) for r in data if r and r[0]]
 
 
-def current_sprint(folder):
-    """The first column holding a "[ ]" or "·" cell, else the column after the last (1-based)."""
+def current_sprint(folder, exclude=None):
+    """The first column holding a "[ ]" or "·" cell of an epic row, else the column after the
+    last column holding an epic row (1-based, 1 for an empty grid). Fix rows never count; the
+    rows of epic exclude (a number) are ignored."""
     n, rows = grid(folder)
+    epic = []
+    for label, cells in rows:
+        m = re.match(r"^E(\d+)\s", label)
+        if m and int(m.group(1)) != exclude:
+            epic.append(cells)
     for i in range(n):
-        if any(cells[i] in ("[ ]", "·") for _, cells in rows):
+        if any(c[i] in ("[ ]", "·") for c in epic):
             return i + 1
-    return n + 1
+    used = [i + 1 for c in epic for i, x in enumerate(c) if x]
+    return max(used) + 1 if used else 1
 
 
 def floors(folder, milestones, assume=None):
@@ -508,7 +518,7 @@ def floors(folder, milestones, assume=None):
     Starts value gets the current sprint (the pre-go preview)."""
     starts = epic_starts(folder)
     provisional = set((assume or {}).values())
-    cur = None
+    cur = {}
     out = {}
     for name, epic in epic_of_milestones(folder, milestones, assume).items():
         if not epic:
@@ -517,8 +527,8 @@ def floors(folder, milestones, assume=None):
         if v:
             out[name] = int(v.group(1))
         elif epic in provisional:
-            cur = cur or current_sprint(folder)
-            out[name] = cur
+            cur.setdefault(epic, current_sprint(folder, exclude=epic))
+            out[name] = cur[epic]
     return out
 
 
@@ -545,7 +555,6 @@ def set_starts(path, value):
 def backfill_starts(folder, dry_run=False):
     """--backfill-starts: Starts for every epic with grid rows and an epic file without one."""
     n, rows = grid(folder)
-    cur = current_sprint(folder)
     starts = epic_starts(folder)
     by_epic = collections.defaultdict(list)
     for label, cells in rows:
@@ -561,9 +570,9 @@ def backfill_starts(folder, dry_run=False):
         if starts.get(e):
             print(f"E{e}: Starts: {starts[e]} kept")
             continue
-        started = [i + 1 for _, cells in by_epic[e] for i, c in enumerate(cells) if c in ("[x]", "[ ]", "[!]")]
-        value = f"S{min(started)}" if started else f"S{cur}"
-        why = "lowest started column" if started else "current sprint"
+        done = [i + 1 for _, cells in by_epic[e] for i, c in enumerate(cells) if c in ("[x]", "[!]")]
+        value = f"S{min(done)}" if done else f"S{current_sprint(folder, exclude=e)}"
+        why = "lowest finished column" if done else "current sprint"
         print(f"E{e}: Starts: {value} ({why})")
         written[e] = value
         if not dry_run:
@@ -580,17 +589,23 @@ def backfill_starts(folder, dry_run=False):
     col, _, errs, _ = schedule(milestones, fl)
     for e in errs:
         print(f"error: {e}", file=sys.stderr)
-    label_of = {re.sub(r"^(?:E\d+\s+\d{2}(?:\.\d+)?|fix)\s+", "", l): (l, c) for l, c in rows}
+    if errs:
+        return
+    sp = load_sibling("sprints")
+    label = sp.epic_rows(folder, load_sibling("ownership"), milestones)
+    shown = [m for m in milestones if m["name"] in label or m["spec"] == FIX]
+    text, _ = sp.build(folder.parent.name, shown, col, (n, [(sp.row_name(l), c) for l, c in rows]),
+                       num_key, label)
+    _, new_rows = table_rows(text, "Milestone")
+    before = {sp.row_name(l): c for l, c in rows}
     moved = []
-    for name, c in col.items():
-        if name not in label_of:
-            continue
-        label, cells = label_of[name]
-        if any(x in ("[x]", "[ ]", "[!]") for x in cells) or label.startswith("fix "):
-            continue
-        now = next((i + 1 for i, x in enumerate(cells) if x), None)
-        if now != c:
-            moved.append(f"  {label}: S{now} to S{c}")
+    for r in new_rows:
+        name, cells = sp.row_name(r[0]), r[1:]
+        old_at = next((i + 1 for i, x in enumerate(before.get(name, [])) if x), None)
+        new_at = next((i + 1 for i, x in enumerate(cells) if x), None)
+        if old_at and old_at != new_at:
+            mark = next((x for x in cells if x), "")
+            moved.append(f"  {r[0]} {mark}: S{old_at} to S{new_at}")
     print(f"rows that move: {len(moved) or 'none'}")
     for line in moved:
         print(line)

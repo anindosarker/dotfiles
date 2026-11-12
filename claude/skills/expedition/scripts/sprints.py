@@ -9,12 +9,14 @@ milestone plus one, never before its epic's "Starts: S<n>" line in plan/epics/E<
 "| Milestone | S1 | ... |" only: "·" in a milestone's own column, blank elsewhere. Cells
 are "·", "[ ]", "[x]" or "[!]".
 
-When status/sprints.md exists, a row that still exists keeps every cell as it is once it carries a
-run mark ("[ ]", "[x]", "[!]"); a row with only "·" is placed again, except a fix
-row, which keeps its cells. New rows are added; a
-new fix milestone goes in the running column (the first column holding a "[ ]", else the
-last). A row no longer in status/ownership.md is dropped, unless it carries a run mark: then it is
-kept with a warning.
+When status/sprints.md exists, a row that still exists keeps every cell as it is once it is
+finished ("[x]" or "[!]"). Every other epic row is placed again; a running row carries its
+"[ ]" to its new column. Fix rows (no epic) are placed after the epic rows: a new fix row, and
+an unfinished one left of the current sprint, go to the current sprint with their mark; an
+unfinished fix row at or right of it stays. The current sprint is the first column holding a
+"[ ]" or "·" cell of an epic row, else the column after the last column holding an epic row (S1
+on an empty grid). A row no longer in status/ownership.md is dropped, unless it carries a run
+mark: then it is kept with a warning.
 
 Rows: every milestone of a spec that carries a "- Epic: E<n>" line (new_spec.py --epic), and
 every fix milestone. An epic's milestones start at its start sprint (the current sprint at its
@@ -31,6 +33,7 @@ from pathlib import Path
 
 RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
 RUN_MARKS = ("[ ]", "[x]", "[!]")
+FINISHED = ("[x]", "[!]")
 PLANNED = "·"
 
 
@@ -74,12 +77,25 @@ def marked(cells):
     return any(c in RUN_MARKS for c in cells)
 
 
-def running_column(n, rows):
-    """First column holding a "[ ]", else the last one (1-based); 0 when there is no grid."""
-    for i in range(n):
-        if any(cells[i] == "[ ]" for _, cells in rows):
+def finished(cells):
+    return any(c in FINISHED for c in cells)
+
+
+def mark_of(cells):
+    """The run mark a row carries ("[ ]" or "·"), "·" when it has none."""
+    return next((c for c in cells if c in RUN_MARKS), PLANNED)
+
+
+def current_column(cells_by_row, epic_rows):
+    """The first column holding a "[ ]" or "·" cell of an epic row, else the column after the
+    last column holding an epic row (1 when there is none). 1-based."""
+    width = max((len(c) for c in cells_by_row.values()), default=0)
+    epic = [cells_by_row[n] for n in epic_rows if n in cells_by_row]
+    for i in range(width):
+        if any(i < len(c) and c[i] in ("[ ]", PLANNED) for c in epic):
             return i + 1
-    return n
+    used = [i + 1 for c in epic for i, x in enumerate(c) if x]
+    return max(used) + 1 if used else 1
 
 
 def build(release, milestones, col, existing, num_key, label=None):
@@ -89,31 +105,43 @@ def build(release, milestones, col, existing, num_key, label=None):
     label = label or {}
     old = dict(rows_old)
     warnings = []
-    run_col = running_column(n_old, rows_old)
     names = [m["name"] for m in milestones]
     spec = {m["name"]: m["spec"] for m in milestones}
     order = {m["name"]: i for i, m in enumerate(milestones)}
     place = {}
+    fixes = [n for n in names if spec[n] == "fix"]
     for name in names:
         cells = old.get(name)
-        if cells is not None and (marked(cells) or spec[name] == "fix"):
+        if cells is not None and finished(cells):
             place[name] = list(cells)
-        elif cells is None and spec[name] == "fix" and run_col:
-            place[name] = run_col
-        else:
-            place[name] = col[name]
+        elif name not in fixes:
+            place[name] = (col[name], mark_of(cells or []))
+    epic_rows = [n for n in names if n not in fixes]
+
+    def as_cells(v, width):
+        if isinstance(v, tuple):
+            return [v[1] if i + 1 == v[0] else "" for i in range(max(width, v[0]))]
+        return list(v)
+    width0 = max([n_old] + [v[0] for v in place.values() if isinstance(v, tuple)] + [1])
+    cur = current_column({n: as_cells(place[n], width0) for n in epic_rows}, epic_rows)
+    for name in fixes:
+        if name in place:
+            continue
+        cells = old.get(name)
+        at = next((i + 1 for i, c in enumerate(cells or []) if c), None)
+        place[name] = (at if at and at >= cur else cur, mark_of(cells or []))
     kept = []
     for name, cells in rows_old:
         if name not in col and marked(cells):
             kept.append(name)
             place[name] = list(cells)
             warnings.append(f"row '{name}' is not in status/ownership.md or in no epic but carries a mark: kept")
-    width = max([n_old] + [v for v in place.values() if isinstance(v, int)] + [1])
+    width = max([n_old] + [v[0] for v in place.values() if isinstance(v, tuple)] + [1])
 
     def cells_of(name):
         v = place[name]
-        if isinstance(v, int):
-            return [PLANNED if i + 1 == v else "" for i in range(width)]
+        if isinstance(v, tuple):
+            return [v[1] if i + 1 == v[0] else "" for i in range(width)]
         return (v + [""] * width)[:width]
 
     def first_col(name):

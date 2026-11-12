@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Create a fix milestone in a release: run/trackers/fix-<slug>-tracker.md citing its queue
 cards on its first line, each cited queue.md card moved to the end of the Autofix lane, then
-status/ownership.md and status/sprints.md regenerated so the fix has a grid row in the running
-sprint column (the first column holding a "[ ]", else the last).
+status/ownership.md and status/sprints.md regenerated so the fix has a grid row in the current
+sprint column (sprints.py: the first column holding a "[ ]" or "·" cell of an epic row, else the
+column after the last column holding an epic row).
 
 Usage: python3 -I new_fix.py <release> <slug> "Q3, Q4" [--files a,b] [--depends "<names>"]
        [--title "<Title>"] [--owner X] [--root PATH]

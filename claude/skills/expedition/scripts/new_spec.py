@@ -18,9 +18,9 @@ Epic tag mode, on go: python3 -I new_spec.py <release> --epic E<n> <spec numbers
 "- Epic: E<n>" directly under its title line; each decision those specs cite (and each named
 D id) gets the tag line "[E<n>]" directly under its heading in decisions.md, and the spec's
 Deliverables row gets E<n> in its Epic cell, and plan/epics/E<n>.md gets "Starts: S<n>" under
-its Specs: line: the current sprint of status/sprints.md as it is at that moment, before the
-epic's rows exist (the first column holding a "[ ]" or "·" cell, else the column after the
-last; S1 for an empty grid). An existing Epic line, epic tag or Starts value is kept and
+its Specs: line: the current sprint of status/sprints.md as it is at that moment (the first
+column holding a "[ ]" or "·" cell of another epic's row, else the column after the last column
+holding another epic's row; S1 for an empty grid; fix rows never count). An existing Epic line, epic tag or Starts value is kept and
 reported; a missing epic file is refused. Each file is read right before its write.
 
 Both modes refuse a superseded decision (heading "(superseded by D<n>)", or named by a later
@@ -252,7 +252,7 @@ def tag_epic(folder, epic, items):
         files[num].write_text("".join(elines), encoding="utf-8")
         marked.append(num)
     print(f"{epic} specs: {', '.join(marked) or 'none'}")
-    start = f"S{own.current_sprint(folder)}"
+    start = f"S{own.current_sprint(folder, exclude=int(epic[1:]))}"
     kept_start = own.set_starts(epic_file, start)
     print(f"{epic} Starts: {kept_start} kept" if kept_start else f"{epic} Starts: {start}")
     plan = folder / f"{folder.parent.name}-plan.md"
