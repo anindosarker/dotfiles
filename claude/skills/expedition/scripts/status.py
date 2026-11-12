@@ -3,8 +3,8 @@
 
 Usage: python3 -I status.py <release> [--next] [--owner X] [--root PATH]
 
---next prints only the first queue.md entry whose "- Tags:" value is empty, in full; "none"
-when no entry is open.
+--next prints only the first card of the Open lane of queue.md with its sub-bullets; "none"
+when Open is empty.
 
 Layout: <release>-plan.md (## Goals and ## Deliverables only), plan/specs/NN-<slug>.md,
 plan/epics/E<n>.md, queue.md, status/index.html,
@@ -12,18 +12,19 @@ status/ownership.md (ownership.py), status/sprints.md (sprints.py), run/trackers
 NN-<slug>-tracker.md or fix-<slug>-tracker.md).
 
 Decisions (### D<n>) get a derived state table from the spec files that cite them and the
-Status lines of those specs' milestone trackers. Queue entries (### Q<n> in queue.md) get a
-state from their "- Tags:" bullet: empty is open, D<n> decided, Later later, Dropped dropped,
-Autofix autofix. Queue gaps: an entry whose first bullet is not "- Tags:" or whose second is
-not "- From:", any other Tags value, a D<n> value naming a missing decision, a (Q<n>) or
-"Source: Q<n>" citation of a missing entry. process.md (## P<n>) must
+Status lines of those specs' milestone trackers. Queue cards (queue.md, a kanban board, see
+board.py) are listed with their lane. Queue gaps: an unknown or missing lane (a "**Complete**"
+marker line under a lane heading is tolerated, the checkbox state is ignored), a card without a
+**Q<n>** token, a duplicate id, a card without a from tag, a Decided card without a first
+sub-bullet "Decision: D<n>" or naming a missing decision, a (Q<n>) or "Source: Q<n>" citation
+of a missing card. process.md (## P<n>) must
 exist with no placeholder left; (P<n>) citations must be defined.
 
 Epics: the tag line under each "### D<n>" heading ("[E<n>]", "[Done]  [E<n>]", or "[Done]"
 for a decision with nothing to run) puts the decision in an epic. The summary lists deciding
 (no tag), in E<n> (no row of the epic in status/sprints.md carries a run mark), running (one does)
 and done ([Done]). The stage line reports discuss and run together ("Stage: discuss, run
-(E2, E3)"); an open queue entry counts as discuss, never as a stage of its own.
+(E2, E3)"); a card in Open counts as discuss, never as a stage of its own.
 Also under Epics: the decisions still editable in place (no citing spec has a status/sprints.md row
 with "[ ]" or "[x]", not superseded); a supersede marked on one side only; an unbuilt spec
 citing a superseded decision; for each epic not done, its plan/epics/E<n>.md missing or Notes bullets
@@ -38,7 +39,7 @@ without a "| Milestone" grid, with text under the grid, with a cell not one of [
 tagged epic's line under "## Critical paths" and reports a missing section or line. A folder
 without plan/ is refused (migrate_layout.py), a folder still on the old queue files too
 (migrate_queue.py). A tracker Status of merged counts as done. A fix tracker (and any tracker
-no milestone owns) counts as citing the queue entries named on its first line.
+no milestone owns) counts as citing the queue cards named on its first line.
 """
 import argparse
 import collections
@@ -310,35 +311,43 @@ def q_cites(text):
     return nums
 
 
-def queue_report(folder, entries, docs, extra, dec_nums):
-    """Print the Queue section: one row per entry with its citing specs and state, then gaps."""
-    print(f"Queue: {len(entries)} in {QUEUE_MD}")
+def queue_report(folder, bd, text, docs, extra, dec_nums):
+    """Print the Queue section: one row per card with its citing specs and lane, then gaps."""
+    parsed = bd.parse(text)
+    cards = parsed["cards"]
+    print(f"Queue: {len(cards)} cards in {QUEUE_MD}")
     texts = {num: read(p) for num, p in docs}
     texts.update({key: first for key, _, first in extra})
     cited = {num: q_cites(t) for num, t in texts.items()}
     rows = []
-    for e in entries:
-        citing = sorted((num for num, c in cited.items() if e["num"] in c), key=num_key)
-        rows.append((f"Q{e['num']}", ", ".join(citing) or "-", load_ownership().queue_state(e)))
+    for c in cards:
+        citing = sorted((num for num, ci in cited.items() if c["num"] in ci), key=num_key)
+        rows.append((f"Q{c['num']}", ", ".join(citing) or "-", c["lane"]))
     if rows:
         w1 = max(len(r[0]) for r in rows) + 2
         w2 = max(len(r[1]) for r in rows) + 2
         for a, b, c in rows:
             print(f"  {a.ljust(w1)}{b.ljust(w2)}{c}")
-    own = load_ownership()
-    have = {e["num"] for e in entries}
-    for e in entries:
-        bullets = [l for l in e["body"] if l.strip()]
-        if e["tag"] is None:
-            print(f"  Q{e['num']}: first bullet is not '- Tags:'")
-        if len(bullets) < 2 or not own.Q_FROM_RE.match(bullets[1 if e["tag"] is not None else 0]):
-            print(f"  Q{e['num']}: second bullet is not '- From:'")
-        t = e["tag"] or ""
-        if not own.Q_TAG_OK_RE.match(t):
-            print(f"  Q{e['num']}: unknown Tags value '{t}': empty, D<n>, Later, Dropped or Autofix")
-        elif t.startswith("D") and int(t[1:]) not in dec_nums:
-            print(f"  Q{e['num']}: Tags {t} names a missing decision")
-    sources = [folder / "decisions.md", folder / QUEUE_MD, folder / f"{folder.parent.name}-plan.md"]
+    names = [l["name"] for l in parsed["lanes"]]
+    for n in names:
+        if n not in bd.LANES:
+            print(f"  unknown lane '## {n}': only {', '.join(bd.LANES)}")
+    for n in bd.LANES:
+        if n not in names:
+            print(f"  lane '## {n}' missing")
+    for i, line in parsed["stray"]:
+        print(f"  {QUEUE_MD}:{i + 1}: card without a **Q<n>** token: {line.strip()[:70]}")
+    for c in cards:
+        if not c["from"]:
+            print(f"  Q{c['num']}: no from tag (#owner, #lead, #lookup or #run-E<n>)")
+        if c["lane"] == "Decided":
+            dn = bd.decision(c)
+            if dn is None:
+                print(f"  Q{c['num']}: in Decided without a first sub-bullet 'Decision: D<n>'")
+            elif dn not in dec_nums:
+                print(f"  Q{c['num']}: Decision D{dn} names a missing decision")
+    have = {c["num"] for c in cards}
+    sources = [folder / "decisions.md", folder / f"{folder.parent.name}-plan.md"]
     sources += sorted((folder / TRACKERS_DIR).glob("*.md")) + sorted((folder / EPICS_DIR).glob("*.md"))
     sources += [p for _, p in docs]
     missing = collections.defaultdict(set)
@@ -348,15 +357,16 @@ def queue_report(folder, entries, docs, extra, dec_nums):
                 missing[n].add(p.relative_to(folder).as_posix())
     for n in sorted(missing):
         print(f"  Q{n} cited but undefined: {', '.join(sorted(missing[n]))}")
-    dups = sorted(n for n, c in collections.Counter(e["num"] for e in entries).items() if c > 1)
+    dups = sorted(n for n, k in collections.Counter(c["num"] for c in cards).items() if k > 1)
     if dups:
         print(f"  duplicate numbers: {', '.join(f'Q{n}' for n in dups)}")
+    return [c["num"] for c in cards if c["lane"] == "Open"]
 
 
-def print_next(entries):
-    """--next: the first open entry (empty Tags value) in full, or none."""
-    ready = next((e for e in entries if e["tag"] == ""), None)
-    print(ready["text"] if ready else "none")
+def print_next(bd, text):
+    """--next: the first card in Open with its sub-bullets, or none."""
+    card = next((c for c in bd.parse(text)["cards"] if c["lane"] == "Open"), None)
+    print(card["text"] if card else "none")
 
 
 def slugify(name):
@@ -646,9 +656,10 @@ def main():
     owner = detect_owner(root, a.owner)
     folder = load_ownership().release_folder(root, owner, a.release)
     queue = folder / QUEUE_MD
-    q_entries = load_ownership().parse_queue(queue)
+    bd = load_ownership("board")
+    q_text = read(queue) if queue.is_file() else ""
     if a.next:
-        print_next(q_entries)
+        print_next(bd, q_text)
         return
     rel = folder.relative_to(root)
     rules = find_rules(root)
@@ -667,7 +678,7 @@ def main():
     docs, statuses = d["docs"], d["statuses"]
 
     dec_items, dec_states = state_table("Decisions", "D", decisions, docs, statuses, True)
-    queue_report(folder, q_entries, docs, d["extra"], {n for n, _, _ in dec_items})
+    open_q = queue_report(folder, bd, q_text, docs, d["extra"], {n for n, _, _ in dec_items})
 
     new_print(folder, plan, d, own)
 
@@ -696,7 +707,6 @@ def main():
     if undefined_p:
         print(f"  cited but undefined: {', '.join(f'P{n}' for n in undefined_p)}")
 
-    untagged = [e["num"] for e in q_entries if not e["tag"]]
 
     print("Epics:")
     tags = own.read_tags(folder)
@@ -751,7 +761,7 @@ def main():
         if not (epics_dir / f"{nxt}.md").is_file():
             print(f"  plan/epics/{nxt}.md missing: new_epic_file.py {a.release} {nxt}")
     parts = []
-    if not dec_items or deciding or untagged:
+    if not dec_items or deciding or open_q:
         parts.append("discuss")
     if running:
         parts.append(f"run ({', '.join(running)})")

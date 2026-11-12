@@ -39,7 +39,7 @@ The release's `process.md` (`.ai/plans/<release>/<owner>/process.md`) holds the 
 - On RUN and on every line typed to it: read the epic file of every epic it runs, re-read whatever a note names, append ` [ack HH:MM]` to each note it read, commit (Shared files rules). A note without ack is unread.
 - RUN is idempotent: an epic whose `status/sprints.md` rows are already running or done is not started again; the runner replies with the current state. A RUN for a held epic lifts the hold.
 - Several epics run at once, no slot limit. One worktree per milestone from the pool. Machine load as today: `process.md` P5, `SERIAL_GATES` when loaded.
-- On each merge the runner ticks the row and reruns `sprints.py`, then `swimlanes.py` (the page data under `status/`; nothing under `status/` is edited by hand). When every milestone of an epic has merged it files its queue entries, writes the handoff, tags `[Done]` on the epic's decisions, sends DONE.
+- On each merge the runner ticks the row and reruns `sprints.py`, then `swimlanes.py` (the page data under `status/`; nothing under `status/` is edited by hand). When every milestone of an epic has merged it files its queue cards, writes the handoff, tags `[Done]` on the epic's decisions, sends DONE.
 - Shared files (`decisions.md`, `queue.md`, the epic files): the rules in [formats.md](formats.md), Shared files.
 
 ## Each loop fire
@@ -90,7 +90,7 @@ The spec says what must be proven (`Acceptance:`); the run manager decides how, 
 - CI is the second run. It never blocks: a milestone merges into the integration branch with a merge commit the moment its local checks pass, no PR. CI runs on the staging branch after the one fast-forward, read in the integration milestone. A red run is fixed forward by a fix milestone on the integration branch, then the fast-forward again.
 - The next milestone never waits: the merge lands at once, so it branches from the integration branch.
 - Shared-run model, only when a milestone needs it: one lead agent does the shared prework on the run branch and worktree; then each file set gets its own worktree and branch (`<slug>-<set>` for both), cut from the run branch after the lead's last commit, because parallel commits in one checkout race on the index; one builder per file set (each file, in every base, owned by one builder); the lead merges each set branch into the run branch when its builder returns; one review bounce, one verify, one merge for the run. Their trackers cite the shared commits and the one run id. `templates/workflow.js` takes this as a `MILESTONES` entry with `lead` and `fileSets`.
-- Owner messages in the runner are discussion under the stage 1 rules; no process proposals; a real choice the run finds is a queue entry.
+- Owner messages in the runner are discussion under the stage 1 rules; no process proposals; a real choice the run finds is a queue card.
 - A milestone slower than the previous ones: measure per-agent durations from the workflow transcript before changing the script.
 
 ## Workflow per milestone
@@ -125,16 +125,16 @@ if (review.contradictsDecision) {
 }
 ```
 
-The runner then files a queue entry and continues with work that does not depend on the choice.
+The runner then files a queue card and continues with work that does not depend on the choice.
 
 ## Results, trackers and the queue
 
 - Every workflow script's result schema has a `notes` array and an `attention` array. A plain Agent returns the same two lists in its final text.
 - `attention`: what needs the owner. `notes`: what a later task, a resume or the owner would otherwise rediscover. Both are usually empty.
 - Sub-agents write the tracker: the builder fills it and sets `Status: running`, the fixer and the verifier update it. They stage owner items in its `## Attention` section.
-- The runner files queue entries at each milestone boundary and when an epic has merged, with `new_item.py <release> Q "<title>" --from "run E<n>" --bullet "<first fact line>"`. It condenses the trackers' `## Attention` sections and the results, and merges duplicates. One plain line per entry, no jargon. Problems found in the code are filed the same way. Never a hand-typed `### Q<n>` heading.
-- The run reports; it does not solve. Do not research solutions for a queue entry. A deviation is reported as keep or revert with the exact strings, never as an implementation question.
-- An accepted decision that no longer fits: a queue entry, never a silent change.
+- The runner files queue cards at each milestone boundary and when an epic has merged, with `new_item.py <release> Q "<title>" --from "run E<n>" --bullet "<first fact line>"`. It condenses the trackers' `## Attention` sections and the results, and merges duplicates. One plain line per card, no jargon. Problems found in the code are filed the same way. A fact for an existing card: `new_item.py <release> --fact Q<n> "<text>"`. Never a hand edit of `queue.md`.
+- The run reports; it does not solve. Do not research solutions for a queue card. A deviation is reported as keep or revert with the exact strings, never as an implementation question.
+- An accepted decision that no longer fits: a queue card, never a silent change.
 - Nothing needs the owner: nothing filed.
 - Formats: [formats.md](formats.md).
 

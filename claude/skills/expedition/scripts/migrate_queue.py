@@ -1,15 +1,24 @@
 #!/usr/bin/env python3
-"""Move a release folder from findings.md and the ATTENTION files to one queue.md.
+"""Move a release folder to queue.md as a kanban board (board.py has the format).
 
 Usage: python3 -I migrate_queue.py <release> [--dry-run] [--owner X] [--root PATH]
 
-For a folder that still has findings.md (### F<n> items) or run/attentions/ (also a flat
-attentions/) with ATTENTION-<YYYY-MM-DD>.md files (## A<n> items):
+Two inputs, one output:
 
-- Builds queue.md: the title, then every F item in file order and every A
-  item in file-date then file order, numbered Q1.. in that order. Each entry gets "- Tags:"
-  and "- From:" as its first two bullets; the old bullets follow as they are (blank lines
-  inside an item dropped). Attribution is not
+(b) A queue.md in the heading format ("### Q<n> <title>", then "- Tags: <value>" and
+"- From: <who>.") is converted in place: ids and titles kept, the Tags value picks the lane
+(empty Open, D<n> Decided with "Decision: D<n>" as the first sub-bullet, Later, Dropped,
+Autofix), From becomes the card's tag (#owner, #lead, #lookup, #run-E<n>), the other bullets
+become tab-indented sub-bullets with their nesting kept, entry order kept inside each lane.
+An entry with any other Tags value goes to Open and is listed as not placed.
+
+(a) A folder that still has findings.md (### F<n> items) or run/attentions/ (also a flat
+attentions/) with ATTENTION-<YYYY-MM-DD>.md files (## A<n> items) is first turned into the
+heading format below, then converted as in (b):
+
+- Entries: every F item in file order and every A item in file-date then file order,
+  numbered Q1.. in that order; the old bullets follow as they are (blank lines inside an
+  item dropped). Attribution is not
   recoverable from the old files, so it is kept simple: "run" for every A item; for an F item
   "run" when it sits under a triage round heading or cites a tracker, else "lead".
 - Tags value, one word: an A item tagged [D<n>] gets D<n>. An A item tagged [F<n>] is the same
@@ -29,10 +38,11 @@ attentions/) with ATTENTION-<YYYY-MM-DD>.md files (## A<n> items):
 - Prints the old-id to Q-id mapping, the entries left untagged, and every bare F<digits> or
   A<digits> token it did not rewrite as "path:line: text", for a person to settle.
 
---dry-run prints the same and writes nothing. Refuses a folder that already has queue.md and
-neither old file, and a folder that has both queue.md and an old file.
+Prints the count of cards per lane and any entry it could not place. --dry-run prints the same
+and writes nothing. Commits nothing. Refuses a folder whose queue.md is already a board, and a
+folder that has both queue.md and an old file.
 
-old_files(folder) is also used by the other scripts to refuse an unmigrated folder.
+refusal(folder, release) is also used by the other scripts to refuse an unmigrated folder.
 """
 import argparse
 import collections
@@ -78,12 +88,68 @@ def old_files(folder):
 
 
 def refusal(folder, release):
-    """One line for the other scripts: the folder still has the old files and no queue.md."""
+    """One line for the other scripts: the folder still has the old files and no queue.md, or a
+    queue.md that is not a kanban board yet."""
     old = old_files(folder)
-    if old and not (Path(folder) / QUEUE).is_file():
-        return (f"{folder} has {' and '.join(old)} and no {QUEUE}: run python3 -I "
-                f"{HERE / 'migrate_queue.py'} {release}")
+    queue = Path(folder) / QUEUE
+    run = f"run python3 -I {HERE / 'migrate_queue.py'} {release}"
+    if old and not queue.is_file():
+        return f"{folder} has {' and '.join(old)} and no {QUEUE}: {run}"
+    if queue.is_file() and not load("board").is_board(read(queue)):
+        return f"{queue} is not a kanban board yet: {run}"
     return None
+
+
+HQ_HEAD_RE = re.compile(r"^###\s+Q(\d+)\b\s*(.*?)\s*$")
+HQ_TAGS_RE = re.compile(r"^\s*-\s*Tags:\s*(.*?)\s*$")
+HQ_FROM_RE = re.compile(r"^\s*-\s*From:\s*(.*?)\s*$")
+BULLET_RE = re.compile(r"^( *)- (.*)$")
+
+
+def convert(text):
+    """Heading-format queue text to a board: (board text, {lane: count}, [not placed])."""
+    bd = load("board")
+    entries, cur = [], None
+    for line, inside in fenced(text.split("\n")):
+        m = None if inside else HQ_HEAD_RE.match(line)
+        if m:
+            cur = {"num": int(m.group(1)), "title": m.group(2), "tag": None, "from": None, "body": []}
+            entries.append(cur)
+            continue
+        if cur is None or (not line.strip() and not inside):
+            continue
+        t = HQ_TAGS_RE.match(line) if cur["tag"] is None and not cur["body"] else None
+        if t:
+            cur["tag"] = t.group(1)
+            continue
+        f = HQ_FROM_RE.match(line) if cur["from"] is None and not cur["body"] else None
+        if f:
+            cur["from"] = f.group(1)
+            continue
+        cur["body"].append(line.rstrip())
+    lanes, unplaced = {}, []
+    for e in entries:
+        tag = e["tag"] or ""
+        lane = {"": "Open", "Later": "Later", "Dropped": "Dropped", "Autofix": "Autofix"}.get(tag)
+        if re.fullmatch(r"D\d+", tag):
+            lane = "Decided"
+        if lane is None:
+            lane = "Open"
+            unplaced.append(f"Q{e['num']}: Tags '{tag}'")
+        if not e["from"]:
+            unplaced.append(f"Q{e['num']}: no From, card has no from tag")
+        block = [bd.card_line(e["num"], e["title"], e["from"], lane)]
+        if lane == "Decided":
+            block.append(f"\t- Decision: {tag}")
+        for line in e["body"]:
+            b = BULLET_RE.match(line)
+            if b:
+                block.append(bd.fact_line(b.group(2), len(b.group(1)) // 2 + 1))
+            else:
+                block.append("\t" + bd.escape_tags(line.strip()))
+        lanes.setdefault(lane, []).append(block)
+    counts = {lane: len(lanes.get(lane, [])) for lane in bd.LANES}
+    return bd.render(lanes), counts, unplaced
 
 
 def die(msg):
@@ -342,6 +408,12 @@ def queue_text(release, entries):
     return "\n".join(out) + "\n"
 
 
+def report(counts, unplaced):
+    print("Cards per lane: " + ", ".join(f"{k} {v}" for k, v in counts.items())
+          + f"; {sum(counts.values())} cards")
+    print(f"Not placed: {'; '.join(unplaced) or 'none'}")
+
+
 def targets(folder):
     """Every Markdown file of the release folder the rewrite covers."""
     skip_dirs = ("reference", "status/data") + ATT_DIRS
@@ -381,10 +453,20 @@ def main():
         die(f"release folder missing: {folder}")
     old = old_files(folder)
     has_queue = (folder / QUEUE).is_file()
-    if has_queue and not old:
-        die(f"{folder / QUEUE} exists and no old file is left: already migrated")
-    if has_queue:
+    if has_queue and old:
         die(f"{folder} has both {QUEUE} and {' and '.join(old)}: merge them by hand")
+    if has_queue:
+        text = read(folder / QUEUE)
+        if load("board").is_board(text):
+            die(f"{folder / QUEUE} is already a kanban board: nothing to migrate")
+        board_text, counts, unplaced = convert(text)
+        report(counts, unplaced)
+        if a.dry_run:
+            print("dry run; nothing written")
+            return
+        (folder / QUEUE).write_text(board_text, encoding="utf-8")
+        print(f"converted {folder / QUEUE}; nothing committed")
+        return
 
     entries, mapping = build(folder)
     prefix = f"{a.release}/{owner}/"
@@ -419,10 +501,12 @@ def main():
     print(f"Bare F or A tokens left ({len(leftovers)} lines):")
     for l in leftovers:
         print(f"  {l}")
+    board_text, lane_counts, unplaced = convert(queue)
+    report(lane_counts, unplaced)
     if a.dry_run:
         print("dry run; nothing written")
         return
-    (folder / QUEUE).write_text(queue, encoding="utf-8")
+    (folder / QUEUE).write_text(board_text, encoding="utf-8")
     for p, new in changed:
         p.write_text(new, encoding="utf-8")
     if (folder / FINDINGS).exists():

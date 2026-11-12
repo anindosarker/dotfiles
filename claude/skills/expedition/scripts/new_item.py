@@ -4,18 +4,24 @@ on one checkout never pick the same number.
 
 Usage: python3 -I new_item.py <release> D|Q "<title>" [--from <text>] [--source Q<n>]
        [--bullet "<text>"] [--owner X] [--root PATH]
+       python3 -I new_item.py <release> --move Q<n> Open|Later|Dropped|Autofix
+       python3 -I new_item.py <release> --fact Q<n> "<text>"
 
-Under an exclusive lock on <release folder>/.ids.lock: re-read the file, take the highest
-number of that kind, and append the item.
+Under an exclusive lock on <release folder>/.ids.lock, re-reading the files right before the
+write (queue.md is a kanban board the owner may drag in the editor; board.py edits it in place
+and leaves every other byte as it was):
 
 - D: under the last "## Round" heading of decisions.md: the heading, the --bullet line if
-  given, then "- Source: Q<n>" if --source is given. With --source, the "- Tags:" bullet of
-  that queue entry gets the new D id in the same commit, unless it already names a decision.
-- Q: at the end of queue.md (created from templates/queue.md when missing): the heading,
-  "- Tags:" (empty, the entry is open), "- From: <text>." (--from, required), then the
-  --bullet line if given.
+  given, then "- Source: Q<n>" if --source is given. With --source, card Q<n> moves to the end
+  of Decided with "Decision: D<n>" as its first sub-bullet; a card already in Decided keeps the
+  highest decision number.
+- Q: a card "- [ ] **Q<n>** <title> #<from>" at the end of Open (--from required: owner,
+  lead, lookup or "run E<n>", written #run-E<n>), the --bullet text as its first fact.
+- --move: card Q<n> with its sub-bullets to the end of that lane (Decided only through D
+  --source). --fact: one tab-indented fact sub-bullet at the end of card Q<n>.
 
-Commits the files it wrote and prints the id alone, e.g. Q11.
+queue.md is created from templates/queue.md when missing. Commits the files it wrote and
+prints the id alone, e.g. Q11.
 """
 import argparse
 import datetime
@@ -80,11 +86,6 @@ def under_last_round(text, block, today):
     return "\n".join(out).lstrip("\n") + "\n"
 
 
-def appended(text, block):
-    body = text.rstrip("\n")
-    return (body + "\n\n" if body else "") + "\n".join(block) + "\n"
-
-
 def git(root, *args):
     r = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
     if r.returncode != 0:
@@ -109,86 +110,119 @@ def exclude_lock(root):
 
 def main():
     ap = argparse.ArgumentParser(
-        usage='new_item.py <release> D|Q "<title>" [--from <text>] [--source Q<n>] '
-              '[--bullet "<text>"] [--owner X] [--root PATH]'
+        usage='new_item.py <release> D|Q "<title>" [--from <text>] [--source Q<n>] [--bullet "<text>"] | '
+              '<release> --move Q<n> Open|Later|Dropped|Autofix | <release> --fact Q<n> "<text>" '
+              '[--owner X] [--root PATH]'
     )
     ap.add_argument("release")
-    ap.add_argument("kind")
-    ap.add_argument("title")
+    ap.add_argument("kind", nargs="?")
+    ap.add_argument("title", nargs="?")
     ap.add_argument("--from", dest="source_of")
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: git top level)")
     ap.add_argument("--source")
     ap.add_argument("--bullet")
+    ap.add_argument("--move", nargs=2, metavar=("Q<n>", "LANE"))
+    ap.add_argument("--fact", nargs=2, metavar=("Q<n>", "TEXT"))
     a = ap.parse_args()
-    if a.kind not in ("D", "Q"):
-        die(f"bad kind '{a.kind}': the kinds are D and Q")
     if not RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
-    if a.kind == "Q" and not (a.source_of or "").strip():
-        die("a Q item needs --from: owner, lead, lookup or run E<n>")
-    if a.kind == "Q" and a.source:
-        die("--source is for a D item")
-    if a.source_of and a.kind == "D":
-        die("--from is for a Q item")
-    title = a.title.strip()
-    if not title:
-        die("empty title")
-    if a.source and not SOURCE_RE.match(a.source):
-        die(f"bad source '{a.source}', expected like Q3")
-    for label, val in (("title", title), ("bullet", a.bullet or ""), ("from", a.source_of or "")):
+    card_op = a.move or a.fact
+    if a.move and a.fact:
+        die("--move and --fact are separate calls")
+    if card_op:
+        if a.kind or a.title or a.source_of or a.source or a.bullet:
+            die("--move and --fact take only a Q id and a lane or a text")
+        if not SOURCE_RE.match(card_op[0]):
+            die(f"bad id '{card_op[0]}', expected like Q3")
+        if a.move and a.move[1] not in ("Open", "Later", "Dropped", "Autofix"):
+            die(f"bad lane '{a.move[1]}': Open, Later, Dropped or Autofix (Decided only through D --source)")
+    else:
+        if a.kind not in ("D", "Q"):
+            die(f"bad kind '{a.kind}': the kinds are D and Q")
+        if a.kind == "Q" and not (a.source_of or "").strip():
+            die("a Q item needs --from: owner, lead, lookup or run E<n>")
+        if a.kind == "Q" and a.source:
+            die("--source is for a D item")
+        if a.source_of and a.kind == "D":
+            die("--from is for a Q item")
+        if not (a.title or "").strip():
+            die("empty title")
+        if a.source and not SOURCE_RE.match(a.source):
+            die(f"bad source '{a.source}', expected like Q3")
+    title = (a.title or "").strip()
+    fact = a.fact[1] if a.fact else ""
+    for label, val in (("title", title), ("bullet", a.bullet or ""), ("from", a.source_of or ""),
+                       ("fact", fact)):
         if "\n" in val:
             die(f"{label} must be one line")
-        if "—" in val:
+        if "\u2014" in val:
             die(f"{label} contains an em dash")
 
     own = load("ownership")
+    bd = load("board")
     root = own.repo_root(a.root)
     folder = own.release_folder(root, own.detect_owner(root, a.owner), a.release)
+    queue = folder / own.QUEUE_MD
     today = datetime.date.today().isoformat()
 
     with open(folder / ".ids.lock", "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         exclude_lock(root)
-        if a.kind == "Q":
-            target = folder / own.QUEUE_MD
-            if not target.is_file():
-                tpl = Path(__file__).resolve().parent.parent / "templates" / "queue.md"
-                target.write_text(tpl.read_text(encoding="utf-8").replace("[release]", a.release),
-                                  encoding="utf-8")
+        if not queue.is_file():
+            tpl = Path(__file__).resolve().parent.parent / "templates" / "queue.md"
+            queue.write_text(tpl.read_text(encoding="utf-8"), encoding="utf-8")
+        board = queue.read_text(encoding="utf-8")
+        written = []
+
+        if card_op:
+            num = int(card_op[0][1:])
+            if bd.find(board, num) is None:
+                die(f"{card_op[0]} is not in {queue}")
+            ident = card_op[0]
+            if a.move:
+                queue.write_text(bd.move(board, num, a.move[1]), encoding="utf-8")
+                subject = f"{ident} to {a.move[1]}"
+            else:
+                queue.write_text(bd.add_fact(board, num, fact), encoding="utf-8")
+                subject = f"{ident} fact"
+            written.append(queue)
+        elif a.kind == "Q":
+            ident = f"Q{max([c['num'] for c in bd.parse(board)['cards']] or [0]) + 1}"
+            block = [bd.card_line(ident[1:], title, a.source_of, "Open")]
+            if a.bullet:
+                block.append(bd.fact_line(a.bullet))
+            queue.write_text(bd.append_card(board, "Open", block), encoding="utf-8")
+            written.append(queue)
+            subject = f"{ident} {title}"
         else:
             target = folder / "decisions.md"
             if not target.is_file():
                 die(f"missing: {target}")
-        ident = f"{a.kind}{highest([target], a.kind) + 1}"
-        bullet = (a.bullet if a.bullet.startswith("- ") else f"- {a.bullet}") if a.bullet else None
-        written = [target]
-
-        if a.kind == "Q":
-            who = a.source_of.strip().rstrip(".")
-            block = [f"### {ident} {title}", "- Tags:", f"- From: {who}."] + ([bullet] if bullet else [])
-            target.write_text(appended(target.read_text(encoding="utf-8"), block), encoding="utf-8")
-        else:
-            if a.source:
-                queue = folder / own.QUEUE_MD
-                if not any(e["num"] == int(a.source[1:]) for e in own.parse_queue(queue)):
-                    die(f"{a.source} is not in {queue}")
+            card = bd.find(board, int(a.source[1:])) if a.source else None
+            if a.source and card is None:
+                die(f"{a.source} is not in {queue}")
+            ident = f"D{highest([target], 'D') + 1}"
+            bullet = (a.bullet if a.bullet.startswith("- ") else f"- {a.bullet}") if a.bullet else None
             block = [f"### {ident} {title}", ""] + ([bullet] if bullet else [])
             if a.source:
                 block.append(f"- Source: {a.source}")
             target.write_text(under_last_round(target.read_text(encoding="utf-8"), block, today),
                               encoding="utf-8")
-            if a.source:
-                entry = next(e for e in own.parse_queue(queue) if e["num"] == int(a.source[1:]))
-                if re.fullmatch(r"D\d+", entry["tag"] or ""):
-                    print(f"{a.source} keeps Tags {entry['tag']}", file=sys.stderr)
-                else:
-                    own.set_queue_tag(queue, int(a.source[1:]), ident)
-                    written.append(queue)
+            written.append(target)
+            if card is not None:
+                old = bd.decision(card) if card["lane"] == "Decided" else None
+                keep = max(old or 0, int(ident[1:]))
+                queue.write_text(bd.move(board, card["num"], "Decided", f"\t- Decision: D{keep}"),
+                                 encoding="utf-8")
+                written.append(queue)
+                if old and old > int(ident[1:]):
+                    print(f"{a.source} keeps Decision D{old}", file=sys.stderr)
+            subject = f"{ident} {title}"
 
         paths = [str(p) for p in written]
         git(root, "add", "--", *paths)
-        git(root, "commit", "-q", "-m", f"docs(plan): {a.release} {ident} {title}", "--only", "--", *paths)
+        git(root, "commit", "-q", "-m", f"docs(plan): {a.release} {subject}", "--only", "--", *paths)
         fcntl.flock(lock, fcntl.LOCK_UN)
     print(ident)
 

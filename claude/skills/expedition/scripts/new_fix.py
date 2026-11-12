@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Create a fix milestone in a release: run/trackers/fix-<slug>-tracker.md citing its queue
-entries on its first line, "- Tags: Autofix" on each cited queue.md entry, then
+cards on its first line, each cited queue.md card moved to the end of the Autofix lane, then
 status/ownership.md and status/sprints.md regenerated so the fix has a grid row in the running
 sprint column (the first column holding a "[ ]", else the last).
 
@@ -12,6 +12,7 @@ without ", tracker": --title, else the slug in words, followed by the cited ids.
 cited too (a fix a decision asks for); it gets no tag. Commits nothing.
 """
 import argparse
+import fcntl
 import importlib.util
 import re
 import sys
@@ -99,7 +100,8 @@ def main():
     if tracker.exists():
         die(f"refusing to overwrite {tracker}")
     queue = folder / own.QUEUE_MD
-    have = {e["num"] for e in own.parse_queue(queue)}
+    bd = load("board")
+    have = {c["num"] for c in bd.parse(queue.read_text(encoding="utf-8"))["cards"]}
     missing = [i for i in ids if i.startswith("Q") and int(i[1:]) not in have]
     if missing:
         die(f"not in {queue.name}: {', '.join(missing)}")
@@ -109,9 +111,13 @@ def main():
     except SystemExit:
         tracker.unlink()
         die(f"ownership.py failed with the fix; {tracker.name} removed")
-    for i in ids:
-        if i.startswith("Q"):
-            own.set_queue_tag(queue, int(i[1:]), "Autofix")
+    with open(folder / ".ids.lock", "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        for i in ids:
+            if i.startswith("Q"):
+                queue.write_text(bd.move(queue.read_text(encoding="utf-8"), int(i[1:]), "Autofix"),
+                                 encoding="utf-8")
+        fcntl.flock(lock, fcntl.LOCK_UN)
     print(tracker)
     print(queue)
     print(folder / own.OWNERSHIP_MD)

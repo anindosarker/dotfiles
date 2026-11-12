@@ -22,58 +22,68 @@ Every item has an ID heading. Its first bullet is required and self-explanatory:
 - `[E<n>]` is written by whoever sends RUN. `[Done]` is written by the runner on merge, or by the lead when a decision with nothing to run is recorded.
 - Re-read the file right before every write, make a targeted edit, commit at once. No held edits.
 - The next D or Q number is read from the file at write time, never from memory.
-- Ids come only from `python3 -I <skill>/scripts/new_item.py <release> D|Q "<title>"`, never typed. It locks, appends the heading, commits and prints the id; the session then writes the bullets under that heading.
+- Ids come only from `python3 -I <skill>/scripts/new_item.py <release> D|Q "<title>"`, never typed. It locks, appends the heading or the card, commits and prints the id; the session then writes a decision's bullets under its heading.
 - No id is mentioned in chat or a tracker before it is allocated: refer to the item by its title.
 - An id never changes after allocation.
-- A duplicate filed twice keeps both ids. The later one gets `- Tags: Dropped` and a fact bullet `- Same as Q<n>.`.
+- A duplicate filed twice keeps both ids. The later card gets the fact `Same as Q<n>.` and moves to Dropped.
 - Fallback rule: a session that finds its own id taken renumbers its own item only, never the other's. With `new_item.py` this no longer happens.
 - Agents on milestone branches never edit `decisions.md`.
 
 ## queue.md
 
-One file per release, in the release folder root, template [../templates/queue.md](../templates/queue.md). It holds every item raised in the release, filed in the turn it is raised (the only exception: an item raised and ruled in the same owner message goes straight to a decision). Entries with an empty Tags value are the queue, the rest are the history. Flat list in the order raised, no round headings.
+One file per release, in the release folder root, template [../templates/queue.md](../templates/queue.md): a kanban board in the obsidian-kanban Markdown format, which the owner may view and drag in the VS Code extension Unified Kanban. It holds every item raised in the release, filed in the turn it is raised (the only exception: an item raised and ruled in the same owner message goes straight to a decision). The Open lane is the queue; the other lanes are the history.
 
 ```md
-# v0.9.x queue
+---
+kanban-plugin: basic
+---
 
-### Q1 Home title is too technical
-- Tags: D71
-- From: owner.
+## Open
 
-### Q2 Example text is hard to read
-- Tags:
-- From: owner.
-- Lookup: TanStack has no intro text; Material React Table uses one or two plain sentences.
+- [ ] **Q10** Home title is too technical #owner
+- [ ] **Q14** Setter passes a function, spec says a value #run-E10
+	- Keep or revert; `features/stRowPinning.ts:42`.
 
-### Q3 Setter passes a function, spec says a value
-- Tags:
-- From: run E10.
-- Keep or revert; `features/stRowPinning.ts:42`.
+## Decided
 
-### Q4 Row pinning drops hand-pinned rows on unselect all
-- Tags: Later
-- From: run E8.
+- [x] **Q6** Comparison page sits too high #owner
+	- Decision: D71
+
+## Later
+
+- [ ] **Q7** Row pinning drops hand-pinned rows on unselect all #run-E8
+	- `features/stRowPinning.ts:42`.
+
+## Dropped
+
+## Autofix
+
+- [x] **Q9** Typo in the pinning guide #run-E10
+
+%% kanban:settings
+{"kanban-plugin":"basic","lane-width":300,"date-format":"YYYY-MM-DD","time-format":"HH:mm"}
+%%
 ```
 
-- Heading `### Q<n> <title>`: a plain sentence naming the problem or idea. The id comes only from `new_item.py` and never changes.
-- First bullet, always: `- Tags: <value>`, one word. Second bullet, always: `- From:` with `owner`, `lead`, `lookup` or `run E<n>`. `new_item.py` writes both, Tags empty.
-- Further bullets: facts only (path:line, measurement, lookup result). Options are never written in the file.
-- Tags values, nothing else (`status.py` flags any other):
+- Sessions change the file only through the scripts: `new_item.py` (`Q`, `D --source`, `--move`, `--fact`) and `new_fix.py`. They re-read it inside the lock, find a card by its `**Q<n>**` token and its lane by the `## ` heading above it, and leave every other byte as found, the frontmatter and the `%% kanban:settings` block included.
+- Five lanes, always all present, in this order. The lane is the card's state:
 
-  | Tag | Meaning |
+  | Lane | Meaning |
   |---|---|
-  | (empty) | Open, waiting to be discussed |
-  | `D<n>` | Decided; the number is the decision |
-  | `Later` | Parked; reopened by clearing the tag |
-  | `Dropped` | Will not be done |
-  | `Autofix` | Fixed without a decision |
+  | Open | Waiting to be discussed |
+  | Decided | Decided; its first fact `Decision: D<n>` names the decision |
+  | Later | Parked; reopened by moving it back to Open |
+  | Dropped | Will not be done |
+  | Autofix | Fixed without a decision |
 
-- `Autofix` is written by `new_fix.py` on each entry a fix milestone cites; the fix is traced through the fix tracker's first line, for example `(Q9)`.
-- A lookup agent appends its facts as bullets under the entry it was given.
-- Citations elsewhere: `(Q3)` in specs and trackers; a decision that came from an entry ends with `- Source: Q3`; a fix tracker's first line cites `(Q3, Q4)`.
-- The run reports; it does not solve. Do not research solutions for a run entry.
-- Not a queue entry: spec text that lags shipped code, a tracker gap, a process lesson, a tooling fact with one right answer. Those go to the tracker Notes, a decision or the spec file directly (`process.md` holds project facts only); the owner sees choices only.
-- Only the Tags value is edited after filing, plus fact bullets appended.
+- A card is one top-level list item: `- [ ] **Q<n>** <title> #<from>`. The title is a plain sentence naming the problem or idea. `<from>` is `owner`, `lead`, `lookup` or `run-E<n>`. The checkbox is `[x]` in Decided, Dropped and Autofix, `[ ]` in Open and Later; the scripts ignore it when reading.
+- Facts are sub-bullets indented with one tab: path:line, measurement, lookup result. Options are never written in the file. A `#word` that is not the from tag is written in backticks, so the extension shows no tag badge.
+- New cards go to the end of Open. A moved card goes, with its facts, to the end of its lane. Decided only through `new_item.py <release> D "<title>" --source Q<n>`, which writes the Decision fact; a card already in Decided keeps the highest decision number.
+- `new_fix.py` moves each card a fix milestone cites to Autofix; the fix is traced through the fix tracker's first line, for example `(Q9)`.
+- A lookup agent adds its facts to the card it was given with `new_item.py <release> --fact Q<n> "<text>"`.
+- Citations elsewhere: `(Q3)` in specs and trackers; a decision that came from a card ends with `- Source: Q3`; a fix tracker's first line cites `(Q3, Q4)`.
+- The run reports; it does not solve. Do not research solutions for a run card.
+- Not a queue card: spec text that lags shipped code, a tracker gap, a process lesson, a tooling fact with one right answer. Those go to the tracker Notes, a decision or the spec file directly (`process.md` holds project facts only); the owner sees choices only.
 
 ## decisions.md
 
@@ -181,7 +191,7 @@ Checks:
 
 - `Status:` is `planned`, `running`, `merged (<commit>)` or `skipped (D<n>)` (a SKIP, `D<n>` the superseding decision).
 - Required: the header lines and one line per task, with the last commit and the workflow run id of the run that covered the task.
-- A fix milestone's tracker cites its queue entries on its first line, for example `# Component fixes (Q3, Q4), tracker`.
+- A fix milestone's tracker cites its queue cards on its first line, for example `# Component fixes (Q3, Q4), tracker`.
 - `Checks:` is followed by one bullet per check: command, commit, result. The integration milestone's suite run on the staging branch gets its own bullet.
 - `## Attention` and `## Notes` are optional. Empty is the normal case. Do not spend tokens on notes.
 - Never: review-round narration, check output, commit lists.

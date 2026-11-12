@@ -1,13 +1,13 @@
 # Stage 4: triage
 
-Folded into stage 1: the run's entries in `queue.md` are queue entries like any other, read when the runner sends DONE or BLOCKED.
+Folded into stage 1: the run's cards in `queue.md` are queue cards like any other, read when the runner sends DONE or BLOCKED.
 
 ## Steps
 
-1. Run `python3 -I <skill>/scripts/status.py <release> --next` for the next open entry.
-2. Settle every entry that is not a real choice first, without the owner (decision with its `Source:` line, follow-up routed, spec or process text fixed inline). Then go through the real choices one at a time. For each, give the facts and a recommendation. Use the item format from SKILL.md stage 1 (`# Q<n>.` title sentence, bullets, `## Options:` with the recommended option first); the next item only after the owner rules on this one. The owner gives feedback. Discuss in chat, not in the file.
-3. Record a decision only when the owner accepts it, with `new_item.py <release> D "<title>" --source Q<n>`. It goes in `decisions.md` under a new heading `## Round <n>: triage of E<n>`. Numbering continues. Each decision ends with `- Source: Q<n>`, and the entry's Tags value becomes `D<n>`. A deferral sets `Later`, a rejection `Dropped`. Format: [formats.md](formats.md).
-4. An entry the owner accepts as it is still gets a short decision with its `Source:` line, so the entry is decided.
+1. Run `python3 -I <skill>/scripts/status.py <release> --next` for the first card in Open.
+2. Settle every card that is not a real choice first, without the owner (decision with its `Source:` line, follow-up routed, spec or process text fixed inline). Then go through the real choices one at a time. For each, give the facts and a recommendation. Use the item format from SKILL.md stage 1 (`# Q<n>.` title sentence, bullets, `## Options:` with the recommended option first); the next item only after the owner rules on this one. The owner gives feedback. Discuss in chat, not in the file.
+3. Record a decision only when the owner accepts it, with `new_item.py <release> D "<title>" --source Q<n>`. It goes in `decisions.md` under a new heading `## Round <n>: triage of E<n>`. Numbering continues. Each decision ends with `- Source: Q<n>`, and the card moves to Decided. A deferral moves it to Later, a rejection to Dropped (`new_item.py <release> --move Q<n> Later|Dropped`). Format: [formats.md](formats.md).
+4. A card the owner accepts as it is still gets a short decision with its `Source:` line, so the card is decided.
 5. File bugs found during triage in `queue.md` (`new_item.py <release> Q`).
 6. A decision that changes an earlier one: SKILL.md, Changing a decision.
 7. Route each piece of follow-up work (rules below).

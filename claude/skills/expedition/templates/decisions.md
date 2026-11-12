@@ -7,4 +7,4 @@
 
 - [Required: explains the decision.]
 - [Then anything: bullets, code blocks, examples, sub-bullets.]
-- [Source: Q[n], last bullet, for a decision that came from a queue entry.]
+- [Source: Q[n], last bullet, for a decision that came from a queue card.]
