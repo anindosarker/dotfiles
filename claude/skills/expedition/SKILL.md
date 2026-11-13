@@ -30,6 +30,7 @@ Mechanical steps use the scripts, never hand-written files. The scripts find the
 - Mid-run fix: `python3 -I ${CLAUDE_SKILL_DIR}/scripts/new_fix.py v0.<n>.x <slug> "Q3, Q4"` (the tracker stub citing the queue cards, each card moved to Autofix, and a grid row in the current sprint column)
 - Queue cards: `python3 -I ${CLAUDE_SKILL_DIR}/scripts/new_item.py v0.<n>.x --move Q<n> Open|Later|Dropped|Autofix` and `--fact Q<n> "<text>"`; next card: `status.py v0.<n>.x --next` (the first card in Open with its facts, or `none`)
 - State and gaps: `python3 -I ${CLAUDE_SKILL_DIR}/scripts/status.py v0.<n>.x`
+- Progress reply for the owner: `python3 -I ${CLAUDE_SKILL_DIR}/scripts/status.py v0.<n>.x --progress` (Markdown, printed as the reply)
 
 File layout, scripts and conventions: [reference/files.md](reference/files.md). File formats (decisions, queue, epic file, tracker, handoff): [reference/formats.md](reference/formats.md).
 
@@ -42,15 +43,17 @@ Writing a rule: one rule per topic, two to five bullets; each bullet a full sent
 ## Owner input
 
 - Owner words: `record it`, `accepted`, `k`, `epic`, `hold D<n>`, `go`, `epic go`.
-- `progress` (or "status"): reply in this form and nothing else, never an item, a commit id, an ack or a list of waiting work:
+- `progress` (or "status"): the lead runs `python3 -I ${CLAUDE_SKILL_DIR}/scripts/status.py <release> --progress` and replies with its output unchanged and nothing else: no added sentence, no item, no commit id, no ack, no list of waiting work. Example output:
 
   ```
-  E12: Specs 6/12.
-  - Running: 44 range filters, 45 select chevron.
-  - Blocked: 47 comparison page, waiting on your check of the table.
+  **E12** · Specs 6/12
+  - **Running**
+    - 44 Range filter editor
+  - **Blocked**
+    - 47 Comparison page: the table names a feature tablecn dropped; keep or remove the row.
   ```
 
-  Line one is the epic and its specs done out of total; a spec is done when every one of its milestones has merged. `Running` lists each running spec as its number and one or two words, and includes a spec that is being retried or fixed. `Blocked` appears only for work that has stopped and waits on the owner, with what the owner has to do. One block per running epic. An epic that finished: `E12: Specs 12/12. Released as 0.9.4.` Nothing running: `Nothing running. Ready for an epic: Q54.`
+  `Running` lists each spec with a milestone running, including a spec that is being retried or fixed. `Blocked` lists only work that has stopped, with the run's own reason from the tracker.
 - `resume` (or "resume E<n>", "resume the runner"): send the one word `resume` to every live window `runner.sh list` shows (`runner.sh resume <release>` for the runner, `runner.sh resume "<release> specs E<n>"` for each fork), in one turn, then post the next item. No picking a window, no status checks, no pane reading or report of a session's state, no audits; the lead does its own work only when the owner says so.
 - A runner or fork window that hits a usage limit is never stopped, replaced or re-forked: it continues by itself when the limit resets, and `resume` typed into it (or `claude --resume <uuid>` after a crash) brings it back. `runner.sh stop` marks the entry stopped, after which `fork` cannot resume it. A decision with nothing to run is tagged `[Done]` when recorded.
 - Owner comments are feedback for discussion, not decisions. An owner message that picks an option, adds specifics or corrects the item is still discussion: fold it into the item and post the item again. Write a decision only on an explicit confirmation ("record it", "accepted"), or on "k" when the agent's last message was the complete item ending with the line `Say "record it" to record it, or add to it.`; "k" on an item still being shaped, "fix it", "makes sense" or a message of specifics never counts. A message that carries a question is discussion whatever else it says ("lgtm, also X right?"): answer the question, fold the answer into the item, and wait for the next message.

@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
 """Read-only status report for an expedition release folder.
 
-Usage: python3 -I status.py <release> [--next] [--owner X] [--root PATH]
+Usage: python3 -I status.py <release> [--next | --progress] [--owner X] [--root PATH]
 
 --next prints only the first card of the Open lane of queue.md with its sub-bullets; "none"
 when Open is empty.
+
+--progress prints only the owner's progress reply, in Markdown: one block per epic with an
+unfinished row in status/sprints.md ("[ ]", "·" or "[!]"), "**E<n>** · Specs d/t" (t the epic's
+specs in the grid, d those whose rows are all "[x]"), then "- **Running**" (specs with a "[ ]" row)
+and "- **Blocked**" (specs with a "[!]" row, with the first ## Attention bullet of that milestone's
+tracker as the reason), each spec as its number and its Deliverables title. Fix rows are ignored.
+With nothing unfinished: the last epic's line, then "Nothing running." and the unticked Decided
+cards of queue.md as "Ready for an epic: **Q<n>**, ...".
 
 Layout: <release>-plan.md (## Goals and ## Deliverables only), plan/specs/NN-<slug>.md,
 plan/epics/E<n>.md, queue.md, status/index.html,
@@ -369,6 +377,99 @@ def print_next(bd, text):
     print(card["text"] if card else "none")
 
 
+GRID_ROW_RE = re.compile(r"^E(\d+)\s+(\d{2}(?:\.\d+)?)\s+(.*)$")
+UNFINISHED = ("[ ]", "·", "[!]")
+TITLE_LINK_RE = re.compile(r"\[(.+?)\]\(")
+PLACEHOLDER_RE = re.compile(r"^(?:\[[^\]]*\]|\([^)]*\))$")
+
+
+def spec_titles(plan):
+    """{spec number: title}: the link text of each Deliverables row."""
+    out = {}
+    if not plan.is_file():
+        return out
+    m = re.search(DELIVERABLES_HEAD, read(plan), re.M | re.S)
+    for line in (m.group(1).splitlines() if m else []):
+        r = ROW_RE.match(line.strip())
+        t = TITLE_LINK_RE.search(r.group(2)) if r else None
+        if t:
+            out[r.group(1)] = t.group(1).strip()
+    return out
+
+
+def attention_reason(path):
+    """The first bullet under "## Attention" in a tracker, one line, without "- "; None when the
+    section has no bullet or only a template placeholder ("[...]" or "(none)")."""
+    if not path or not path.is_file():
+        return None
+    inside = False
+    for _, line in outside_fences(read(path)):
+        if line.startswith("## "):
+            if inside:
+                return None
+            inside = line.strip() == "## Attention"
+        elif inside and line.startswith("- "):
+            text = line[2:].strip()
+            return None if not text or PLACEHOLDER_RE.match(text) else text
+    return None
+
+
+def print_progress(folder, plan, own, bd, q_text):
+    """--progress: the owner's progress reply, from status/sprints.md, the Deliverables titles,
+    the milestone trackers' ## Attention and the Decided lane of queue.md."""
+    sprints = folder / SPRINTS_MD
+    head, data = own.table_rows(read(sprints), "Milestone") if sprints.is_file() else (None, [])
+    epics = collections.defaultdict(lambda: collections.defaultdict(list))
+    for r in data if head else []:
+        m = GRID_ROW_RE.match(r[0]) if r else None
+        if m:
+            epics[int(m.group(1))][m.group(2)].append((m.group(3), r[1:]))
+    titles = spec_titles(plan)
+    trackers = {(num, b["name"]): b["tracker"]
+                for num, bl in new_collect(folder, plan, own)["blocks"].items() for b in bl}
+    done_row = lambda cells: "[x]" in cells and not any(c in UNFINISHED for c in cells)
+    open_row = lambda cells: any(c in UNFINISHED for c in cells)
+
+    def counts(specs):
+        return sum(1 for rows in specs.values() if all(done_row(c) for _, c in rows)), len(specs)
+
+    def title(num, rows):
+        return titles.get(num) or rows[0][0]
+
+    blocks = []
+    for e in sorted(epics):
+        specs = epics[e]
+        if not any(open_row(c) for rows in specs.values() for _, c in rows):
+            continue
+        d, t = counts(specs)
+        lines = [f"**E{e}** · Specs {d}/{t}"]
+        nums = sorted(specs, key=num_key)
+        running = [n for n in nums if any("[ ]" in c for _, c in specs[n])]
+        blocked = [n for n in nums if any("[!]" in c for _, c in specs[n])]
+        if running:
+            lines.append("- **Running**")
+            lines += [f"  - {n} {title(n, specs[n])}" for n in running]
+        if blocked:
+            lines.append("- **Blocked**")
+            for n in blocked:
+                reason = next((r for name, c in specs[n] if "[!]" in c
+                               if (r := attention_reason(trackers.get((n, name))))), None)
+                lines.append(f"  - {n} {title(n, specs[n])}" + (f": {reason}" if reason else ""))
+        blocks.append("\n".join(lines))
+    if blocks:
+        print("\n\n".join(blocks))
+        return
+    ready = [f"**Q{c['num']}**" for c in bd.parse(q_text)["cards"]
+             if c["lane"] == "Decided" and c["box"] != "x"]
+    tail = "Nothing running." + (f" Ready for an epic: {', '.join(ready)}" if ready else "")
+    if epics:
+        last = max(epics)
+        d, t = counts(epics[last])
+        print(f"**E{last}** · Specs {d}/{t}\n\n{tail}")
+    else:
+        print(tail)
+
+
 def slugify(name):
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
@@ -644,9 +745,11 @@ def unacked_notes(path):
 
 
 def main():
-    ap = argparse.ArgumentParser(usage="status.py <release> [--next] [--owner X] [--root PATH]")
+    ap = argparse.ArgumentParser(
+        usage="status.py <release> [--next | --progress] [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("--next", action="store_true")
+    ap.add_argument("--progress", action="store_true")
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: found from the cwd)")
     a = ap.parse_args()
@@ -660,6 +763,9 @@ def main():
     q_text = read(queue) if queue.is_file() else ""
     if a.next:
         print_next(bd, q_text)
+        return
+    if a.progress:
+        print_progress(folder, folder / f"{a.release}-plan.md", load_ownership(), bd, q_text)
         return
     rel = folder.relative_to(root)
     rules = find_rules(root)
