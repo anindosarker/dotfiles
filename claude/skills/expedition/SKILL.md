@@ -49,7 +49,7 @@ Writing a rule: one rule per topic, two to five bullets; each bullet a full sent
 ## Owner input
 
 - Owner words: `record it`, `accepted`, `k`, `epic`, `hold D<n>`, `go`, `epic go`.
-- `progress` (or "status"): while a runner is live and an epic has an unfinished row, the lead types `runner.sh send <release> "PROGRESS"` and ends its turn with the one line `Asked the runner.`; the runner runs `status.py <release> --progress`, corrects the block from what only it knows (a milestone that is built and stopped goes under `Blocked` with who it waits on, the owner or the lead, and for what), and sends the block back by `SendMessage`; the lead passes that message on unchanged, and when the block says a milestone waits on the lead, does that work in the same turn. No runner live, or nothing unfinished: the lead runs `python3 -I ${CLAUDE_SKILL_DIR}/scripts/status.py <release> --progress` itself. Either way the reply is the block and nothing else: no added sentence, no item, no commit id, no ack, no list of waiting work. Example output:
+- `progress` (or "status"): the lead runs `${CLAUDE_SKILL_DIR}/scripts/runner.sh progress <release>` and replies, in that same turn, with its output unchanged and nothing else: no added sentence, no item, no commit id, no ack, no list of waiting work. The script asks the live runner, which answers before anything else in its turn and knows what the files do not (a milestone that is built and stopped, and who it waits on); with no live runner, or no answer within 45 seconds, it prints `status.py --progress` from the files. When the block says a milestone waits on the lead, the lead does that work in the same turn, after the block. Example output:
 
   ```
   **E12** · Specs 6/12
