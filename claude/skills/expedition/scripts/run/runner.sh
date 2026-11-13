@@ -24,14 +24,20 @@
 # send, resume and watch never use the caller's folder.
 #
 # Lead: start, send and fork run inside tmux record the calling window as registry key "lead"
-# ({"tmux": "<session>:<window id>", "session": $CLAUDE_CODE_SESSION_ID, "name": --from or the
-# "from <name>" of the sent line}). start also starts the nudge watcher (pid file
-# ~/.claude/expedition-runners/nudge-watch.pid), which types "NUDGE <source>: <text>" into the
-# lead window for each You Should Know note shown to a runner, a fork or an unknown session;
-# stop stops it once no runner or fork window is live.
+# ({"tmux": "<session>:<window id>", "pane": "<pane id>", "session": $CLAUDE_CODE_SESSION_ID,
+# "name": --from or the "from <name>" of the sent line}). start also starts the nudge watcher
+# (pid file ~/.claude/expedition-runners/nudge-watch.pid), which types "NUDGE <source>: <text>"
+# into the lead pane for each You Should Know note shown to a runner, a fork or an unknown
+# session; stop stops it once no runner or fork window is live.
+#
+# Typing: send and resume type into the entry's pane (recorded at start or fork; an older entry
+# without one: the window's pane running claude), literal text then Enter as a separate key, and
+# only while that pane runs a program that is not a shell; otherwise nothing is typed and the
+# command fails with one line.
 #
 # Registry: ~/.claude/expedition-runners.json, one entry per runner name
-# (name, uuid, tmux target, cwd, release, started, state). Status files:
+# (name, uuid, tmux target, pane, cwd, release, started, state); every write takes a lock and
+# replaces the file by rename. Env overrides (tests): EXPEDITION_REGISTRY, EXPEDITION_STATE_DIR. Status files:
 # ~/.claude/expedition-runners/<name>.status, written by the hooks in
 # templates/runner-settings.json ("idle" on Stop, "busy" on UserPromptSubmit); the hooks find
 # the name in EXPEDITION_RUNNER, exported here before exec.
@@ -40,8 +46,8 @@
 set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-REGISTRY="$HOME/.claude/expedition-runners.json"
-STATE_DIR="$HOME/.claude/expedition-runners"
+REGISTRY="${EXPEDITION_REGISTRY:-$HOME/.claude/expedition-runners.json}"
+STATE_DIR="${EXPEDITION_STATE_DIR:-$HOME/.claude/expedition-runners}"
 SETTINGS="$SKILL_DIR/templates/runner-settings.json"
 BRIEF_TEMPLATE="$SKILL_DIR/templates/runner-brief.md"
 WATCHER="$SKILL_DIR/scripts/run/nudge-watch.sh"
@@ -54,13 +60,30 @@ usage() {
   exit 2
 }
 
-# Registry access through stdlib python: reg get <name> | reg put <name> <json> | reg all
+# Registry access through stdlib python: reg get <name> | reg put <name> <json> | reg all.
+# put and set read, change and write under an exclusive lock on "<registry>.lock" and replace
+# the file through a temp file in the same folder, so two writers never lose an entry.
 reg() {
   python3 -I - "$REGISTRY" "$@" <<'PY'
-import json, sys
+import fcntl, json, os, sys, tempfile
 from pathlib import Path
 path, op = Path(sys.argv[1]), sys.argv[2]
-data = json.loads(path.read_text()) if path.is_file() else {}
+
+def read():
+    return json.loads(path.read_text()) if path.is_file() else {}
+
+def write(change):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(str(path) + ".lock", "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        data = read()
+        change(data)
+        fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".", suffix=".tmp")
+        with os.fdopen(fd, "w") as f:
+            f.write(json.dumps(data, indent=2) + "\n")
+        os.replace(tmp, path)
+
+data = read() if op in ("get", "field", "all") else {}
 if op == "get":
     e = data.get(sys.argv[3])
     print(json.dumps(e) if e else "")
@@ -68,15 +91,13 @@ elif op == "field":
     e = data.get(sys.argv[3]) or {}
     print(e.get(sys.argv[4], ""))
 elif op == "put":
-    e = data.get(sys.argv[3], {})
-    e.update(json.loads(sys.argv[4]))
-    data[sys.argv[3]] = e
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2) + "\n")
+    def change(d):
+        e = d.get(sys.argv[3], {})
+        e.update(json.loads(sys.argv[4]))
+        d[sys.argv[3]] = e
+    write(change)
 elif op == "set":
-    data[sys.argv[3]] = json.loads(sys.argv[4])
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2) + "\n")
+    write(lambda d: d.__setitem__(sys.argv[3], json.loads(sys.argv[4])))
 elif op == "all":
     for name, e in data.items():
         if name == "lead":
@@ -92,6 +113,46 @@ window_alive() {
   [ -n "$target" ] || return 1
   command -v tmux >/dev/null 2>&1 || return 1
   tmux list-windows -a -F '#{session_name}:#{window_id}' 2>/dev/null | grep -qxF "$target"
+}
+
+# pane_typable <pane id>: the pane exists, is not dead, and its foreground program is not a shell.
+pane_typable() {
+  local info
+  info="$(tmux display-message -p -t "$1" '#{pane_dead} #{pane_current_command}' 2>/dev/null)" || return 1
+  case "$info" in
+    "0 "*) ;;
+    *) return 1 ;;
+  esac
+  case "${info#0 }" in
+    ""|zsh|-zsh|bash|-bash|sh|-sh|fish|-fish|dash|-dash|ksh|-ksh|tcsh|-tcsh) return 1 ;;
+  esac
+  return 0
+}
+
+# entry_pane <name>: the entry's recorded pane when it still exists; for an older entry without
+# one, the pane of its window running claude (claude, node, or the version-named binary).
+entry_pane() {
+  local pane
+  pane="$(reg field "$1" pane)"
+  if [ -n "$pane" ]; then
+    tmux display-message -p -t "$pane" '#{pane_id}' 2>/dev/null || true
+    return 0
+  fi
+  tmux list-panes -t "$(reg field "$1" tmux)" -F '#{pane_id} #{pane_current_command}' 2>/dev/null \
+    | awk '$2 == "claude" || $2 == "node" || $2 ~ /^[0-9]+\.[0-9]+\.[0-9]+$/ { print $1; exit }'
+}
+
+# type_into <name> <line>: type the line into the entry's pane and submit it, or fail with one
+# line when the pane is gone or runs a shell (nothing typed).
+type_into() {
+  local pane
+  pane="$(entry_pane "$1")"
+  [ -n "$pane" ] || die "$1: no claude pane found in its window; nothing typed"
+  pane_typable "$pane" || die "$1: pane $pane is not running claude (a shell or gone); nothing typed"
+  tmux send-keys -t "$pane" -l -- "$2"
+  sleep 0.3
+  tmux send-keys -t "$pane" Enter
+  TYPED_PANE="$pane"
 }
 
 # Runner names: "<release> runner<n>". runner_name <release> returns the newest runner that is
@@ -121,16 +182,24 @@ next_runner_name() {
 # name keeps the recorded one.
 record_lead() {
   [ -n "${TMUX:-}" ] || return 0
-  local target name="${1:-}"
+  local target pane name="${1:-}"
   target="$(tmux display-message -p -t "${TMUX_PANE:-}" '#{session_name}:#{window_id}')"
+  pane="$(tmux display-message -p -t "${TMUX_PANE:-}" '#{pane_id}')"
   [ -n "$name" ] || name="$(python3 -I -c 'import json,sys; from pathlib import Path; p=Path(sys.argv[1]); d=json.loads(p.read_text()) if p.is_file() else {}; print((d.get("lead") or {}).get("name", ""))' "$REGISTRY")"
-  reg set lead "$(python3 -I -c 'import json,sys; print(json.dumps({"tmux": sys.argv[1], "session": sys.argv[2], "name": sys.argv[3]}))' "$target" "${CLAUDE_CODE_SESSION_ID:-}" "$name")"
+  reg set lead "$(python3 -I -c 'import json,sys; print(json.dumps({"tmux": sys.argv[1], "pane": sys.argv[4], "session": sys.argv[2], "name": sys.argv[3]}))' "$target" "${CLAUDE_CODE_SESSION_ID:-}" "$name" "$pane")"
 }
 
+# watch_running: the pid file names a live nudge-watch.sh process; a stale pid file (no such
+# process, or a pid reused by another program) is removed.
 watch_running() {
   local pid
   pid="$(cat "$WATCH_PID" 2>/dev/null || true)"
-  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+  [ -n "$pid" ] || return 1
+  if [[ "$pid" =~ ^[0-9]+$ ]] && ps -p "$pid" -o command= 2>/dev/null | grep -qF nudge-watch.sh; then
+    return 0
+  fi
+  rm -f "$WATCH_PID"
+  return 1
 }
 
 watch_start() {
@@ -248,9 +317,10 @@ cmd_start() {
 
   local session
   session="$(tmux display-message -p '#{session_name}')"
-  target="$(tmux new-window -d -P -F '#{session_name}:#{window_id}' -t "$session:" -n "$name" -c "$cwd" "$line")"
+  local pane
+  read -r target pane < <(tmux new-window -d -P -F '#{session_name}:#{window_id} #{pane_id}' -t "$session:" -n "$name" -c "$cwd" "$line")
   printf 'busy' > "$(file_of "$name").status"
-  reg put "$name" "$(python3 -I -c 'import json,sys,datetime; print(json.dumps({"name": sys.argv[1], "uuid": sys.argv[2], "tmux": sys.argv[3], "cwd": sys.argv[4], "release": sys.argv[5], "started": datetime.datetime.now().isoformat(timespec="seconds"), "state": "running"}))' "$name" "$uuid" "$target" "$cwd" "$release")"
+  reg put "$name" "$(python3 -I -c 'import json,sys,datetime; print(json.dumps({"name": sys.argv[1], "uuid": sys.argv[2], "tmux": sys.argv[3], "pane": sys.argv[6], "cwd": sys.argv[4], "release": sys.argv[5], "started": datetime.datetime.now().isoformat(timespec="seconds"), "state": "running"}))' "$name" "$uuid" "$target" "$cwd" "$release" "$pane")"
   if [ "$resume" = 1 ]; then
     echo "$name resumed in $target (session $uuid)"
   else
@@ -347,10 +417,11 @@ cmd_fork() {
   fi
   local -a cmd
   if [ "$resume" = 1 ]; then
-    cmd=(claude --resume "$uuid" -n "$name" --dangerously-skip-permissions --model "$model" "$prompt")
+    cmd=(claude --resume "$uuid" -n "$name" --dangerously-skip-permissions --model "$model"
+         --settings "$SETTINGS" "$prompt")
   else
     cmd=(claude --resume "$parent" --fork-session --session-id "$uuid" -n "$name"
-         --dangerously-skip-permissions --model "$model" "$prompt")
+         --dangerously-skip-permissions --model "$model" --settings "$SETTINGS" "$prompt")
   fi
   local line
   line="cd $(printf '%q' "$cwd") && exec$(printf ' %q' "${cmd[@]}")"
@@ -359,8 +430,9 @@ cmd_fork() {
     echo "$line"
     exit 0
   fi
-  target="$(tmux new-window -d -P -F '#{session_name}:#{window_id}' -t "$(tmux display-message -p '#{session_name}'):" -n "$name" -c "$cwd" "$line")"
-  reg put "$name" "$(python3 -I -c 'import json,sys,datetime; print(json.dumps({"name": sys.argv[1], "kind": "fork", "uuid": sys.argv[6], "parent": sys.argv[2], "tmux": sys.argv[3], "cwd": sys.argv[4], "release": sys.argv[5], "started": datetime.datetime.now().isoformat(timespec="seconds"), "state": "running"}))' "$name" "$parent" "$target" "$cwd" "$release" "$uuid")"
+  local pane
+  read -r target pane < <(tmux new-window -d -P -F '#{session_name}:#{window_id} #{pane_id}' -t "$(tmux display-message -p '#{session_name}'):" -n "$name" -c "$cwd" "$line")
+  reg put "$name" "$(python3 -I -c 'import json,sys,datetime; print(json.dumps({"name": sys.argv[1], "kind": "fork", "uuid": sys.argv[6], "parent": sys.argv[2], "tmux": sys.argv[3], "pane": sys.argv[7], "cwd": sys.argv[4], "release": sys.argv[5], "started": datetime.datetime.now().isoformat(timespec="seconds"), "state": "running"}))' "$name" "$parent" "$target" "$cwd" "$release" "$uuid" "$pane")"
   if [ "$resume" = 1 ]; then
     echo "$name resumed in $target (session $uuid, model $model)"
   else
@@ -380,16 +452,14 @@ cmd_resume() {
   state="$(reg field "$name" state)"
   target="$(reg field "$name" tmux)"
   if window_alive "$target"; then
-    tmux send-keys -t "$target" -l "$line"
-    sleep 0.3
-    tmux send-keys -t "$target" Enter
-    echo "typed into $target: $line"
+    type_into "$name" "$line"
+    echo "typed into $target ($TYPED_PANE): $line"
   elif [[ "$1" =~ ^v[0-9]+\.[0-9]+\.x$ ]]; then
     [ "$state" != "stopped" ] || reg put "$name" '{"state": "running"}'
     cmd_start "$1"
   else
     echo "$name window is gone. Resume it in a terminal of its own:"
-    echo "cd $(printf '%q' "$(reg field "$name" cwd)") && claude -n $(printf '%q' "$name") --dangerously-skip-permissions --resume $uuid"
+    echo "cd $(printf '%q' "$(reg field "$name" cwd)") && claude -n $(printf '%q' "$name") --dangerously-skip-permissions --settings $(printf '%q' "$SETTINGS") --resume $uuid"
   fi
 }
 
@@ -406,18 +476,16 @@ cmd_send() {
   [ "$(reg field "$name" state)" != "stopped" ] || die "$name is stopped: runner.sh start $1"
   target="$(reg field "$name" tmux)"
   window_alive "$target" || die "$name window is gone: runner.sh start $1 resumes it"
-  tmux send-keys -t "$target" -l "$line"
-  sleep 0.3
-  tmux send-keys -t "$target" Enter
+  type_into "$name" "$line"
   # A long line can stay in the input box after the first Enter: check, send Enter once more.
   sleep 1
   # The input box is the text between the last two rule lines of the pane.
-  if tmux capture-pane -p -t "$target" \
+  if tmux capture-pane -p -t "$TYPED_PANE" \
       | awk '/^[[:space:]]*─/ { n++; box[n] = buf; buf = ""; next } { buf = buf $0 } END { print box[n] }' \
-      | grep -qF -- "${line:0:40}"; then
-    tmux send-keys -t "$target" Enter
+      | grep -qF -- "${line:0:40}" && pane_typable "$TYPED_PANE"; then
+    tmux send-keys -t "$TYPED_PANE" Enter
   fi
-  echo "typed into $target: $line"
+  echo "typed into $target ($TYPED_PANE): $line"
 }
 
 [ $# -ge 1 ] || usage
