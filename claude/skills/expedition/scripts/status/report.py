@@ -10,20 +10,24 @@ plan/epics/E<n>.md, queue.md, status/index.html, status/sprints.md (sprints/refr
 (one per milestone, NN-<slug>-tracker.md). The ownership facts come from
 lib/ownership.py compute, in memory.
 
-Decisions (### D<n>) get a derived state table from the spec files that cite them and the
-Status lines of those specs' milestone trackers. Queue cards (queue.md, a kanban board, see
+Decisions (the **D<n>** cards of the decisions.md board, lib/decisions.py) are listed with the
+specs citing them and their state from the Done rule (to do, in progress, done, superseded by
+D<n>, deferred). Board gaps, one line each: a missing lane, a card without a **D<n>** token, a
+tag other than #superseded, #deferred, #E<n> and #R<n>, a duplicate id, ids out of order inside
+a lane, a card whose lane disagrees with the Done rule (a hand drag; the next sync moves it back),
+a tick that disagrees with its lane. Queue cards (queue.md, a kanban board, see
 lib/board.py) are listed with their lane. Queue gaps: an unknown or missing lane (a "**Complete**"
 marker line under a lane heading is tolerated), a card without a **Q<n>** token, a duplicate id,
 a tag on a title line that is not #D<n> or #E<n>, a leftover "Decision:" sub-bullet, a Decided
 card without #D<n> or with a #D<n> naming a missing decision, a Decided card whose tick or #E<n>
-tag disagrees with the decision's tag line (the next queue/item.py, epics/tag.py or
+tag disagrees with the lane of its decision (the next queue/item.py, epics/tag.py or
 sprints/refresh.py run syncs it), a (Q<n>) or "Source: Q<n>" citation of a missing card. process.md (## P<n>) must
 exist with no placeholder left; (P<n>) citations must be defined.
 
-Epics: the tag line under each "### D<n>" heading ("[E<n>]", "[Done]  [E<n>]", or "[Done]"
-for a decision with nothing to run) puts the decision in an epic. The summary lists deciding
-(no tag), in E<n> (no row of the epic in status/sprints.md carries a run mark), running (one does)
-and done ([Done]). The stage line reports discuss and run together ("Stage: discuss, run
+Epics: the #E<n> tag of a decision card puts the decision in an epic. The summary lists deciding
+(the To do lane), done with nothing to run (in Done, no epic tag, not superseded or deferred),
+in E<n> (no row of the epic in status/sprints.md carries a run mark), running (one does) and done
+(every decision of the epic in Done). The stage line reports discuss and run together ("Stage: discuss, run
 (E2, E3)"); a card in Open counts as discuss, never as a stage of its own.
 Also under Epics: the decisions still editable in place (no citing spec has a status/sprints.md row
 with "[ ]" or "[x]", not superseded); a supersede marked on one side only; an unbuilt spec
@@ -42,7 +46,8 @@ status/sprints.md missing, without a "| Milestone" grid, with text under the gri
 not one of [x], [ ], ·, [!] or blank, or with rows that differ from the milestones of the specs
 with an Epic line. Ownership also prints each tagged epic's critical path,
 computed on the fly. A folder without plan/ is refused (migrate/layout.py), a folder still on
-the old queue files too (migrate/queue.py), a folder that still has status/ownership.md too
+the old queue files too (migrate/queue.py), a decisions.md in the heading format too
+(migrate/decisions.py), a folder that still has status/ownership.md too
 (migrate/epics.py), a folder that still has run/trackers/fix-*-tracker.md too (migrate/fixes.py).
 A tracker Status of merged counts as done. A tracker no milestone owns counts as citing the
 queue cards named on its first line.
@@ -71,10 +76,6 @@ SPECS_DIR, EPICS_DIR, TRACKERS_DIR, QUEUE_MD = C.SPECS_DIR, C.EPICS_DIR, C.TRACK
 SPRINTS_MD, INDEX_HTML = C.SPRINTS_MD, C.INDEX_HTML
 
 SPEC_RE = re.compile(r"^(\d{2}(?:\.\d+)?)-.+\.md$")
-LEGACY_ITEM_RE = re.compile(r"^(\d+)\. ")
-SECTION_RE = re.compile(r"^#{1,3}\s")
-SUPERSEDED_RE = re.compile(r"\(superseded by ([A-Z]\d+)\)")
-DEFERRED_RE = re.compile(r"^\s*-\s*Deferred to\b")
 LIST = r"(\d+(?:\s*(?:,|and|to)\s*\d+)*)"
 DEC_PAREN_RE = re.compile(r"\(decisions? " + LIST + r"\)")
 DEC_BARE_RE = re.compile(r"\bdecision (\d+)(?![\d-])", re.I)
@@ -100,33 +101,6 @@ def expand(listing):
     return nums
 
 
-def parse_items(path, letter):
-    """Return (fmt, items): items is a list of (num, heading, body lines).
-
-    fmt is 'ids' for ### <letter><n> headings, 'legacy' for a numbered list,
-    'none' when the file has neither.
-    """
-    if not path.is_file():
-        return "none", []
-    head_re = re.compile(r"^###\s+" + letter + r"(\d+)\b(.*)$")
-    lines = list(fence_flags(read(path)))
-    for fmt, start_re in (("ids", head_re), ("legacy", LEGACY_ITEM_RE)):
-        items = []
-        for line, inside in lines:
-            m = None if inside else start_re.match(line)
-            if m:
-                rest = m.group(2) if fmt == "ids" else ""
-                items.append((int(m.group(1)), rest, []))
-            elif items and not inside and SECTION_RE.match(line):
-                items.append(None)
-            elif items and items[-1] is not None:
-                items[-1][2].append(line)
-        items = [i for i in items if i is not None]
-        if items:
-            return fmt, items
-    return "none", []
-
-
 def cites(text, letter, legacy):
     """Numbers cited as (D7) or (D6, D7); legacy adds (decision N) forms."""
     nums = set()
@@ -143,57 +117,65 @@ def cites(text, letter, legacy):
     return nums
 
 
-def item_state(heading, body, citing, statuses):
-    sup = SUPERSEDED_RE.search(heading)
-    if sup:
-        return f"superseded by {sup.group(1)}"
-    if any(DEFERRED_RE.match(l) for l in body):
+def decision_state(card, lane):
+    """The state column of a decision: its Done rule lane, or why it is closed."""
+    if card["sup_by"]:
+        return f"superseded by D{card['sup_by'][0]}"
+    if card["deferred"]:
         return "deferred"
-    if not citing:
-        return "unplanned"
-    st = [statuses[n] for n in citing]
-    if any(s is None for s in st):
-        return "unknown"
-    states = {"done" if s[0] == "merged" else s[0] for s in st}
-    if states == {"done"}:
-        shas = [s[1] for s in st if s[1]]
-        return f"done ({', '.join(shas)})" if shas else "done"
-    if states & {"running", "done"}:
-        return "running"
-    return "planned"
+    return lane.lower()
 
 
-def state_table(label, letter, path, docs, statuses, legacy_cites, extra=()):
-    fmt, items = parse_items(path, letter)
-    note = {"ids": "", "legacy": ", legacy numbered list", "none": ""}[fmt]
-    print(f"{label}: {len(items)} in {path.name}{note}")
-    if fmt == "none" and path.is_file():
-        heads = sum(1 for _, l in outside_fences(read(path)) if l.startswith("### "))
-        if heads:
-            print(f"  legacy format, {heads} headings")
+def decision_table(folder, path, docs, extra=()):
+    """Print the Decisions section: one row per card (id, citing specs, state), then the board
+    gaps. Returns (cards, {D: rule lane})."""
+    dc = C.load("lib/decisions")
+    parsed = dc.parse(read(path)) if path.is_file() else {"lanes": [], "cards": [], "stray": []}
+    cards = parsed["cards"]
+    print(f"Decisions: {len(cards)} in {path.name}")
     texts = {num: read(p) for num, p in docs}
     texts.update(dict(extra))
-    cited = {num: cites(t, letter, legacy_cites)
-             for num, t in texts.items()}
-    rows, state_of = [], {}
-    for n, heading, body in items:
-        citing = sorted((num for num, c in cited.items() if n in c), key=num_key)
-        state_of[n] = item_state(heading, body, citing, statuses)
-        rows.append((f"{letter}{n}", ", ".join(citing) or "-", state_of[n]))
+    cited = {num: cites(t, "D", True) for num, t in texts.items()}
+    want = dc.rule_lanes(folder, cards)
+    rows = []
+    for c in sorted(cards, key=lambda c: c["num"]):
+        citing = sorted((num for num, ci in cited.items() if c["num"] in ci), key=num_key)
+        rows.append((f"D{c['num']}", ", ".join(citing) or "-", decision_state(c, want[c["num"]])))
     if rows:
         w1 = max(len(r[0]) for r in rows) + 2
         w2 = max(len(r[1]) for r in rows) + 2
         for a, b, c in rows:
             print(f"  {a.ljust(w1)}{b.ljust(w2)}{c}")
-    defined = [n for n, _, _ in items]
+    names = [l["name"] for l in parsed["lanes"]]
+    for n in dc.LANES:
+        if n not in names:
+            print(f"  lane '## {n}' missing")
+    for i, line in parsed["stray"]:
+        print(f"  {path.name}:{i + 1}: card without a **D<n>** token: {line.strip()[:70]}")
+    for c in cards:
+        bad = [f"#{t}" for t in c["tags"] if not dc.TAG_OK_RE.match(t)]
+        if bad:
+            print(f"  D{c['num']}: tag {', '.join(bad)} on the title line: only #superseded, #deferred, #E<n>, #R<n>")
+    for lane in dc.LANES:
+        nums = [c["num"] for c in cards if c["lane"] == lane]
+        if nums != sorted(nums):
+            print(f"  {lane}: ids out of order: {', '.join(f'D{n}' for n in nums)}")
+    for c in cards:
+        if c["lane"] in dc.LANES and c["lane"] != want[c["num"]]:
+            print(f"  D{c['num']}: in {c['lane']}, the Done rule says {want[c['num']]} (a hand drag): "
+                  f"the next sync moves it")
+        elif c["lane"] in dc.LANES and c["ticked"] != (c["lane"] == dc.DONE):
+            print(f"  D{c['num']}: {'ticked' if c['ticked'] else 'unticked'} in {c['lane']}: "
+                  f"the next sync sets the tick of its lane")
+    defined = [c["num"] for c in cards]
     all_cited = set().union(*cited.values()) if cited else set()
     undefined = sorted(all_cited - set(defined))
     if undefined:
-        print(f"  cited but undefined: {', '.join(f'{letter}{n}' for n in undefined)}")
-    dups = sorted(n for n, c in collections.Counter(defined).items() if c > 1)
+        print(f"  cited but undefined: {', '.join(f'D{n}' for n in undefined)}")
+    dups = sorted(n for n, k in collections.Counter(defined).items() if k > 1)
     if dups:
-        print(f"  duplicate numbers: {', '.join(f'{letter}{n}' for n in dups)}")
-    return items, state_of
+        print(f"  duplicate numbers: {', '.join(f'D{n}' for n in dups)}")
+    return cards, want
 
 
 def q_cites(text):
@@ -251,7 +233,7 @@ def queue_report(folder, bd, text, docs, extra, dec_nums, tags):
             if (have, c["e"]) != (box, epic):
                 shows = have + (f" #E{c['e']}" if c["e"] else "")
                 says = box + (f" #E{epic}" if epic else "")
-                print(f"  Q{c['num']}: shows {shows}, decisions.md says {says} for D{c['d']}: "
+                print(f"  Q{c['num']}: shows {shows}, the lane of D{c['d']} says {says}: "
                       f"the next queue/item.py, epics/tag.py or sprints/refresh.py run syncs it")
     have = {c["num"] for c in cards}
     sources = [folder / "decisions.md", folder / f"{folder.parent.name}-plan.md"]
@@ -463,8 +445,8 @@ def main():
     d = own.new_collect(folder, plan)
     docs, statuses = d["docs"], d["statuses"]
 
-    dec_items, dec_states = state_table("Decisions", "D", decisions, docs, statuses, True)
-    open_q = queue_report(folder, bd, q_text, docs, d["extra"], {n for n, _, _ in dec_items},
+    dec_cards, _ = decision_table(folder, decisions, docs)
+    open_q = queue_report(folder, bd, q_text, docs, d["extra"], {c["num"] for c in dec_cards},
                           bd.decision_tags(own, folder))
 
     new_print(folder, plan, d, own)
@@ -496,23 +478,22 @@ def main():
 
 
     print("Epics:")
-    tags = own.read_tags(folder)
-    nums = [n for n, _, _ in dec_items]
-    closed = lambda n: dec_states.get(n, "").startswith(("superseded", "deferred"))
+    nums = sorted(c["num"] for c in dec_cards)
+    card = {c["num"]: c for c in dec_cards}
     marks = epic_marks(folder / SPRINTS_MD)
-    untagged = lambda n: not tags.get(n, {}).get("epic") and not tags.get(n, {}).get("done")
-    deciding = [n for n in nums if untagged(n) and not closed(n)]
-    done_alone = [n for n in nums if tags.get(n, {}).get("done") and not tags[n].get("epic")]
+    deciding = [n for n in nums if card[n]["lane"] == "To do"]
+    done_alone = [n for n in nums if card[n]["lane"] == "Done" and not card[n]["epic"]
+                  and not card[n]["sup_by"] and not card[n]["deferred"]]
     groups = collections.defaultdict(list)
     for n in nums:
-        if tags.get(n, {}).get("epic"):
-            groups[tags[n]["epic"]].append(n)
+        if card[n]["epic"]:
+            groups[card[n]["epic"]].append(n)
     running = []
     print(f"  deciding: {', '.join(f'D{n}' for n in deciding) or 'none'}")
     if done_alone:
         print(f"  done, nothing to run: {', '.join(f'D{n}' for n in done_alone)}")
     for e in sorted(groups):
-        if all(tags[n]["done"] for n in groups[e]):
+        if all(card[n]["lane"] == "Done" for n in groups[e]):
             state = " done"
         else:
             state = " running" if marks.get(e) else ""
@@ -522,10 +503,10 @@ def main():
     gone = {**bullets, **heads}
     for old, new in sorted(bullets.items()):
         if heads.get(old) != new:
-            print(f"  D{new} supersedes D{old}, but the D{old} heading lacks (superseded by D{new})")
+            print(f"  D{new} supersedes D{old}, but the D{old} title lacks (superseded by D{new})")
     for old, new in sorted(heads.items()):
         if bullets.get(old) != new:
-            print(f"  D{old} heading says superseded by D{new}, but D{new} lacks '- Supersedes D{old}.'")
+            print(f"  D{old} title says superseded by D{new}, but D{new} lacks '- Supersedes D{old}.'")
     cited = {num: own.spec_cites(p) for num, p in docs}
     built = built_specs(folder / SPRINTS_MD)
     for num, c in cited.items():
@@ -557,7 +538,7 @@ def main():
         if not (epics_dir / f"{nxt}.md").is_file():
             print(f"  plan/epics/{nxt}.md missing: epics/new.py {a.release} {nxt}")
     parts = []
-    if not dec_items or deciding or open_q:
+    if not dec_cards or deciding or open_q:
         parts.append("discuss")
     if running:
         parts.append(f"run ({', '.join(running)})")

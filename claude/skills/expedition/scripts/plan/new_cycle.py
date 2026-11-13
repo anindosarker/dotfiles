@@ -44,17 +44,12 @@ def write_new(path, text):
 
 
 def from_template(name, release, today):
-    """Template head up to its Round heading, as Round 1 of a new release (the whole template
-    when it has no Round heading)."""
+    """The template with the release filled in."""
     path = C.TEMPLATES / name
     if not path.is_file():
         die(f"template missing: {path}")
-    out = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if line.startswith("## Round"):
-            out.append(f"## Round 1: discussion, {today}")
-            break
-        out.append(line.replace("[release]", release).replace("[cycle]", release))
+    out = [line.replace("[release]", release).replace("[cycle]", release)
+           for line in path.read_text(encoding="utf-8").splitlines()]
     return "\n".join(out) + "\n"
 
 

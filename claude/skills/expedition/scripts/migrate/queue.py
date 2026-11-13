@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Move a release folder to queue.md as a kanban board in the current card format (lib/board.py
-has the format: tags #D<n> and #E<n> only, the tick in Decided mirrors decisions.md).
+has the format: tags #D<n> and #E<n> only, the tick in Decided mirrors the lane of the decision
+in decisions.md).
 
 Usage: python3 -I migrate/queue.py <release> [--dry-run] [--owner X] [--root PATH]
 
@@ -14,8 +15,8 @@ Later cards "[ ]", Dropped and Autofix "[x]", Decided cards ticked and tagged #E
 board.sync; card order, facts and lanes unchanged; the frontmatter restored when missing; the
 settings block kept byte for byte, with "tag-action":"kanban" added only when that key is
 absent. A board already in the current format gets the same pass, which changes nothing.
-Prints cards per lane, Decided cards ready / in an epic / done without epic / superseded or
-deferred without a tag, the ready cards with their D ids, and the from tags removed.
+Prints cards per lane, Decided cards ready / in progress / done (the lane of their decision),
+the ready cards with their D ids, and the from tags removed.
 
 (b) A queue.md in the heading format ("### Q<n> <title>", then "- Tags: <value>" and
 "- From: <who>.") is converted in place: ids and titles kept, the Tags value picks the lane
@@ -48,6 +49,7 @@ heading format below, then converted as in (b):
 - Prints the old-id to Q-id mapping, the entries left untagged, and every bare F<digits> or
   A<digits> token it did not rewrite as "path:line: text", for a person to settle.
 
+Refuses a folder whose decisions.md is still in the heading format (migrate/decisions.py first).
 Prints the count of cards per lane and any entry it could not place. --dry-run prints the same
 and writes nothing. Commits nothing. Refuses a folder that has both queue.md and an old file.
 
@@ -81,7 +83,6 @@ ATT_DIRS = ("run/attentions", "attentions")
 QUEUE = "queue.md"
 F_HEAD_RE = re.compile(r"^###\s+F(\d+)\b\s*(.*?)\s*$")
 A_HEAD_RE = re.compile(r"^#{2,3}\s+A(\d+)\b\s*(.*?)\s*$")
-D_HEAD_RE = re.compile(r"^###\s+D(\d+)\b")
 TAG_LINE_RE = re.compile(r"^\s*(?:\[[^\]\n]+\]\s*)+$")
 TAG_RE = re.compile(r"\[([^\]\n]+)\]")
 ID = r"[DFAPQ]\d+"
@@ -228,25 +229,23 @@ def recard(text, tags):
 
 
 def decided_counts(text, tags):
-    """(ready [(Q, D)], in an epic, done without epic, closed without a tag) of the Decided cards,
-    from decision_tags()."""
+    """(ready [(Q, D)], in progress, done) of the Decided cards, from the lanes of their
+    decisions (decision_tags())."""
     bd = load("board")
-    ready, epic, done, closed = [], 0, 0, 0
+    ready, epic, done = [], 0, 0
     for c in bd.parse(text)["cards"]:
         if c["lane"] != "Decided":
             continue
         t = tags.get(c["d"]) if c["d"] else None
         if t is None:
             continue
-        if t["epic"]:
+        if t["lane"] == "In progress":
             epic += 1
-        elif t["done"]:
+        elif t["lane"] == "Done":
             done += 1
-        elif t["closed"]:
-            closed += 1
         else:
             ready.append((c["num"], c["d"]))
-    return ready, epic, done, closed
+    return ready, epic, done
 
 
 die, read = C.die, C.read
@@ -314,33 +313,23 @@ def ids_in(text):
 
 
 def decision_cites(folder):
-    """{old id: {D numbers}} from Source: lines and first-bullet Fixes lines of decisions.md."""
+    """{old id: {D numbers}} from Source: lines and first-bullet Fixes lines of the decisions.md
+    board."""
     out = collections.defaultdict(set)
-    path = folder / "decisions.md"
-    if not path.is_file():
-        return out
-    d, first = None, False
-    for line, inside in fenced(read(path).splitlines()):
-        if inside:
-            continue
-        m = D_HEAD_RE.match(line)
-        if m:
-            d, first = int(m.group(1)), True
-            continue
-        if line.startswith("#"):
-            d = None
-            continue
-        if d is None:
-            continue
-        for s in SOURCE_RE.finditer(line):
-            for i in ids_in(s.group(2)):
-                out[i].add(d)
-        if first and line.lstrip().startswith("- "):
-            f = FIXES_RE.match(line)
-            if f:
-                for i in ids_in(f.group(2)):
+    for card in C.load("lib/decisions").read_cards(folder)["cards"]:
+        d, first = card["num"], True
+        for line, inside in fenced(card["body"]):
+            if inside:
+                continue
+            for s in SOURCE_RE.finditer(line):
+                for i in ids_in(s.group(2)):
                     out[i].add(d)
-            first = False
+            if first and line.lstrip().startswith("- "):
+                f = FIXES_RE.match(line)
+                if f:
+                    for i in ids_in(f.group(2)):
+                        out[i].add(d)
+                first = False
     return out
 
 
@@ -534,6 +523,9 @@ def main():
     folder = root / ".ai" / "plans" / a.release / owner
     if not folder.is_dir():
         die(f"release folder missing: {folder}")
+    old_d = C.load("migrate/decisions").refusal(folder, a.release)
+    if old_d:
+        die(old_d)
     old = old_files(folder)
     has_queue = (folder / QUEUE).is_file()
     if has_queue and old:
@@ -552,9 +544,8 @@ def main():
         else:
             board_text, counts, unplaced = convert(text, tags)
             report(counts, unplaced)
-        ready, epic, done, closed = decided_counts(board_text, tags)
-        print(f"Decided: {len(ready)} ready, {epic} in an epic, {done} done without epic, "
-              f"{closed} superseded or deferred without a tag")
+        ready, epic, done = decided_counts(board_text, tags)
+        print(f"Decided: {len(ready)} ready (decision in To do), {epic} in progress, {done} done")
         print(f"Ready: {', '.join(f'Q{q} (D{d})' for q, d in ready) or 'none'}")
         if a.dry_run:
             print("dry run; nothing written")

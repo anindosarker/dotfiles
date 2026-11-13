@@ -161,7 +161,7 @@ def release_folder(root, owner, release):
     if not (folder / "plan").is_dir():
         die(f"{folder} has the old layout (no plan/): run python3 -I "
             f"{script('migrate/layout.py')} {release}")
-    old = load("migrate/queue").refusal(folder, release)
+    old = load("migrate/queue").refusal(folder, release) or load("migrate/decisions").refusal(folder, release)
     if old:
         die(old)
     if (folder / LEGACY_OWNERSHIP_MD).is_file():

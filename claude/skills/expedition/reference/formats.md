@@ -13,16 +13,16 @@
 
 ## Shared rule
 
-Every item has an ID heading. Its first bullet is required and self-explanatory: a reader understands the item from it alone. Everything after it is open-ended, but in bullets. Templates: [../templates/](../templates/).
+Every item has an ID: the `**Q<n>**` or `**D<n>**` token of its card, a heading elsewhere. Its first bullet is required and self-explanatory: a reader understands the item from it alone. Everything after it is open-ended, but in bullets. Templates: [../templates/](../templates/).
 
 ## Shared files
 
 `decisions.md`, `queue.md` and the epic files are written by both sessions, lead and runner.
 
-- `[E<n>]` is written by whoever sends RUN. `[Done]` is written by the runner on merge, or by the lead when a decision with nothing to run is recorded.
+- The lane, tick and tags of a `decisions.md` card are written by the scripts only: `queue/item.py` (a new card in To do), `epics/tag.py` through `run/go.py` (`#E<n>`, In progress), the sync in `sprints/refresh.py`, `sprints/mark.py`, `plan/new_fix.py` and every `queue/item.py` call (the lanes of the Done rule), `decisions/close.py` (Done, nothing to run) and `decisions/supersede.py`. A session writes only a decision's bullets.
 - Re-read the file right before every write, make a targeted edit, commit at once. No held edits.
 - The next D or Q number is read from the file at write time, never from memory.
-- Ids come only from `python3 -I <skill>/scripts/queue/item.py <release> D|Q "<title>"`, never typed. It locks, appends the heading or the card, commits and prints the id; the session then writes a decision's bullets under its heading.
+- Ids come only from `python3 -I <skill>/scripts/queue/item.py <release> D|Q "<title>"`, never typed. It locks, appends the card, commits and prints the id; the session then writes a decision's bullets under its card, each indented with one tab.
 - No id is mentioned in chat or a tracker before it is allocated: refer to the item by its title.
 - An id never changes after allocation.
 - A duplicate filed twice keeps both ids. The later card gets the fact `Same as Q<n>.` and moves to Dropped.
@@ -92,12 +92,12 @@ kanban-plugin: basic
   | Lane | Box | Meaning |
   |---|---|---|
   | Open, Later | `[ ]` | Not decided |
-  | Decided | `[ ]` | Ready for an epic: the decision has no tag |
-  | Decided | `[x]` with `#E<n>` | In an epic: the decision carries `[E<n>]` |
-  | Decided | `[x]`, no `#E` tag | Closed: the decision carries `[Done]` alone, or is superseded or deferred |
+  | Decided | `[ ]` | Ready for an epic: the decision is in To do |
+  | Decided | `[x]` with `#E<n>` | In an epic: the decision is In progress |
+  | Decided | `[x]`, no `#E` tag | Closed: the decision is Done (merged, nothing to run, superseded or deferred) |
   | Dropped, Autofix | `[x]` | Closed |
 
-  `decisions.md` is the record. The tick and `#E<n>` of a Decided card mirror the decision's tag line; `epics/tag.py`, `sprints/refresh.py` and every `queue/item.py` call sync them, and `status/report.py` flags a card that disagrees.
+  `decisions.md` is the record. The tick and `#E<n>` of a Decided card mirror the lane of its decision; `epics/tag.py`, `sprints/refresh.py` and every `queue/item.py` call sync them, and `status/report.py` flags a card that disagrees.
 - Facts are sub-bullets indented with one tab: path:line, measurement, lookup result. Every sub-bullet is a fact. Options are never written in the file. A `#word` that is not a tag is written in backticks, so the extension shows no tag badge.
 - New cards go to the end of Open. A moved card goes, with its facts, to the end of its lane. Decided only through `queue/item.py <release> D "<title>" --source Q<n>`, which adds `#D<n>` to the title and leaves the card unticked; a card already in Decided keeps the highest decision number. A card leaving Decided loses its `#D` and `#E` tags.
 - `plan/new_fix.py` moves each card a fix cites to Autofix, ticked and without tags; the fix is traced through its task line and its tracker's first line, for example `(Q9)`.
@@ -108,46 +108,60 @@ kanban-plugin: basic
 
 ## decisions.md
 
-One file per release, template [../templates/decisions.md](../templates/decisions.md). Triage decisions continue the numbering.
+One file per release, template [../templates/decisions.md](../templates/decisions.md): a kanban board in the card grammar of `queue.md`. Triage decisions continue the numbering.
 
 ```md
-# v0.4.x decisions
+---
+kanban-plugin: basic
+---
 
-## Round 1: discussion, 2026-10-21
+## To do
 
-### D1 Rewrite internals on TanStack v9 primitives
+- [ ] **D96** A click in a date filter box starts typing at its first part #R4
+	- Native date inputs put the caret on the segment under the click, so typed digits fill only the year.
+	- Source: Q80
 
-- First bullet, required: explains the decision.
-- Then what changes and what stays.
-- Then anything: bullets, code blocks, examples, sub-bullets.
+## In progress
 
-## Round 2: triage of E1
+- [ ] **D89** Release 0.9.4 ships E12 #E12 #R4
+	- Spec 48 ships E12 as 0.9.4.
 
-### D9 Setters pass on*Change a function updater, like core
+## Done
 
-- ...
-- Source: Q2
+- [x] **D9** Process file audited #R1
+	- First bullet, required: explains the decision.
+- [x] **D15** Release 0.9.0 after E2 (superseded by D28) #superseded #E3 #R2
+	- ...
+- [x] **D28** The 0.9.0 release waits for the owner's approval #E7 #R3
+	- Supersedes D15.
+	- Then anything: bullets, code blocks, examples, sub-bullets.
+
+%% kanban:settings
+{"kanban-plugin":"basic","lane-width":600,"date-format":"YYYY-MM-DD","time-format":"HH:mm","tag-action":"kanban","set-view":"list","full-list-lane-width":true,"show-add-list":false,"show-archive-all":false,"custom-title":"v0.9.x decisions"}
+%%
 ```
 
-- Tag line, directly under the heading: none (deciding), in an epic, done, or done with nothing to run:
-
-  ```
-  ### D1 Toolbar above the frame
-
-  ### D1 Toolbar above the frame
-  [E1]
-
-  ### D1 Toolbar above the frame
-  [Done]  [E1]
-
-  ### D9 Process file audited
-  [Done]
-  ```
-
 - Accepted decisions only. Questions stay in chat.
-- Built: a milestone citing the decision has a `[ ]` or `[x]` cell in `status/sprints.md`. Before that, a change is an edit in place, same id; from then on, a supersede.
-- Supersede marks both sides: the old heading becomes `### D7 (superseded by D15) ...`, the new decision's first bullet is `- Supersedes D7.` The heading mark is the only edit an old decision ever gets.
-- Deferred to another release: add the bullet `- Deferred to v0.5.x`. That release's specs cite it as `(v0.4.x D9)`.
+- Three lanes, always all present, in this order. The lane is the decision's state, and the checkbox is `[x]` only in Done:
+
+  | Lane | Meaning |
+  |---|---|
+  | To do | Decided, in no epic |
+  | In progress | In an epic, its own work not all merged |
+  | Done | Its own work merged, closed with nothing to run, superseded, or deferred to another release |
+
+- A card is `- [ ] **D<n>** <title> <tags>`; the decision's bullets follow, each indented with one tab. A bullet's nested lines and a fenced code block keep their own indentation after that tab; a blank line inside a fence is a lone tab, so the card stays one card. Cards are ordered by D number inside each lane. A number is never reused; the next is the highest in the file plus one.
+- Tags, at the end of the title line only, space separated, in this order: `#superseded` or `#deferred` when it applies, `#E<n>` when the decision is in an epic, `#R<n>` the round it was recorded in. No other tag. A new decision takes the highest round in the file; `queue/item.py <release> D "<title>" --new-round` starts the next one.
+- The Done rule, computed by `lib/decisions.py` for every script:
+  1. A `(superseded by D<n>)` mark or a `- Deferred to` bullet: Done.
+  2. Rows with a Spec cell in the Ownership table of an epic that has gone (a `Starts: S<n>` value): its own specs are the row specs that cite it `(D<n>)` in a heading line (the title line, a `### Milestone:` heading or any `#` heading), else every row spec. Done when every milestone tracker of every own spec is `merged` or `skipped`, else In progress.
+  3. No such row: Done when it is closed by hand (a ticked card in Done: `decisions/close.py <release> D<n>` for a decision with nothing to run) or when any spec citing it has merged; In progress when it carries `#E<n>`; else To do.
+  A release spec that only names a decision in its text does not keep that decision open.
+- The board may be viewed in the Unified Kanban extension, but a drag or a tick there is not a state change: `status/report.py` flags a card whose lane disagrees with the Done rule or whose tick disagrees with its lane, and the next sync moves it back.
+- Built: a milestone citing the decision has a `[ ]` or `[x]` cell in `status/sprints.md`. Before that, a change is an edit of its bullets, same id; from then on, a supersede.
+- Supersede: `decisions/supersede.py <release> D7 D15` marks both sides: D7 gets `(superseded by D15)` at the end of its title and `#superseded`, and moves to Done; D15's first bullet is `- Supersedes D7.` The mark is the only edit an old decision ever gets.
+- Deferred to another release: add the bullet `- Deferred to v0.5.x`; the sync adds `#deferred` and moves the card to Done. That release's specs cite it as `(v0.4.x D9)`.
+- A decision that came from a card ends with `- Source: Q<n>`, the last bullet.
 - Specs cite a decision as `(D7)`.
 
 ## Epic file

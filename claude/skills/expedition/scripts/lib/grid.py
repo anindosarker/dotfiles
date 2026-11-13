@@ -20,10 +20,11 @@ epic, spec number, then milestone order in the spec.
 
 write_grid() writes the grid only (sprints/grid.py). refresh() is the chain every grid change
 runs, in this order: the grid; the Sprint column of the "## Ownership" table of every unfinished
-epic that has gone (a Starts value, not every decision [Done]), touching only that column
-(lib/ownership.py sync_sprint_columns), finished epics' files left alone; then the Decided cards
-of queue.md synced with the tag lines of decisions.md (lib/board.py sync: the tick and the
-#E<n> tag), so a "[Done]" written since the last script run reaches the board. sprints/refresh.py,
+epic that has gone (a Starts value, not every decision in Done), touching only that column
+(lib/ownership.py sync_sprint_columns), finished epics' files left alone; then the cards of
+decisions.md moved to the lanes of the Done rule (lib/decisions.py sync), so a merge reaches
+the board; then the Decided cards of queue.md synced with those lanes (lib/board.py sync: the
+tick and the #E<n> tag). sprints/refresh.py,
 sprints/mark.py, run/go.py (through sprints/refresh.py), plan/new_fix.py and migrate/fixes.py use
 refresh(); the swimlane data (sprints/swimlanes.py) follows it. set_mark() sets one run cell for
 sprints/mark.py, the only writer of the marks.
@@ -168,8 +169,17 @@ def sync_epics(folder, comp):
         print(f"{p}: Sprint column synced with the grid")
 
 
+def sync_decisions(folder, locked=False):
+    """The cards of decisions.md, to the lanes of the Done rule; prints the cards moved. Takes
+    the .ids.lock lock unless the caller holds it (locked=True)."""
+    dc = C.load("lib/decisions")
+    moved = dc.sync_file(folder, None if locked else folder / ".ids.lock")
+    if moved:
+        print(f"{folder / 'decisions.md'}: lanes synced: {dc.moved_text(moved)}")
+
+
 def sync_queue(folder, locked=False):
-    """The Decided cards of queue.md, from the tag lines of decisions.md; prints the cards. Takes
+    """The Decided cards of queue.md, from the lanes of decisions.md; prints the cards. Takes
     the .ids.lock lock unless the caller holds it (locked=True)."""
     own, bd = C.load("lib/ownership"), C.load("lib/board")
     lock = None if locked else folder / ".ids.lock"
@@ -179,10 +189,11 @@ def sync_queue(folder, locked=False):
 
 
 def refresh(folder, release, quiet=False, locked=False):
-    """The chain after a grid change: the grid, the epic files' Sprint column, the queue sync.
-    locked=True: the caller holds the .ids.lock lock. Returns the grid text."""
+    """The chain after a grid change: the grid, the epic files' Sprint column, the decisions
+    lanes, the queue sync. locked=True: the caller holds the .ids.lock lock. Returns the grid text."""
     text, comp = write_grid(folder, release, quiet)
     sync_epics(folder, comp)
+    sync_decisions(folder, locked)
     sync_queue(folder, locked)
     return text
 

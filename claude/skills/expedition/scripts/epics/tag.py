@@ -5,21 +5,23 @@ row and the epic file.
 Usage: python3 -I epics/tag.py <release> E<n> <spec numbers or D ids> [--owner X] [--root PATH]
 
 A D id resolves to the specs citing it. Each named spec gets the line "- Epic: E<n>" directly
-under its title line; each decision those specs cite (and each named D id) gets the tag line
-"[E<n>]" directly under its heading in decisions.md, and the spec's Deliverables row gets E<n> in
+under its title line; each decision those specs cite (and each named D id) gets the tag "#E<n>"
+on its card in decisions.md and moves to In progress (lib/decisions.py, under the .ids.lock
+lock, then the Done rule sync), and the spec's Deliverables row gets E<n> in
 its Epic cell, and plan/epics/E<n>.md gets "Starts: S<n>" under its Specs: line: the current
 sprint of status/sprints.md as it is at that moment (the first column holding a "[ ]" or "·"
 cell of another epic's row, else the column after the last column holding another epic's row;
 S1 for an empty grid). An existing Epic line, epic tag or Starts value is kept and reported; a
 missing epic file is refused. Each file is read right before its write. Then the Decided cards
-of queue.md are synced with the tag lines (lib/board.py sync): each card whose decision now
-carries "[E<n>]" is ticked and gets "#E<n>".
+of queue.md are synced with the lanes (lib/board.py sync): each card whose decision is now In
+progress is ticked and gets "#E<n>".
 
 Refuses a superseded decision (heading "(superseded by D<n>)", or named by a later
 "- Supersedes D<n>." bullet): a named spec that cites one, or a named D id that is one.
 Commits nothing.
 """
 import argparse
+import fcntl
 import importlib.util
 import re
 import sys
@@ -43,7 +45,7 @@ die = C.die
 
 def tag_epic(folder, epic, items):
     """Write "- Epic: E<n>" into each named spec (a D id names the specs citing it),
-    "[E<n>]" under each decision those specs cite and each named D id, and the epic's
+    "#E<n>" on each decision those specs cite and each named D id, and the epic's
     "Starts: S<n>" line."""
     own = C.load("lib/ownership")
     epic_file = folder / own.EPICS_DIR / f"{epic}.md"
@@ -71,7 +73,6 @@ def tag_epic(folder, epic, items):
     if not path.is_file():
         die(f"decisions.md missing: {path}")
     tags = own.read_tags(folder)
-    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
     missing = sorted(nums - set(tags))
     if missing:
         die(f"not in decisions.md: {', '.join(f'D{n}' for n in missing)}")
@@ -106,16 +107,28 @@ def tag_epic(folder, epic, items):
         print(f"warning: {plan.name} missing, Epic cells not written")
     if kept_specs:
         print(f"kept specs: {', '.join(kept_specs)}")
+    dc = C.load("lib/decisions")
     tagged, kept = [], []
-    for n in sorted(nums, key=lambda n: -tags[n]["line"]):
-        t = tags[n]
-        if t["epic"]:
-            kept.append(f"D{n} E{t['epic']}" + (" done" if t["done"] else ""))
-            continue
-        lines.insert(t["line"] + 1, f"[{epic}]\n")
-        tagged.append(n)
-    path.write_text("".join(lines), encoding="utf-8")
+    with open(folder / ".ids.lock", "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        text = path.read_text(encoding="utf-8")
+        cards = {c["num"]: c for c in dc.parse(text)["cards"]}
+        for n in sorted(nums):
+            c = cards[n]
+            if c["epic"]:
+                kept.append(f"D{n} E{c['epic']}" + (" done" if c["lane"] == dc.DONE else ""))
+                continue
+            c["epic"] = int(epic[1:])
+            lane = dc.DONE if c["lane"] == dc.DONE else dc.PROGRESS
+            text = dc.move(text, n, lane, dc.head_line(c, lane))
+            tagged.append(n)
+        if tagged:
+            C.load("lib/board").write(path, text)
+        moved = dc.sync_file(folder)
+        fcntl.flock(lock, fcntl.LOCK_UN)
     print(f"{epic}: {', '.join(f'D{n}' for n in sorted(tagged)) or 'nothing tagged'}")
+    if moved:
+        print(f"decisions.md lanes synced: {dc.moved_text(moved)}")
     if kept:
         print(f"kept: {', '.join(sorted(kept, key=lambda k: int(k.split()[0][1:])))}")
     bd = C.load("lib/board")

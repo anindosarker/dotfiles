@@ -9,8 +9,9 @@ ownership facts are computed in memory; migrate/epics.py fills the epic files' t
 templates/swimlanes.html to status/index.html. Rewrites links: specs/ to plan/specs/ (and the
 sprints.md link) in <release>-plan.md; specs/, epics/, trackers/, handoffs/,
 sprints.md paths of this release inside the handoffs and the epic files.
-A folder without a kanban-board queue.md, or with a board in the old card format, then goes
-through migrate/queue.py, and every folder through migrate/epics.py, before the reruns. A folder
+A decisions.md in the old heading format then goes through migrate/decisions.py, a folder
+without a kanban-board queue.md, or with a board in the old card format, through
+migrate/queue.py, and every folder through migrate/epics.py, before the reruns. A folder
 with run/trackers/fix-*-tracker.md stops there after the migrate/fixes.py dry run, with one line
 naming the remaining steps.
 Appends the status/index.html and status/data/ render lines to the repo's .gitignore when
@@ -150,6 +151,11 @@ def main():
         edit(path, lambda t: rewrite_paths(t, prefix))
 
     args = [a.release, "--owner", owner, "--root", str(root)]
+    if C.load("migrate/decisions").refusal(folder, a.release):
+        print("== migrate/decisions.py")
+        r = subprocess.run([sys.executable, "-I", str(HERE / "decisions.py")] + args, cwd=str(root))
+        if r.returncode:
+            die(f"migrate/decisions.py failed (exit {r.returncode}); the moves stay, fix and rerun it")
     queue = folder / "queue.md"
     if not queue.is_file() or C.load("migrate/queue").refusal(folder, a.release):
         print("== migrate/queue.py")

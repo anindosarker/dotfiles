@@ -3,7 +3,7 @@
 on one checkout never pick the same number.
 
 Usage: python3 -I queue/item.py <release> D|Q "<title>" [--source Q<n>]
-       [--bullet "<text>"] [--owner X] [--root PATH]
+       [--bullet "<text>"] [--new-round] [--owner X] [--root PATH]
        python3 -I queue/item.py <release> --move Q<n> Open|Later|Dropped|Autofix
        python3 -I queue/item.py <release> --fact Q<n> "<text>"
 
@@ -11,8 +11,11 @@ Under an exclusive lock on <release folder>/.ids.lock, re-reading the files righ
 write (queue.md is a kanban board the owner may drag in the editor; lib/board.py edits it in place
 and leaves every other byte as it was):
 
-- D: under the last "## Round" heading of decisions.md: the heading, the --bullet line if
-  given, then "- Source: Q<n>" if --source is given. With --source, card Q<n> moves to the end
+- D: a card "- [ ] **D<n>** <title> #R<n>" at the end of To do in decisions.md (a kanban board,
+  lib/decisions.py), the --bullet line if given, then "- Source: Q<n>" if --source is given, as
+  tab-indented lines. <n> is the highest D number in the file plus one; the round is the
+  highest #R number in the file (1 when none), the next one with --new-round. With --source,
+  card Q<n> moves to the end
   of Decided, unticked, with "#D<n>" at the end of its title line; a card already in Decided
   keeps the highest decision number.
 - Q: a tagless card "- [ ] **Q<n>** <title>" at the end of Open, the --bullet text as its
@@ -21,14 +24,14 @@ and leaves every other byte as it was):
   --source; a card leaving Decided loses its #D and #E tags). --fact: one tab-indented fact
   sub-bullet at the end of card Q<n>.
 
-Every call then syncs the Decided cards with the tag lines of decisions.md (lib/board.py sync:
-the tick and the #E<n> tag), so a "[Done]" the lead wrote by hand reaches the board on the next call.
+Every call then moves the decisions.md cards to the lanes of the Done rule (lib/decisions.py
+sync) and syncs the Decided cards with those lanes (lib/board.py sync: the tick and the #E<n>
+tag), and commits decisions.md when the sync changed it.
 
 queue.md is created from templates/queue.md when missing. Commits the files it wrote and
 prints the id alone, e.g. Q11.
 """
 import argparse
-import datetime
 import fcntl
 import importlib.util
 import re
@@ -49,43 +52,7 @@ def _common():
 
 C = _common()
 SOURCE_RE = re.compile(r"^Q\d+$")
-ROUND_RE = re.compile(r"^## Round\b")
-die, git = C.die, C.git
-
-
-def highest(paths, kind):
-    head = re.compile(r"^#{2,3}\s+" + kind + r"(\d+)\b")
-    top = 0
-    for p in paths:
-        if not p.is_file():
-            continue
-        for line in p.read_text(encoding="utf-8", errors="replace").splitlines():
-            m = head.match(line)
-            if m:
-                top = max(top, int(m.group(1)))
-    return top
-
-
-def under_last_round(text, block, today):
-    """Insert block at the end of the last '## Round' section; add Round 1 when none."""
-    lines = text.rstrip("\n").split("\n") if text.strip() else []
-    rounds = [i for i, l in enumerate(lines) if ROUND_RE.match(l)]
-    if not rounds:
-        lines += ["", f"## Round 1: discussion, {today}"]
-        end = len(lines)
-    else:
-        end = len(lines)
-        for i in range(rounds[-1] + 1, len(lines)):
-            if lines[i].startswith("## "):
-                end = i
-                break
-    head, tail = lines[:end], lines[end:]
-    while head and not head[-1].strip():
-        head.pop()
-    out = head + [""] + block
-    if tail:
-        out += [""] + tail
-    return "\n".join(out).lstrip("\n") + "\n"
+die = C.die
 
 
 def exclude_lock(root):
@@ -106,7 +73,7 @@ def exclude_lock(root):
 
 def main():
     ap = argparse.ArgumentParser(
-        usage='queue/item.py <release> D|Q "<title>" [--source Q<n>] [--bullet "<text>"] | '
+        usage='queue/item.py <release> D|Q "<title>" [--source Q<n>] [--bullet "<text>"] [--new-round] | '
               '<release> --move Q<n> Open|Later|Dropped|Autofix | <release> --fact Q<n> "<text>" '
               '[--owner X] [--root PATH]'
     )
@@ -119,6 +86,7 @@ def main():
     ap.add_argument("--bullet")
     ap.add_argument("--move", nargs=2, metavar=("Q<n>", "LANE"))
     ap.add_argument("--fact", nargs=2, metavar=("Q<n>", "TEXT"))
+    ap.add_argument("--new-round", action="store_true")
     a = ap.parse_args()
     if not C.RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
@@ -126,7 +94,7 @@ def main():
     if a.move and a.fact:
         die("--move and --fact are separate calls")
     if card_op:
-        if a.kind or a.title or a.source or a.bullet:
+        if a.kind or a.title or a.source or a.bullet or a.new_round:
             die("--move and --fact take only a Q id and a lane or a text")
         if not SOURCE_RE.match(card_op[0]):
             die(f"bad id '{card_op[0]}', expected like Q3")
@@ -135,8 +103,8 @@ def main():
     else:
         if a.kind not in ("D", "Q"):
             die(f"bad kind '{a.kind}': the kinds are D and Q")
-        if a.kind == "Q" and a.source:
-            die("--source is for a D item")
+        if a.kind == "Q" and (a.source or a.new_round):
+            die("--source and --new-round are for a D item")
         if not (a.title or "").strip():
             die("empty title")
         if a.source and not SOURCE_RE.match(a.source):
@@ -154,7 +122,8 @@ def main():
     root = own.repo_root(a.root, a.release)
     folder = own.release_folder(root, own.detect_owner(root, a.owner), a.release)
     queue = folder / own.QUEUE_MD
-    today = datetime.date.today().isoformat()
+    dc = C.load("lib/decisions")
+    target = folder / "decisions.md"
 
     with open(folder / ".ids.lock", "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -185,19 +154,18 @@ def main():
             new = bd.append_card(board, "Open", block)
             subject = f"{ident} {title}"
         else:
-            target = folder / "decisions.md"
             if not target.is_file():
                 die(f"missing: {target}")
             card = bd.find(board, int(a.source[1:])) if a.source else None
             if a.source and card is None:
                 die(f"{a.source} is not in {queue}")
-            ident = f"D{highest([target], 'D') + 1}"
-            bullet = (a.bullet if a.bullet.startswith("- ") else f"- {a.bullet}") if a.bullet else None
-            block = [f"### {ident} {title}", ""] + ([bullet] if bullet else [])
-            if a.source:
-                block.append(f"- Source: {a.source}")
-            target.write_text(under_last_round(target.read_text(encoding="utf-8"), block, today),
-                              encoding="utf-8")
+            d_text = target.read_text(encoding="utf-8")
+            cards = dc.parse(d_text)["cards"]
+            ident = f"D{dc.highest(cards) + 1}"
+            rnd = max(dc.highest_round(cards), 1) + (1 if a.new_round and dc.highest_round(cards) else 0)
+            bullets = ([a.bullet] if a.bullet else []) + ([f"Source: {a.source}"] if a.source else [])
+            block = dc.new_card(int(ident[1:]), title, rnd, bullets)
+            bd.write(target, bd.insert_card(d_text, dc.TODO, block, int(ident[1:]), "D"))
             written.append(target)
             if card is not None:
                 old = card["d"] if card["lane"] == "Decided" else None
@@ -207,6 +175,9 @@ def main():
                     print(f"{a.source} keeps #D{old}", file=sys.stderr)
             subject = f"{ident} {title}"
 
+        moved = dc.sync_file(folder)
+        if moved:
+            print(f"decisions.md lanes synced: {dc.moved_text(moved)}", file=sys.stderr)
         synced, changed = bd.sync(board if new is None else new, bd.decision_tags(own, folder))
         if changed:
             print(f"synced with decisions.md: {', '.join(f'Q{n}' for n in changed)}", file=sys.stderr)
@@ -215,8 +186,9 @@ def main():
             written.append(queue)
 
         paths = [str(p) for p in written]
-        git(root, "add", "--", *paths)
-        git(root, "commit", "-q", "-m", f"docs(plan): {a.release} {subject}", "--only", "--", *paths)
+        if target not in written and target.is_file():
+            paths.append(str(target))
+        C.commit(root, paths, f"docs(plan): {a.release} {subject}")
         fcntl.flock(lock, fcntl.LOCK_UN)
     print(ident)
 

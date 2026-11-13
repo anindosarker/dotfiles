@@ -67,8 +67,6 @@ MILESTONE_RE = re.compile(r"^#{3,4}\s+Milestone:\s*(.+?)\s*$")
 HEADING_RE = re.compile(r"^#{1,6}\s")
 FIELD_RE = re.compile(r"^\s*(?:-\s*)?(Files owned|Depends on|Review|Starts):\s*(.*?)\s*$")
 TASK_RE = re.compile(r"^\s*-\s*Task\s+\d+:")
-D_HEAD_RE = re.compile(r"^###\s+D(\d+)\b")
-TAG_LINE_RE = re.compile(r"^\s*(?:\[(?:Done|E\d+)\]\s*)+$")
 D_CITE_RE = re.compile(r"\((D\d+[^)]*)\)")
 D_ID_RE = re.compile(r"^D(\d+)$")
 EPIC_LINE_RE = re.compile(r"^\s*-\s*Epic:\s*E(\d+)\s*$")
@@ -451,28 +449,19 @@ def find_cycle(nodes, succ):
     return sorted(nodes)
 
 
-def read_tags(folder):
-    """Decision tags: {D number: {"epic": n or None, "done": bool, "line": heading index}}.
+def decisions():
+    return C.load("lib/decisions")
 
-    The tag line is the first non-blank line under a "### D<n>" heading, e.g. "[E1]" or
-    "[Done]  [E1]". A decision without one is in no epic.
-    """
-    path = folder / "decisions.md"
+
+def read_tags(folder):
+    """Decision states from the decisions.md board (lib/decisions.py): {D number: {"epic": the
+    #E<n> number or None, "lane": "To do", "In progress" or "Done", "done" and "closed": True in
+    Done, "line": the card's line index}}."""
     tags = {}
-    if not path.is_file():
-        return tags
-    lines = read(path).splitlines()
-    for i, line in outside_fences(read(path)):
-        m = D_HEAD_RE.match(line)
-        if not m:
-            continue
-        nxt = next((l for l in lines[i:] if l.strip()), "")
-        epic, done = None, False
-        if TAG_LINE_RE.match(nxt):
-            b = re.search(r"\[E(\d+)\]", nxt)
-            epic = int(b.group(1)) if b else None
-            done = "[Done]" in nxt
-        tags[int(m.group(1))] = {"epic": epic, "done": done, "line": i - 1}
+    for c in decisions().read_cards(folder)["cards"]:
+        done = c["lane"] == "Done"
+        tags[c["num"]] = {"epic": c["epic"], "lane": c["lane"], "done": done, "closed": done,
+                          "line": c["line"]}
     return tags
 
 
@@ -494,30 +483,16 @@ def spec_epic(path):
     return None
 
 
-SUPERSEDED_HEAD_RE = re.compile(r"\(superseded by D(\d+)\)")
-SUPERSEDES_RE = re.compile(r"^\s*-\s*Supersedes D(\d+)\b")
-
-
 def supersedes(folder):
-    """(heads, bullets): {old D: new D} from "### D7 (superseded by D15)" heading marks and from
-    "- Supersedes D7." bullets under a later decision. A superseded decision is a key of either."""
-    path = folder / "decisions.md"
-    heads, bullets, cur = {}, {}, None
-    if not path.is_file():
-        return heads, bullets
-    for _, line in outside_fences(read(path)):
-        m = D_HEAD_RE.match(line)
-        if m:
-            cur = int(m.group(1))
-            s = SUPERSEDED_HEAD_RE.search(line)
-            if s:
-                heads[cur] = int(s.group(1))
-            continue
-        if line.startswith("#"):
-            cur = None
-        s = SUPERSEDES_RE.match(line)
-        if s and cur is not None:
-            bullets[int(s.group(1))] = cur
+    """(heads, bullets): {old D: new D} from "(superseded by D15)" title marks (the first mark of
+    a card) and from "- Supersedes D7." bullets of a later decision. A superseded decision is a
+    key of either."""
+    heads, bullets = {}, {}
+    for c in decisions().read_cards(folder)["cards"]:
+        if c["sup_by"]:
+            heads[c["num"]] = c["sup_by"][0]
+        for old in c["supersedes"]:
+            bullets[old] = c["num"]
     return heads, bullets
 
 
@@ -688,19 +663,10 @@ def set_field(text, key, value):
 
 
 def decision_titles(folder):
-    """{D number: heading title} from decisions.md, without a "(superseded by ...)" mark; "|"
-    becomes "/" so the title fits a table cell."""
-    path = folder / "decisions.md"
-    out = {}
-    if not path.is_file():
-        return out
-    for _, line in outside_fences(read(path)):
-        m = D_HEAD_RE.match(line)
-        if m:
-            t = re.sub(r"^###\s+D\d+\b", "", line)
-            t = re.sub(r"\(superseded by D\d+\)", "", t).strip().lstrip(":.-").strip()
-            out[int(m.group(1))] = t.replace("|", "/")
-    return out
+    """{D number: card title} from decisions.md, without a "(superseded by ...)" mark or tags;
+    "|" becomes "/" so the title fits a table cell."""
+    return {c["num"]: c["base"].lstrip(":.-").strip().replace("|", "/")
+            for c in decisions().read_cards(folder)["cards"]}
 
 
 def epic_specs(folder, n, decisions, given=None):
@@ -901,7 +867,7 @@ def fill_epic(folder, n, given=None, quiet=False):
 
 
 def finished_epics(folder):
-    """Epic numbers that are finished: every decision tagged with the epic is [Done], or the
+    """Epic numbers that are finished: every decision tagged with the epic is in Done, or the
     epic has rows in status/sprints.md and every one is "[x]" or "[!]"."""
     tags = read_tags(folder)
     _, rows = grid(folder)

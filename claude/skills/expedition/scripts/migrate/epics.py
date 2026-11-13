@@ -81,7 +81,7 @@ def main():
         die(f"release folder missing: {folder}")
     if not (folder / "plan").is_dir():
         die(f"{folder} has the old layout (no plan/): run python3 -I {HERE / 'layout.py'} {a.release}")
-    old = load("migrate_queue").refusal(folder, a.release)
+    old = load("migrate_queue").refusal(folder, a.release) or C.load("migrate/decisions").refusal(folder, a.release)
     if old:
         die(old)
     comp = own.compute(folder)

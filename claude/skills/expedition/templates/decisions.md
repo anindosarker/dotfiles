@@ -1,10 +1,13 @@
-# [release] decisions
+---
+kanban-plugin: basic
+---
 
-## Round [n]: [discussion | triage of E[n]], [YYYY-MM-DD]
+## To do
 
-### D[n] [Decision in a few words]
-[E[n]]  (tag line: none while deciding, [E[n]] on go, [Done]  [E[n]] on merge, [Done] alone when nothing runs)
+## In progress
 
-- [Required: explains the decision.]
-- [Then anything: bullets, code blocks, examples, sub-bullets.]
-- [Source: Q[n], last bullet, for a decision that came from a queue card.]
+## Done
+
+%% kanban:settings
+{"kanban-plugin":"basic","lane-width":600,"date-format":"YYYY-MM-DD","time-format":"HH:mm","tag-action":"kanban","set-view":"list","full-list-lane-width":true,"show-add-list":false,"show-archive-all":false,"custom-title":"[release] decisions"}
+%%

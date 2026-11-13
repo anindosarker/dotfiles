@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""Sync the Decided cards of queue.md with the tag lines of decisions.md (lib/board.py sync: the
-tick and the #E<n> tag), under the .ids.lock lock, so a "[Done]" written since the last script
-run reaches the board. Prints the cards it changed. Commits nothing.
+"""Sync the Decided cards of queue.md with the lanes of decisions.md (lib/board.py sync: the
+tick and the #E<n> tag), under the .ids.lock lock. Prints the cards it changed. Commits nothing.
 
 Usage: python3 -I queue/sync.py <release> [--owner X] [--root PATH]
 

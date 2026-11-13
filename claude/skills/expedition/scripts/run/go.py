@@ -5,18 +5,19 @@ Usage: python3 -I run/go.py <release> E<n> --from <lead session name> [--owner X
 
 Steps, each skipped when already done, so a rerun after a failure picks up where it stopped:
 
-1. tag: epics/tag.py <release> E<n> <specs>: "- Epic: E<n>" in each spec, "[E<n>]" under
-   each decision, E<n> in the Deliverables rows, "Starts:" in the epic file, the epic's queue
+1. tag: epics/tag.py <release> E<n> <specs>: "- Epic: E<n>" in each spec, "#E<n>" on each
+   decision card (moved to In progress), E<n> in the Deliverables rows, "Starts:" in the epic file, the epic's queue
    cards ticked and tagged #E<n>. The epic's specs: its tagged specs, the Spec column of its
    table, and (before the Starts line exists) every untagged spec citing one of its decisions.
    Fails when a decision of the "Decisions:" line is cited by none of them. Done when every
    spec and decision carries E<n> and Starts has a value.
 2. commit: the epic's spec files and their trackers, decisions.md, queue.md, <release>-plan.md
    and the epic file, when any of them changed.
-3. grid: sprints/refresh.py (the grid, the epic files' Sprint column, the queue sync, the
-   swimlane data). Done when every milestone of the epic's specs has a row in status/sprints.md.
+3. grid: sprints/refresh.py (the grid, the epic files' Sprint column, the decisions lanes, the
+   queue sync, the swimlane data). Done when every milestone of the epic's specs has a row in status/sprints.md.
 4. epic file: the "Specs:" line and the final table (the epics/table.py fill, the Sprint column
-   from the grid); commits the epic files, status/sprints.md and queue.md when any of them changed.
+   from the grid); commits the epic files, status/sprints.md, decisions.md and queue.md when any of
+   them changed.
 5. close writer: runner.sh stop "<release> specs E<n>". Skipped when runner.sh list shows that
    window stopped; a window runner.sh does not list at all leaves nothing to close.
 6. run: runner.sh start <release> --from <lead> when runner.sh list shows no live runner of the
@@ -202,7 +203,7 @@ class Go:
         except SystemExit:
             raise StepFailed("epics/table.py failed")
         return self.commit([self.folder / own.EPICS_DIR, self.folder / own.SPRINTS_MD,
-                            self.folder / own.QUEUE_MD],
+                            self.folder / "decisions.md", self.folder / own.QUEUE_MD],
                            f"docs(plan): {self.release} E{self.n} go: grid and epic file")
 
     def step_close(self):

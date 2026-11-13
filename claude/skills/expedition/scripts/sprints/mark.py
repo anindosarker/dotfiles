@@ -11,9 +11,10 @@ entry and in every prompt.
 
 launch sets the milestone's cell to "[ ]", merge to "[x]", stop to "[!]", in the column its row
 has now. Then, under the .ids.lock lock: the grid is regenerated with a new "Updated:" line, the
-Sprint column of every unfinished epic's table and the Decided cards of queue.md follow it
-(lib/grid.py refresh), the swimlane data is written (sprints/swimlanes.py), and the grid, the
-epic files and queue.md the chain changed are committed with --only, never pushed. Prints one
+Sprint column of every unfinished epic's table, the lanes of decisions.md and the Decided cards
+of queue.md follow it (lib/grid.py refresh), the swimlane data is written (sprints/swimlanes.py),
+and the grid, the epic files, decisions.md and queue.md the chain changed are committed with
+--only, never pushed. Prints one
 line.
 
 A milestone with no tracker of that name, or with no row in the grid, is refused with one line,
@@ -85,7 +86,7 @@ def main():
         with contextlib.redirect_stdout(io.StringIO()):
             g.refresh(folder, a.release, quiet=True, locked=True)
             C.load("sprints/swimlanes").write(folder, a.release, quiet=True)
-        paths = [grid, folder / C.QUEUE_MD] + sorted((folder / C.EPICS_DIR).glob("E*.md"))
+        paths = [grid, folder / "decisions.md", folder / C.QUEUE_MD] + sorted((folder / C.EPICS_DIR).glob("E*.md"))
         C.commit(root, paths, f"docs(plan): {a.release} {key} {a.action}")
         fcntl.flock(lock, fcntl.LOCK_UN)
     print(f"{key}: {old} to {mark} ({num} {name}); committed")

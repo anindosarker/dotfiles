@@ -28,9 +28,9 @@ the change into the spec); no epic running for a follow-up spec (file a queue ca
 several running and no --epic; a milestone name already taken; milestones that no longer
 schedule (sprints/check.py names the error). Then each cited card moves to the end of Autofix,
 ticked, without tags, under the .ids.lock lock; the refresh chain (lib/grid.py refresh: the grid,
-the epic files' Sprint column, the queue sync) and the swimlane data run (the lock is free
-meanwhile, the queue sync takes it); the files written, the grid and the epic files the chain
-synced are committed under the lock (shared-file rules), never pushed. Prints one line naming
+the epic files' Sprint column, the decisions lanes, the queue sync) and the swimlane data run (the
+lock is free meanwhile, the syncs take it); the files written, the grid, decisions.md and the epic
+files the chain synced are committed under the lock (shared-file rules), never pushed. Prints one line naming
 the form, the spec, the milestone and its sprint.
 """
 import argparse
@@ -289,7 +289,8 @@ def run(a, own, bd, root, folder, ids, files, want_epic, lock):
         load("lib/grid").refresh(folder, a.release, quiet=True)
         load("sprints/swimlanes").write(folder, a.release, quiet=True)
     fcntl.flock(lock, fcntl.LOCK_EX)
-    paths = [str(p) for p in writes] + [str(folder / own.SPRINTS_MD)] + ([str(queue)] if ids else [])
+    paths = [str(p) for p in writes] + [str(folder / own.SPRINTS_MD), str(folder / "decisions.md")]
+    paths += [str(queue)] if ids else []
     paths += [str(p) for p in sorted((folder / own.EPICS_DIR).glob("E*.md"))]
     C.commit(root, paths, f"docs(plan): {a.release} fix {num} {a.title}")
     fcntl.flock(lock, fcntl.LOCK_UN)

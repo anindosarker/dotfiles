@@ -1,21 +1,26 @@
 #!/usr/bin/env python3
 """queue.md as a kanban board in the obsidian-kanban Markdown format (the owner views and
 drags it with the VS Code extension Unified Kanban). Library for the other scripts, no CLI.
+The same parser reads and rewrites decisions.md, a board of **D<n>** cards (lib/decisions.py
+holds its lanes, tags and the Done rule): parse(), find() and insert_card() take the id letter,
+is_board() the first lane name.
 
 File shape: a frontmatter with "kanban-plugin: basic", then one "## <Lane>" heading per lane,
 in this order: Open, Decided, Later, Dropped, Autofix. A card is one top-level list item,
 "- [ ] **Q<n>** <title>", its facts sub-bullets indented with one TAB per level. Two tags
 exist, at the end of the title line, decision before epic: "#D<n>" (the decision that settled
 the card) and "#E<n>" (the epic that decision is in). The checkbox is [ ] in Open and Later,
-[x] in Dropped and Autofix. In Decided it mirrors the decision's tag line in decisions.md:
-[ ] with no #E tag while the decision has no tag (ready for an epic), [x] with "#E<n>" once it
-carries "[E<n>]", [x] with no epic tag when it carries "[Done]" alone or is closed without a tag
-(superseded or deferred: it never goes into an epic). sync() sets it. The file ends with the
-"%% kanban:settings ... %%" block.
+[x] in Dropped and Autofix. In Decided it mirrors the lane of the decision in decisions.md:
+[ ] with no #E tag while the decision is in To do (ready for an epic), [x] with "#E<n>" while
+it is In progress, [x] with no epic tag once it is Done (merged, closed with nothing to run,
+superseded or deferred). sync() sets it. The file ends with the "%% kanban:settings ... %%" block.
 
 The extension rewrites the file between script calls, so every edit here is surgical: the
 caller re-reads the file inside its lock, a card is found by its **Q<n>** token and its lane by
 the "## " heading above it, and every other byte (settings block, other cards) stays as it was.
+A card runs through every following line indented with a TAB (or spaces), including blank or
+whitespace-only lines that are followed by more indented lines of the same card (a fenced code
+block with blank lines stays one card).
 The extension may drop the frontmatter when it saves its settings: a file with a settings block
 and a "## Open" lane is still a board, and write() restores the frontmatter.
 
@@ -59,13 +64,14 @@ def has_front(text):
     return False
 
 
-def is_board(text):
-    """A board: the kanban frontmatter, or a settings block together with a '## Open' lane."""
+def is_board(text, first_lane="Open"):
+    """A board: the kanban frontmatter, or a settings block together with a '## <first_lane>'
+    lane ("Open" for queue.md, "To do" for decisions.md)."""
     if has_front(text):
         return True
     lines = text.split("\n")
     return (any(SETTINGS_RE.match(l) for l in lines)
-            and any(LANE_RE.match(l) and LANE_RE.match(l).group(1) == "Open" for l in lines))
+            and any(LANE_RE.match(l) and LANE_RE.match(l).group(1) == first_lane for l in lines))
 
 
 def with_front(text):
@@ -137,7 +143,32 @@ def _body_end(lines):
     return len(lines)
 
 
-def parse(text):
+def id_re(letter):
+    """The card id token pattern of a board: **Q<n>** for queue.md, **D<n>** for decisions.md."""
+    return ID_RE if letter == "Q" else re.compile(r"\*\*" + letter + r"(\d+)\*\*")
+
+
+def card_end(lines, i, stop):
+    """Index after the card whose list line is lines[i]: the indented lines under it, and blank or
+    whitespace-only lines followed by more indented lines."""
+    j = i + 1
+    while j < stop:
+        if lines[j].strip() and lines[j][:1] in ("\t", " "):
+            j += 1
+            continue
+        if lines[j].strip():
+            break
+        k = j
+        while k < stop and not lines[k].strip():
+            k += 1
+        if k < stop and lines[k][:1] in ("\t", " "):
+            j = k + 1
+            continue
+        break
+    return j
+
+
+def parse(text, letter="Q"):
     """{lanes: [{name, line}], cards: [...], stray: [...]}.
 
     A card is {num, lane, line, end, title, box, d, e, tags, from, decision, subs, text}:
@@ -145,7 +176,10 @@ def parse(text):
     lines under it); title has no tags; d and e are the highest #D and #E numbers or None;
     tags lists every tag token of the title line; from is an old from tag or None; decision is
     the highest old 'Decision: D<n>' sub-bullet or None. stray lists top-level list items with
-    no **Q<n>** token, as (line index, text). Lanes after a '***' line are lanes too."""
+    no **Q<n>** token, as (line index, text). Lanes after a '***' line are lanes too. letter "D"
+    reads decisions.md (**D<n>** tokens; the queue fields d, e, from and decision mean nothing
+    there)."""
+    idr = id_re(letter)
     lines = text.split("\n")
     stop = _body_end(lines)
     lanes, cards, stray = [], [], []
@@ -165,10 +199,8 @@ def parse(text):
             i += 1
             continue
         if line.startswith("- ") and lane is not None:
-            j = i + 1
-            while j < stop and lines[j].strip() and lines[j][:1] in ("\t", " "):
-                j += 1
-            idm = ID_RE.search(line)
+            j = card_end(lines, i, stop)
+            idm = idr.search(line)
             if idm:
                 body = CARD_RE.match(line).group(1)
                 tags = tags_of(body)
@@ -178,7 +210,7 @@ def parse(text):
                     if tm:
                         nums[tm.group(1)].append(int(tm.group(2)))
                 fm = FROM_RE.search(body)
-                title = ID_RE.sub("", body, count=1)
+                title = idr.sub("", body, count=1)
                 title = FROM_RE.sub("", TRAIL_TAGS_RE.sub("", title)).strip()
                 subs = lines[i + 1:j]
                 decs = [int(dm.group(1)) for s in subs if (dm := DECISION_RE.match(s))]
@@ -203,43 +235,28 @@ def is_old(text):
     return any(c["from"] or c["decision"] for c in parse(text)["cards"])
 
 
-def find(text, num):
-    return next((c for c in parse(text)["cards"] if c["num"] == num), None)
-
-
-DEFERRED_RE = re.compile(r"^\s*-\s*Deferred to\b")
-D_HEAD_RE = re.compile(r"^###\s+D(\d+)\b")
+def find(text, num, letter="Q"):
+    return next((c for c in parse(text, letter)["cards"] if c["num"] == num), None)
 
 
 def decision_tags(own, folder):
-    """{D: {epic, done, closed, line}}: ownership.read_tags plus closed, true for a superseded
-    decision or one with a "- Deferred to" bullet."""
-    tags = own.read_tags(folder)
-    heads, bullets = own.supersedes(folder)
-    closed = set(heads) | set(bullets)
-    path = folder / "decisions.md"
-    cur = None
-    if path.is_file():
-        for _, line in own.outside_fences(path.read_text(encoding="utf-8")):
-            m = D_HEAD_RE.match(line)
-            if m:
-                cur = int(m.group(1))
-            elif line.startswith("#"):
-                cur = None
-            elif cur is not None and DEFERRED_RE.match(line):
-                closed.add(cur)
-    for n, t in tags.items():
-        t["closed"] = n in closed
-    return tags
+    """{D: {epic, done, closed, lane, line}} from the lanes of decisions.md (ownership.read_tags):
+    lane is "To do", "In progress" or "Done"; closed is the same as done (in Done)."""
+    return own.read_tags(folder)
 
 
 def want(card, tags):
     """(box, epic) a Decided card should show for decision_tags(), or None when its #D tag is
-    missing or names no decision."""
+    missing or names no decision: unticked while the decision is in To do, ticked with #E<n>
+    while it is In progress, ticked without an epic tag once it is Done."""
     t = tags.get(card["d"]) if card["d"] else None
     if t is None:
         return None
-    return ("[x]" if t["epic"] or t["done"] or t.get("closed") else "[ ]"), t["epic"]
+    if t.get("lane") == "To do":
+        return "[ ]", None
+    if t.get("lane") == "In progress":
+        return "[x]", t["epic"]
+    return "[x]", None
 
 
 def sync(text, tags):
@@ -306,6 +323,20 @@ def _insert(lines, at, block, blank_after):
     lines[at:at] = block + ([""] if blank_after else [])
 
 
+def insert_card(text, lane, block, num, letter="Q"):
+    """Insert the block in lane before the first card with a higher id number, else at the end
+    of the lane (decisions.md keeps its cards in D number order)."""
+    lines = text.split("\n")
+    board = parse(text, letter)
+    nxt = next((c for c in board["cards"] if c["lane"] == lane and c["num"] > num), None)
+    if nxt is not None:
+        lines[nxt["line"]:nxt["line"]] = block
+        return "\n".join(lines)
+    at, blank = _lane_insert_at(lines, board, lane)
+    _insert(lines, at, block, blank)
+    return "\n".join(lines)
+
+
 def append_card(text, lane, block):
     """Append the block (card line plus sub-bullets) at the end of lane."""
     lines = text.split("\n")
@@ -350,10 +381,10 @@ def add_fact(text, num, fact):
     return "\n".join(lines)
 
 
-def render(cards_by_lane, settings=SETTINGS):
+def render(cards_by_lane, settings=SETTINGS, lanes=LANES):
     """A whole board: cards_by_lane maps a lane to a list of blocks (lists of lines)."""
     out = list(FRONT)
-    for lane in LANES:
+    for lane in lanes:
         out += [f"## {lane}", ""]
         for block in cards_by_lane.get(lane, []):
             out += block

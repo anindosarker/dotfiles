@@ -4,7 +4,7 @@ citing it) that a milestone of a running epic also owns.
 
 Usage: python3 -I epics/overlap.py <release> <spec numbers or D ids> [--owner X] [--root PATH]
 
-A running epic is a [E<n>] tag in decisions.md on a decision without [Done]; a spec's epic is
+A running epic is the #E<n> tag of a decisions.md card not in the Done lane; a spec's epic is
 its own "- Epic: E<n>" line (epics/tag.py). Exit code 1 when a file is shared, 0 otherwise.
 """
 import argparse
@@ -27,7 +27,7 @@ C = _common()
 
 
 def running_epics(tags):
-    """Epics with at least one decision not yet [Done]."""
+    """Epics with at least one decision not in Done."""
     return sorted({t["epic"] for t in tags.values() if t["epic"] and not t["done"]})
 
 

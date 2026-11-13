@@ -15,7 +15,7 @@ run/trackers/NN-<milestone-slug>-tracker.md.
 
 The epic tags on go are epics/tag.py.
 
-Refuses a superseded decision (heading "(superseded by D<n>)", or named by a later
+Refuses a superseded decision (title mark "(superseded by D<n>)", or named by a later
 "- Supersedes D<n>." bullet) when the title, scope or template cites one.
 """
 import argparse

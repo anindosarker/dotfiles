@@ -15,7 +15,7 @@ the "Decisions:" line (the ids already there plus the new ones, in number order)
 row per decision, "| D<n> <title from decisions.md> |  |  |  |  |"; on a rerun only the missing
 rows are added, every other row kept as it is. Refuses, writing nothing, a decision that is
 missing from decisions.md, superseded, already tagged with another epic, or done with nothing to
-run ("[Done]" without an epic tag).
+run (in Done without an epic tag).
 
 Note (--note): appends "- <text>" at the end of the "## Notes" section, creating the section at
 the end of the file when it is missing. An urgent note starts with "Urgent:".

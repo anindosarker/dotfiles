@@ -17,7 +17,7 @@ How to write an implementation plan for this repository. Applies to humans and a
 ```
 .ai/plans/v0.<n>.x/<git_username>/
 ├── <release>-plan.md              ← authored: ## Goals and the spec table | # | Spec | Scope |
-├── decisions.md         ← every decision the owner made, grouped, with the why
+├── decisions.md         ← every decision the owner made, with the why, one card each
 ├── plan/specs/01-<slug>.md   ← authored: one file per spec (template below); section 2.1 holds one ### Milestone: <name> block per milestone
 ├── plan/specs/02-<slug>.md
 ├── plan/epics/E<n>.md    ← one per epic, with its Ownership table
