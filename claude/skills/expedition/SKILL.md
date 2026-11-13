@@ -42,10 +42,19 @@ Writing a rule: one rule per topic, two to five bullets; each bullet a full sent
 ## Owner input
 
 - Owner words: `record it`, `accepted`, `k`, `epic`, `hold D<n>`, `go`, `epic go`.
+- `progress` (or "status"): reply in this form and nothing else, never an item, a commit id, an ack or a list of waiting work:
+
+  ```
+  E12: Specs 6/12.
+  - Running: 44 range filters, 45 select chevron.
+  - Blocked: 47 comparison page, waiting on your check of the table.
+  ```
+
+  Line one is the epic and its specs done out of total; a spec is done when every one of its milestones has merged. `Running` lists each running spec as its number and one or two words, and includes a spec that is being retried or fixed. `Blocked` appears only for work that has stopped and waits on the owner, with what the owner has to do. One block per running epic. An epic that finished: `E12: Specs 12/12. Released as 0.9.4.` Nothing running: `Nothing running. Ready for an epic: Q54.`
 - `resume` (or "resume E<n>", "resume the runner"): send the one word `resume` to every live window `runner.sh list` shows (`runner.sh resume <release>` for the runner, `runner.sh resume "<release> specs E<n>"` for each fork), in one turn, then post the next item. No picking a window, no status checks, no pane reading or report of a session's state, no audits; the lead does its own work only when the owner says so.
 - A runner or fork window that hits a usage limit is never stopped, replaced or re-forked: it continues by itself when the limit resets, and `resume` typed into it (or `claude --resume <uuid>` after a crash) brings it back. `runner.sh stop` marks the entry stopped, after which `fork` cannot resume it. A decision with nothing to run is tagged `[Done]` when recorded.
 - Owner comments are feedback for discussion, not decisions. An owner message that picks an option, adds specifics or corrects the item is still discussion: fold it into the item and post the item again. Write a decision only on an explicit confirmation ("record it", "accepted"), or on "k" when the agent's last message was the complete item ending with the line `Say "record it" to record it, or add to it.`; "k" on an item still being shaped, "fix it", "makes sense" or a message of specifics never counts. A message that carries a question is discussion whatever else it says ("lgtm, also X right?"): answer the question, fold the answer into the item, and wait for the next message.
-- Only a real choice reaches the owner: a visible behavior or look, a public API, a re-decided decision, a scope change. Spec wording that follows shipped code, tracker and process gaps, tooling with one right answer, a deviation that keeps the decided behavior: the agent settles them, records a short decision and moves on. The owner does not read spec files.
+- Only a real choice reaches the owner: a visible behavior or look, a public API, a re-decided decision, a scope change. Spec wording that follows shipped code, tracker and process gaps, tooling with one right answer, a deviation that keeps the decided behavior: the agent settles them, records a short decision and moves on. The owner does not read spec files. Never an item for the owner: a build, memory, heap, timeout, port, Docker, flaky test or CI problem; a tool setting; anything the run can fix itself. The run fixes the cause, or the lead records a short decision, and the card goes to Autofix or Decided without being posted.
 - A recorded decision changes per Changing a decision (stage 1): in place until built, superseded after.
 - A run agent follows accepted decisions. A decision that no longer fits becomes a queue card, never a silent change.
 - A side-agent note the owner pastes ("Heads up ...") is feedback too: explain the trade-off, give the options with a lean, the owner picks.
