@@ -5,7 +5,7 @@
 //   judges(p, src) (when p.judged is set), merge(p, verify), check(sprint), release(sprint).
 // The composition at the bottom runs the one MILESTONES entry (this milestone) build to merge. Only the release milestone's
 // script sets RELEASE_MILESTONE and composes check and release over MERGED_MILESTONES (the [x] rows of status/sprints.md).
-// The MILESTONES entry is one milestone: a "### Milestone:" block of an epic (a row of status/ownership.md and of status/sprints.md).
+// The MILESTONES entry is one milestone: a "### Milestone:" block of an epic (a row of status/sprints.md).
 // Copy, then edit meta, INTEGRATION, RELEASE_LABEL, RELEASE_PREFIX, RELEASE_EPIC, GATE_JUDGED, MIRROR,
 // the RUN_* switches, SERIAL_GATES, SHIP_PARTIAL, RELEASE_MILESTONE, MERGED_MILESTONES, STOPPED_MILESTONES, MILESTONES, BASE_SHA
 // and SPECIFICS. Keep the rest.
@@ -86,7 +86,7 @@ const SPECIFICS = {
   'NN': `Milestone NN specifics: ...`,
 }
 
-const buildPrompt = (p, wt = p.wt, branch = p.branch) => `You are the coder for milestone ${p.id}. Implement its "### Milestone:" block of the epic ${list(p.plan)} (read the epic whole, plus ${PLANS}/<release>-plan.md, ${PLANS}/status/ownership.md and ${PLANS}/decisions.md) on worktree ${wt}.
+const buildPrompt = (p, wt = p.wt, branch = p.branch) => `You are the coder for milestone ${p.id}. Implement its "### Milestone:" block of the epic ${list(p.plan)} (read the epic whole, plus ${PLANS}/<release>-plan.md and ${PLANS}/decisions.md) on worktree ${wt}.
 ${RULES(p, wt, branch)}
 How to work:
 - The branch may already hold commits from an interrupted earlier attempt: read \`git log --oneline ${BASE_SHA}..HEAD\` and \`git status\` first and continue from that state; do not redo finished tasks.

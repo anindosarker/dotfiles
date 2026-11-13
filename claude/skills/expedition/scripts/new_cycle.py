@@ -9,8 +9,8 @@ earlier release (else the skill template), and the sub-folders:
 
 status/index.html is copied from templates/swimlanes.html. status/index.html and status/data/
 are renders, never committed: the two .ai/plans/*/*/status/ lines are appended to the repo's
-.gitignore when missing. status/ownership.md, status/sprints.md
-and status/data/ are written later by ownership.py, sprints.py and swimlanes.py.
+.gitignore when missing. status/sprints.md and status/data/ are written later by sprints.py
+and swimlanes.py.
 
 Usage: python3 -I new_cycle.py <release> [--owner X] [--root PATH]
 """

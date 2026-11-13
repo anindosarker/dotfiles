@@ -1,4 +1,4 @@
-Example of a release `<release>-plan.md` and its sprint grid (v0.8.x), and a `status/ownership.md` excerpt as ownership.py wrote it (v0.9.x), from a real project. Its relative links point into that project's plan folder.
+Example of a release `<release>-plan.md` and its sprint grid (v0.8.x), and an epic file with its Ownership table as migrate_epics.py wrote it (v0.9.x), from a real project. Its relative links point into that project's plan folder.
 
 # v0.8.x plan
 
@@ -24,21 +24,28 @@ Release 0.8.0 (D32). Decisions: [decisions.md](decisions.md) D1 to D40. Queue: [
 
 ---
 
-# v0.9.x ownership
+# E9
 
-Generated: 2026-11-09 by ownership.py (E4 rows only; `docs/` is `apps/shadcn-table-docs/`)
+`docs/` is `apps/shadcn-table-docs/`; the Files cell of spec 22 is cut short here.
 
-| Milestone | Spec | Depends on | Derived from | Files |
+Decisions: D50, D51, D52
+Specs: 21, 22, 23
+Starts: S1
+
+## Ownership
+
+| Decision | Files | Spec | Milestone | Sprint |
 |---|---|---|---|---|
-| Theme customizer | 04 | none | none | `docs/package.json`, `pnpm-lock.yaml`, `docs/lib/design-system/*`, `docs/components/design-system-provider.tsx`, `docs/components/theme-customizer.tsx`, `docs/components/theme-controls.tsx`, `docs/components/theme-preset-switcher.tsx`, `docs/components/ui-radix/sheet.tsx`, `docs/lib/theme-presets.ts`, `docs/themes/*`, `docs/styles/*`, `docs/app/global.css`, `docs/app/layout.tsx`, `docs/components/theme-demo/variants/no-step-3.tsx`, `docs/components/theme-demo/variants/matches.tsx`, `docs/components/dev-home/v12/dune.tsx`, `test/docs-e2e/lib/getting-started.mjs` |
-| Theme panel copy import | 08 | none | Theme customizer (`docs/components/design-system-provider.tsx`, `docs/components/theme-customizer.tsx`, `test/docs-e2e/lib/getting-started.mjs`) | `docs/components/theme-customizer.tsx`, `docs/components/design-system-provider.tsx`, `docs/lib/design-system/config.ts`, `test/docs-e2e/lib/getting-started.mjs` |
-| Theme panel shortcut row | 09 | Theme panel copy import | Theme customizer (`docs/components/design-system-provider.tsx`, `docs/components/theme-customizer.tsx`, `test/docs-e2e/lib/getting-started.mjs`) | `docs/components/theme-customizer.tsx`, `docs/components/design-system-provider.tsx`, `test/docs-e2e/lib/getting-started.mjs` |
-| Theme color picker | 10 | Theme panel shortcut row | Theme customizer (`docs/package.json`, `pnpm-lock.yaml`, `docs/components/design-system-provider.tsx`, `docs/components/theme-customizer.tsx`, `test/docs-e2e/lib/getting-started.mjs`) | `docs/package.json`, `pnpm-lock.yaml`, `docs/components/theme-customizer.tsx`, `docs/components/design-system-provider.tsx`, `docs/lib/design-system/tokens.ts`, `test/docs-e2e/lib/getting-started.mjs` |
+| D50 Sitemap and robots for the docs site | docs/app/sitemap.ts, docs/app/robots.ts | 21 | Sitemap and robots | S1 |
+| D51 Remove the /dev preview routes from the docs site | docs/app/sitemap.ts, docs/app/robots.ts | 21 | Sitemap and robots | S1 |
+| D51 Remove the /dev preview routes from the docs site | docs/app/dev/**, docs/components/theme-demo/theme-chips.tsx | 22 | Remove dev routes | S7 |
+| D50 Sitemap and robots for the docs site | CHANGELOG.md | 23 | Integration 0.9.2; Release PR 0.9.2; After release 0.9.2 | S8 to S10 |
+| D51 Remove the /dev preview routes from the docs site | CHANGELOG.md | 23 | Integration 0.9.2; Release PR 0.9.2; After release 0.9.2 | S8 to S10 |
+| D52 Release 0.9.2 ships E9 | CHANGELOG.md | 23 | Integration 0.9.2; Release PR 0.9.2; After release 0.9.2 | S8 to S10 |
 
-## Critical paths
+## Notes
 
-- E1: 01 Filtering > 02 Pagination
-- E4: 08 Theme panel copy import > 09 Theme panel shortcut row > 10 Theme color picker
+- Scope: SEO for www.shadcn-table.com; E9 runs while E8 (docs restructuring) stays parked with no decisions. [ack 00:21]
 
 ---
 

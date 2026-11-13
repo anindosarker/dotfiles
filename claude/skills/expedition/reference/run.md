@@ -39,7 +39,7 @@ The release's `process.md` (`.ai/plans/<release>/<owner>/process.md`) holds the 
 - On RUN and on every line typed to it: read the epic file of every epic it runs, re-read whatever a note names, append ` [ack HH:MM]` to each note it read, commit (Shared files rules). A note without ack is unread.
 - RUN is idempotent: an epic whose `status/sprints.md` rows are already running or done is not started again; the runner replies with the current state. A RUN for a held epic lifts the hold.
 - Several epics run at once, no slot limit. One worktree per milestone from the pool. Machine load as today: `process.md` P5, `SERIAL_GATES` when loaded.
-- On each merge the runner ticks the row and reruns `sprints.py`, then `swimlanes.py` (the page data under `status/`; nothing under `status/` is edited by hand). `sprints.py` also syncs the Decided cards of `queue.md` with `decisions.md`; a changed `queue.md` is committed with the grid. When every milestone of an epic has merged it files its queue cards, writes the handoff, tags `[Done]` on the epic's decisions, sends DONE.
+- On each merge the runner ticks the row and reruns `sprints.py`, then `swimlanes.py` (the page data under `status/`; nothing under `status/` is edited by hand). `sprints.py` also rewrites the Sprint column of every unfinished epic's table and syncs the Decided cards of `queue.md` with `decisions.md`; the epic files and the `queue.md` it changed are committed with the grid. When every milestone of an epic has merged it files its queue cards, writes the handoff, tags `[Done]` on the epic's decisions, sends DONE.
 - Shared files (`decisions.md`, `queue.md`, the epic files): the rules in [formats.md](formats.md), Shared files.
 
 ## Each loop fire
@@ -62,10 +62,10 @@ Waiting on CI or a release run is never a foreground wait and never blocks the n
 
 ## Milestones and sprints
 
-The run follows `status/sprints.md` and `status/ownership.md` ([files.md](files.md)) and decides nothing the plan left out.
+The run follows `status/sprints.md` and the specs' milestone blocks ([files.md](files.md), Ownership) and decides nothing the plan left out.
 
 - The run unit is the milestone, not the spec: one team, its own worktree, branch and tracker, one builder end to end. It edits only its files while it runs. The orchestration per column is the run manager's judgment: one Workflow per milestone, several per milestone, or one for several, whatever proves the Acceptance with the fewest wakes and agents.
-- A sprint is one column of the grid, computed by `ownership.py` across every epic. A later epic's rows start at its start sprint (`Starts:` in its epic file), so a running column accepts them and a finished column never does. A milestone branches from the integration branch after the milestones it depends on have merged. Each epic's critical path is its line under `## Critical paths` in `status/ownership.md`, the longest chain inside that epic; launch its milestones first when a column is crowded.
+- A sprint is one column of the grid, computed by `ownership.py` across every epic. A later epic's rows start at its start sprint (`Starts:` in its epic file), so a running column accepts them and a finished column never does. A milestone branches from the integration branch after the milestones it depends on have merged. Each epic's critical path is the longest chain inside that epic (`status.py` prints it, the swimlane page marks it); launch its milestones first when a column is crowded.
 - The runner ticks `status/sprints.md` at each boundary: `[ ]` at launch, `[x]` at merge, `[!]` at a stop (the reason in the tracker's `## Attention`), and the `Updated:` line. A fix milestone added mid-run gets its row from `new_fix.py`.
 - The first bullet under `## Attention` in the tracker of a stopped milestone is one plain sentence saying what the owner has to decide or do, because the progress reply (`status.py --progress`) shows it as written.
 - The first sprint's shared milestone: everything two or more milestones need (dependency adds, lockfile, lint or tsconfig config, CI edits, shared new helpers, baseline captures). Later milestones never touch `package.json`, the lockfile, ESLint or CI config.

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Create a fix milestone in a release: run/trackers/fix-<slug>-tracker.md citing its queue
 cards on its first line, each cited queue.md card moved to the end of the Autofix lane (ticked,
-no tags; a card leaving Decided loses its #D and #E tags), then
-status/ownership.md and status/sprints.md regenerated so the fix has a grid row in the current
+no tags; a card leaving Decided loses its #D and #E tags), then the ownership facts checked
+(ownership.compute) and status/sprints.md regenerated so the fix has a grid row in the current
 sprint column (sprints.py: the first column holding a "[ ]" or "·" cell of an epic row, else the
 column after the last column holding an epic row).
 
@@ -85,7 +85,7 @@ def main():
     for label, val in (("title", a.title or ""), ("files", a.files), ("depends", a.depends)):
         if "|" in val:
             die(f"{label} must not contain '|'")
-        if "—" in val:
+        if "\u2014" in val:
             die(f"{label} contains an em dash")
     files = [f.strip() for f in a.files.split(",") if f.strip()]
     words = a.title or a.slug.replace("-", " ").capitalize()
@@ -108,11 +108,12 @@ def main():
     if missing:
         die(f"not in {queue.name}: {', '.join(missing)}")
     tracker.write_text(tracker_text(title, files, a.depends.strip()), encoding="utf-8")
-    try:
-        own.generate(folder, a.release, quiet=True)
-    except SystemExit:
+    errors = own.compute(folder)["errors"]
+    if errors:
+        for e in errors:
+            print(f"error: {e}", file=sys.stderr)
         tracker.unlink()
-        die(f"ownership.py failed with the fix; {tracker.name} removed")
+        die(f"the milestones do not schedule with the fix; {tracker.name} removed")
     with open(folder / ".ids.lock", "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         for i in ids:
@@ -121,7 +122,6 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_UN)
     print(tracker)
     print(queue)
-    print(folder / own.OWNERSHIP_MD)
     load("sprints").write(folder, a.release)
     load("swimlanes").write(folder, a.release)
 

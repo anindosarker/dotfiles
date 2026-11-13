@@ -3,13 +3,14 @@
 
 Usage: python3 -I migrate_layout.py <release> [--owner X] [--root PATH]
 
-git mv: specs/ and epics/ into plan/; trackers/ and handoffs/ into run/;
-ownership.md and sprints.md into status/ (a plain move when a path is untracked). Copies
+git mv: specs/ and epics/ into plan/; trackers/ and handoffs/ into run/; sprints.md into
+status/ (a plain move when a path is untracked); the old ownership.md is git rm'ed (the
+ownership facts are computed in memory; migrate_epics.py fills the epic files' tables). Copies
 templates/swimlanes.html to status/index.html. Rewrites links: specs/ to plan/specs/ (and the
 sprints.md link) in <release>-plan.md; specs/, epics/, trackers/, handoffs/,
-ownership.md and sprints.md paths of this release inside the handoffs and the epic files.
+sprints.md paths of this release inside the handoffs and the epic files.
 A folder without a kanban-board queue.md, or with a board in the old card format, then goes
-through migrate_queue.py before the reruns.
+through migrate_queue.py, and every folder through migrate_epics.py, before the reruns.
 Appends the status/index.html and status/data/ render lines to the repo's .gitignore when
 missing (renders, never committed). Then reruns ownership.py, sprints.py, swimlanes.py and status.py. Commits nothing. Refuses a
 folder that already has plan/specs/; a target folder that exists already (an epic file
@@ -29,7 +30,7 @@ RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
 HERE = Path(__file__).resolve().parent
 MOVES = [("specs", "plan/specs"), ("epics", "plan/epics"), ("trackers", "run/trackers"),
          ("handoffs", "run/handoffs"),
-         ("ownership.md", "status/ownership.md"), ("sprints.md", "status/sprints.md")]
+         ("sprints.md", "status/sprints.md")]
 DIRS = {"specs": "plan", "epics": "plan", "trackers": "run", "handoffs": "run"}
 
 
@@ -70,7 +71,7 @@ def rewrite_paths(text, prefix):
     for old, top in DIRS.items():
         text = re.sub(p + old + "/", prefix + f"{top}/{old}/", text)
         text = re.sub(r"(?<![\w./-])" + old + "/", f"{top}/{old}/", text)
-    for name in ("ownership.md", "sprints.md"):
+    for name in ("sprints.md",):
         text = re.sub(p + re.escape(name), prefix + "status/" + name, text)
         text = re.sub(r"(?<![\w./-])" + re.escape(name), "status/" + name, text)
     return text
@@ -145,6 +146,12 @@ def main():
             s.rmdir()
         else:
             move(root, folder, s, d)
+    if (folder / "ownership.md").exists():
+        r = subprocess.run(["git", "-C", str(root), "rm", "-q", "--", str(folder / "ownership.md")],
+                           capture_output=True, text=True)
+        if r.returncode:
+            (folder / "ownership.md").unlink()
+        print("removed: ownership.md (computed in memory now)")
     for sub in ("plan/specs", "plan/epics", "run/trackers", "run/handoffs", "status/data"):
         (folder / sub).mkdir(parents=True, exist_ok=True)
     tpl = HERE.parent / "templates" / "swimlanes.html"
@@ -169,6 +176,10 @@ def main():
         r = subprocess.run([sys.executable, "-I", str(HERE / "migrate_queue.py")] + args, cwd=str(root))
         if r.returncode:
             die(f"migrate_queue.py failed (exit {r.returncode}); the moves stay, fix and rerun it")
+    print("== migrate_epics.py")
+    r = subprocess.run([sys.executable, "-I", str(HERE / "migrate_epics.py")] + args, cwd=str(root))
+    if r.returncode:
+        die(f"migrate_epics.py failed (exit {r.returncode}); the moves stay, fix and rerun it")
     for script in ("ownership.py", "sprints.py", "swimlanes.py", "status.py"):
         print(f"== {script}")
         r = subprocess.run([sys.executable, "-I", str(HERE / script)] + args, cwd=str(root))

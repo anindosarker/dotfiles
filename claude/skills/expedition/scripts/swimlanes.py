@@ -4,7 +4,8 @@
 
 Usage: python3 -I swimlanes.py <release> [--owner X] [--root PATH]
 
-Reads status/sprints.md (grid), status/ownership.md (table and "## Critical paths") and
+Reads status/sprints.md (grid), the ownership facts (ownership.compute, in memory: each
+milestone's dependencies and files, each epic's critical path computed on the fly) and
 <release>-plan.md (Deliverables). Each epic's path milestones are marked critical; the data
 holds criticalPaths {"E6": [names]} and criticalPath, their union, for older pages.
 Refreshes status/index.html from templates/swimlanes.html when the template is newer or the
@@ -47,10 +48,9 @@ def status_of(marker):
 
 def build(folder, release, own):
     """The swimlane data dict of a release folder."""
-    sprints_path, own_path = folder / own.SPRINTS_MD, folder / own.OWNERSHIP_MD
-    for p in (sprints_path, own_path):
-        if not p.is_file():
-            die(f"{p.relative_to(folder)} missing: run ownership.py and sprints.py")
+    sprints_path = folder / own.SPRINTS_MD
+    if not sprints_path.is_file():
+        die(f"{sprints_path.relative_to(folder)} missing: run sprints.py")
     sprints_md = own.read(sprints_path)
     plan = folder / f"{release}-plan.md"
     plan_md = own.read(plan) if plan.is_file() else ""
@@ -58,11 +58,13 @@ def build(folder, release, own):
 
     specs = {m.group(1): {"title": m.group(2), "spec": m.group(3), "outcome": m.group(5)}
              for m in PLAN_ROW_RE.finditer(plan_md)}
-    owned, err = own.read_ownership(own_path)
-    if err:
-        die(err)
-    owners = {m["name"]: m for m in owned}
-    paths = {f"E{e}": names for e, names in sorted(own.read_paths(own_path).items())}
+    comp = own.compute(folder)
+    if comp["errors"]:
+        for e in comp["errors"]:
+            print(f"error: {e}", file=sys.stderr)
+        die("the milestones do not schedule: fix the specs (ownership.py names the error)")
+    owners = {m["name"]: m for m in comp["milestones"]}
+    paths = {f"E{e}": names for e, names in sorted(comp["paths"].items())}
     union = [n for names in paths.values() for n in names]
 
     head, grid = own.table_rows(sprints_md, "Milestone")

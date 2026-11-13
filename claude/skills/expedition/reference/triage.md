@@ -23,5 +23,5 @@ Folded into stage 1: the run's cards in `queue.md` are queue cards like any othe
 
 - In doubt: a new release. A follow-up spec that grows past the current decisions blocks the release.
 - A decision moved to another release gets the bullet `- Deferred to v0.<n>.x`. That release's specs cite it as `(v0.<m>.x D<n>)`.
-- `new_spec.py` adds the Specs row; the follow-up spec's milestones get their `status/ownership.md` rows from `ownership.py` and their grid rows from `sprints.py`. A fix milestone gets its tracker and its grid row in the current sprint column from `new_fix.py`.
+- `new_spec.py` adds the Specs row; the follow-up spec's milestones get their column from `ownership.py` and their grid rows from `sprints.py`. A fix milestone gets its tracker and its grid row in the current sprint column from `new_fix.py`.
 - A follow-up spec's milestones run as their own milestones in the column `ownership.py` gives them, with their own Workflow, or as a single Agent when nothing follows ([run.md](run.md), Orchestration).

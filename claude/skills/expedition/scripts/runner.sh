@@ -343,7 +343,7 @@ cmd_fork() {
   if [ "$resume" = 1 ]; then
     prompt="Resumed. Finish the task of the first prompt of this session, then stop."
   elif [ -z "$prompt" ]; then
-    prompt="You are the spec writer for epic $epic of $release, decisions $ids. You hold the lead's full context. First read the epic file plan/epics/$epic.md in the release folder and every file its Notes name. Write one spec per decided item with new_spec.py per SKILL.md stage 2, run ownership.py, then reply by SendMessage to $from with one line: SPECS $epic <spec numbers>. Do nothing else."
+    prompt="You are the spec writer for epic $epic of $release, decisions $ids. You hold the lead's full context. First read the epic file plan/epics/$epic.md in the release folder and every file its Notes name. Then, per SKILL.md stage 2: fill the Files column of the epic's Ownership table (the files each decision changes, as the project writes the paths); cut the epic into specs weighing the three aims; write the specs with new_spec.py; run ownership.py $release --epic $epic <spec numbers> to complete the table; check the plan with that output and your own judgment and regroup the specs if a clearly better cut exists; then reply by SendMessage to $from with one line: SPECS $epic <spec numbers>. Do nothing else."
   fi
   local -a cmd
   if [ "$resume" = 1 ]; then

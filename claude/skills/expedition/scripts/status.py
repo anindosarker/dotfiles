@@ -15,9 +15,9 @@ With nothing unfinished: the last epic's line, then "Nothing running." and the u
 cards of queue.md as "Ready for an epic: **Q<n>**, ...".
 
 Layout: <release>-plan.md (## Goals and ## Deliverables only), plan/specs/NN-<slug>.md,
-plan/epics/E<n>.md, queue.md, status/index.html,
-status/ownership.md (ownership.py), status/sprints.md (sprints.py), run/trackers/ (one per milestone,
-NN-<slug>-tracker.md or fix-<slug>-tracker.md).
+plan/epics/E<n>.md, queue.md, status/index.html, status/sprints.md (sprints.py), run/trackers/
+(one per milestone, NN-<slug>-tracker.md or fix-<slug>-tracker.md). The ownership facts come from
+ownership.compute, in memory.
 
 Decisions (### D<n>) get a derived state table from the spec files that cite them and the
 Status lines of those specs' milestone trackers. Queue cards (queue.md, a kanban board, see
@@ -37,18 +37,23 @@ and done ([Done]). The stage line reports discuss and run together ("Stage: disc
 Also under Epics: the decisions still editable in place (no citing spec has a status/sprints.md row
 with "[ ]" or "[x]", not superseded); a supersede marked on one side only; an unbuilt spec
 citing a superseded decision; for each epic not done, its plan/epics/E<n>.md missing or Notes bullets
-without "[ack HH:MM]"; an epic file whose epic has grid rows and no "Starts:" value, or a
-Starts value that is not S<number>; while an epic runs, the next epic file missing.
+without "[ack HH:MM]" (only when the file has a ## Notes section); an epic file whose epic has
+grid rows and no "Starts:" value, or a Starts value that is not S<number>; while an epic runs,
+the next epic file missing. The epic files' "## Ownership" tables (ownership.epic_gaps): an epic
+with grid rows whose file has no table, an unreadable table, a decision of the Decisions line
+with no row, a spec of the epic with no row, a Files path that does not exist in the repo (not
+for a finished epic: every decision [Done] or every grid row [x] or [!]), a row file no milestone of its spec owns, a Sprint
+cell that disagrees with the grid. Epics without an epic file are not flagged.
 
 Gaps reported for the layout: a plan section other than Goals and Deliverables; a
 Deliverables Scope cell over 120 characters; a spec with no "### Milestone:" block, a block without Files owned, a Task line without
-Checks, no Acceptance line; status/ownership.md missing or older than a spec file ("run
-ownership.py"), or one ownership.py would refuse (collision, cycle); status/sprints.md missing,
-without a "| Milestone" grid, with text under the grid, with a cell not one of [x], [ ],
-·, [!] or blank, or with rows that differ from status/ownership.md. Ownership also lists each
-tagged epic's line under "## Critical paths" and reports a missing section or line. A folder
-without plan/ is refused (migrate_layout.py), a folder still on the old queue files too
-(migrate_queue.py). A tracker Status of merged counts as done. A fix tracker (and any tracker
+Checks, no Acceptance line; milestones ownership.py would refuse (collision, cycle);
+status/sprints.md missing, without a "| Milestone" grid, with text under the grid, with a cell
+not one of [x], [ ], ·, [!] or blank, or with rows that differ from the milestones of the specs
+with an Epic line and the fix trackers. Ownership also prints each tagged epic's critical path,
+computed on the fly. A folder without plan/ is refused (migrate_layout.py), a folder still on
+the old queue files too (migrate_queue.py), a folder that still has status/ownership.md too
+(migrate_epics.py). A tracker Status of merged counts as done. A fix tracker (and any tracker
 no milestone owns) counts as citing the queue cards named on its first line.
 """
 import argparse
@@ -83,10 +88,8 @@ SPECS_DIR = "plan/specs"
 EPICS_DIR = "plan/epics"
 TRACKERS_DIR = "run/trackers"
 QUEUE_MD = "queue.md"
-OWNERSHIP_MD = "status/ownership.md"
 SPRINTS_MD = "status/sprints.md"
 INDEX_HTML = "status/index.html"
-PATHS_HEAD = "## Critical paths"
 
 
 def die(msg):
@@ -605,45 +608,25 @@ def new_print(folder, plan, d, own):
             print(f"  no Status line: {p.name}")
 
     print("Ownership:")
-    ownership = folder / OWNERSHIP_MD
+    comp = own.compute(folder)
     owned = None
-    if not docs and not ownership.is_file():
+    if not docs:
         print("  no specs yet")
-    elif not ownership.is_file():
-        print("  status/ownership.md missing: run ownership.py")
     else:
-        newer = sorted(p.name for _, p in docs if p.stat().st_mtime > ownership.stat().st_mtime)
-        if newer:
-            print(f"  status/ownership.md older than plan/specs/{newer[0]}: run ownership.py")
-        owned, err = own.read_ownership(ownership)
-        if err:
-            print(f"  {err}")
-        current, errors = own.collect(folder)
-        if not errors:
-            _, _, errors, _ = own.schedule(current, own.floors(folder, current))
-        for e in errors:
+        for e in comp["errors"]:
             print(f"  ownership.py would fail: {e}")
-        if owned is not None and not errors:
-            have = {m["name"] for m in owned}
-            want = {m["name"] for m in current}
-            for n in sorted(want - have):
-                print(f"  milestone not in status/ownership.md: {n} (run ownership.py)")
-            for n in sorted(have - want):
-                print(f"  status/ownership.md row with no milestone block or fix tracker: {n} (run ownership.py)")
-        if owned is not None:
-            paths = own.read_paths(ownership)
-            print(f"  {len(owned)} milestones; critical paths: {len(paths)} epics")
-            if PATHS_HEAD not in read(ownership):
-                print(f"  status/ownership.md has no '{PATHS_HEAD}' section: run ownership.py")
+        if not comp["errors"]:
+            owned = comp["milestones"]
+            by_name = {m["name"]: m for m in owned}
+            print(f"  {len(owned)} milestones, {max(comp['col'].values(), default=0)} columns")
             tagged = sorted({e for e, _ in own.spec_epics(folder).values() if e})
             for e in tagged:
-                print(f"  E{e} path: {' > '.join(paths[e])}" if e in paths
-                      else f"  E{e} has no critical path line: run ownership.py")
+                print(f"  E{e} path: {own.path_text(comp['paths'].get(e, []), by_name)}")
 
     print("Sprints:")
     sprints = folder / SPRINTS_MD
     if owned is None:
-        print("  no status/ownership.md to compare with" if docs else "  no specs yet")
+        print("  no milestones to compare with" if docs else "  no specs yet")
     if not sprints.is_file():
         if docs:
             print("  status/sprints.md missing: run sprints.py")
@@ -672,10 +655,10 @@ def new_print(folder, plan, d, own):
                 names = [m["name"] for m in owned if m["name"] in in_epic or m["spec"] == own.FIX]
                 for n in names:
                     if n not in grid:
-                        print(f"  status/ownership.md row not in status/sprints.md: {n} (run sprints.py)")
+                        print(f"  milestone not in status/sprints.md: {n} (run sprints.py)")
                 for n in grid:
                     if n not in names:
-                        print(f"  status/sprints.md row not in status/ownership.md or in no epic: {n}")
+                        print(f"  status/sprints.md row with no milestone or in no epic: {n}")
 
     print("Spec checks:")
     quiet = True
@@ -776,7 +759,7 @@ def main():
     index = plan
     decisions = folder / "decisions.md"
     print("Files:")
-    for p in (plan, folder / OWNERSHIP_MD, folder / SPRINTS_MD, folder / INDEX_HTML, decisions, queue):
+    for p in (plan, folder / SPRINTS_MD, folder / INDEX_HTML, decisions, queue):
         print(f"  {p.relative_to(folder)}: {'present' if p.is_file() else 'missing'}")
 
     own = load_ownership()
@@ -870,6 +853,8 @@ def main():
             print(f"  E{e} has rows in status/sprints.md and no Starts value: ownership.py {a.release} --backfill-starts")
         elif v and not own.SPRINT_VALUE_RE.match(v):
             print(f"  plan/epics/E{e}.md: Starts '{v}' is not S<number>")
+    for gap in own.epic_gaps(folder, own.compute(folder)):
+        print(f"  {gap}")
     if any(marks.get(int(e[1:])) for e in running):
         nxt = f"E{max(groups) + 1}"
         if not (epics_dir / f"{nxt}.md").is_file():

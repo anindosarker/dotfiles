@@ -1,11 +1,24 @@
 #!/usr/bin/env python3
-"""Create the epic file plan/epics/E<n>.md of a release (reference/formats.md, Epic file) and commit it.
+"""Create or start the epic file plan/epics/E<n>.md of a release (reference/formats.md, Epic
+file), or append a note to it, and commit that one file.
 
 Usage: python3 -I new_epic_file.py <release> E<n> [--owner X] [--root PATH]
+       python3 -I new_epic_file.py <release> E<n> <D ids> [--owner X] [--root PATH]
+       python3 -I new_epic_file.py <release> E<n> --note "<text>" [--owner X] [--root PATH]
 
-Writes the stub "# E<n>", an empty "Decisions:", "Specs:" and "Starts:" line and "## Notes", then commits
-that one file. Refuses when the file exists. The lead runs it the moment the previous epic's RUN
-is sent.
+Stub (no D ids): writes "# E<n>", empty "Decisions:", "Specs:" and "Starts:" lines and the empty
+"## Ownership" table, no "## Notes" heading. Refuses when the file exists. go.py runs it for the
+next epic the moment the previous epic's RUN is sent.
+
+Start the epic (D ids, on the owner's "epic"): creates the file when it does not exist, writes
+the "Decisions:" line (the ids already there plus the new ones, in number order) and one table
+row per decision, "| D<n> <title from decisions.md> |  |  |  |  |"; on a rerun only the missing
+rows are added, every other row kept as it is. Refuses, writing nothing, a decision that is
+missing from decisions.md, superseded, already tagged with another epic, or done with nothing to
+run ("[Done]" without an epic tag).
+
+Note (--note): appends "- <text>" at the end of the "## Notes" section, creating the section at
+the end of the file when it is missing. An urgent note starts with "Urgent:".
 """
 import argparse
 import importlib.util
@@ -16,6 +29,7 @@ from pathlib import Path
 
 RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
 EPIC_RE = re.compile(r"^E\d+$")
+D_RE = re.compile(r"^D(\d+)$")
 
 
 def die(msg):
@@ -32,10 +46,79 @@ def load_ownership():
     return mod
 
 
+def stub(own, epic):
+    return f"# {epic}\n\nDecisions:\nSpecs:\nStarts:\n\n" + "\n".join([own.OWN_HEAD, ""] + own.render_table([])) + "\n"
+
+
+def commit(root, path, message):
+    for args in (["add", "--", str(path)],
+                 ["commit", "-q", "-m", message, "--only", "--", str(path)]):
+        r = subprocess.run(["git", "-C", str(root)] + args, capture_output=True, text=True)
+        if r.returncode:
+            die(f"git {args[0]} failed: {r.stderr.strip() or r.stdout.strip()}")
+
+
+def start(own, folder, path, epic, nums):
+    """Write the Decisions line and the missing rows; return True when the file changed."""
+    n = int(epic[1:])
+    tags = own.read_tags(folder)
+    heads, bullets = own.supersedes(folder)
+    gone = {**bullets, **heads}
+    bad = []
+    for d in nums:
+        t = tags.get(d)
+        if t is None:
+            bad.append(f"D{d} is not in decisions.md")
+        elif d in gone:
+            bad.append(f"D{d} is superseded by D{gone[d]}")
+        elif t["epic"] and t["epic"] != n:
+            bad.append(f"D{d} is already in E{t['epic']}")
+        elif t["done"] and not t["epic"]:
+            bad.append(f"D{d} is done with nothing to run")
+    if bad:
+        die("; ".join(bad) + ": nothing written")
+    text = own.read(path) if path.is_file() else stub(own, epic)
+    rows, err = own.read_table(text)
+    if err:
+        die(f"{path}: {err}")
+    rows = rows or []
+    have = {r["decision"] for r in rows}
+    ids = sorted(set(own.epic_decisions(text)) | set(nums))
+    titles = own.decision_titles(folder)
+    added = [d for d in ids if d not in have]
+    rows += [{"decision": d, "title": titles.get(d, ""), "files": [], "spec": "",
+              "milestone": "", "sprint": ""} for d in added]
+    new = own.put_table(own.set_field(text, "Decisions", ", ".join(f"D{d}" for d in ids)), rows)
+    print(f"{epic}: Decisions {', '.join(f'D{d}' for d in ids)}; rows added: "
+          f"{', '.join(f'D{d}' for d in added) or 'none'}")
+    if path.is_file() and new == own.read(path):
+        return False
+    path.write_text(new, encoding="utf-8")
+    return True
+
+
+def note(own, path, text_line):
+    """Append "- <text>" to the Notes section, creating it at the end of the file."""
+    lines = own.read(path).rstrip("\n").split("\n")
+    span = own.section(lines, own.NOTES_HEAD)
+    bullet = f"- {text_line.strip()}"
+    if span is None:
+        lines += ["", own.NOTES_HEAD, "", bullet]
+    else:
+        end = span[1]
+        while end > span[0] + 1 and not lines[end - 1].strip():
+            end -= 1
+        lines.insert(end, bullet)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def main():
-    ap = argparse.ArgumentParser(usage="new_epic_file.py <release> E<n> [--owner X] [--root PATH]")
+    ap = argparse.ArgumentParser(
+        usage="new_epic_file.py <release> E<n> [<D ids> | --note \"<text>\"] [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("epic")
+    ap.add_argument("ids", nargs="*")
+    ap.add_argument("--note")
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: found from the cwd)")
     a = ap.parse_args()
@@ -43,19 +126,31 @@ def main():
         die(f"bad release '{a.release}', expected like v0.9.x")
     if not EPIC_RE.match(a.epic):
         die(f"bad epic '{a.epic}', expected like E3")
+    items = [s.strip() for x in a.ids for s in x.split(",") if s.strip()]
+    if any(not D_RE.match(i) for i in items):
+        die(f"bad decision ids {' '.join(items)}, expected like D81 D82")
+    if items and a.note is not None:
+        die("give D ids or --note, not both")
+    if a.note is not None and ("\u2014" in a.note or not a.note.strip()):
+        die("the note is empty or contains an em dash")
     own = load_ownership()
     root = own.repo_root(a.root, a.release)
     folder = own.release_folder(root, own.detect_owner(root, a.owner), a.release)
     path = folder / own.EPICS_DIR / f"{a.epic}.md"
-    if path.exists():
-        die(f"refusing to overwrite {path}")
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(f"# {a.epic}\n\nDecisions:\nSpecs:\nStarts:\n\n## Notes\n", encoding="utf-8")
-    for args in (["add", "--", str(path)],
-                 ["commit", "-q", "-m", f"docs(plan): {a.release} {a.epic} epic file", "--only", "--", str(path)]):
-        r = subprocess.run(["git", "-C", str(root)] + args, capture_output=True, text=True)
-        if r.returncode:
-            die(f"git {args[0]} failed: {r.stderr.strip()}")
+    if a.note is not None:
+        if not path.is_file():
+            die(f"{path} missing")
+        note(own, path, a.note)
+        commit(root, path, f"docs(plan): {a.release} {a.epic} note")
+    elif items:
+        if start(own, folder, path, a.epic, [int(D_RE.match(i).group(1)) for i in items]):
+            commit(root, path, f"docs(plan): {a.release} {a.epic} epic started")
+    else:
+        if path.exists():
+            die(f"refusing to overwrite {path}")
+        path.write_text(stub(own, a.epic), encoding="utf-8")
+        commit(root, path, f"docs(plan): {a.release} {a.epic} epic file")
     print(path)
 
 

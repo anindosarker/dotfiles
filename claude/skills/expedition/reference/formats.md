@@ -152,32 +152,44 @@ One file per release, template [../templates/decisions.md](../templates/decision
 
 ## Epic file
 
-`plan/epics/E<n>.md`, one per epic, written by `new_epic_file.py`; lifecycle in SKILL.md stage 1, reading and ack in [run.md](run.md), Epics.
+`plan/epics/E<n>.md`, one per epic, started by `new_epic_file.py`; lifecycle in SKILL.md stage 1, reading and ack in [run.md](run.md), Epics.
 
-```
-# E6
+```md
+# E12
 
-Decisions: D35, D36, D38.
-Specs: 09, 10.
-Starts: S4
+Decisions: D81, D82, D83, D86, D88, D90
+Specs: 39, 40, 41, 42, 49
+Starts: S17
+
+## Ownership
+
+| Decision | Files | Spec | Milestone | Sprint |
+|---|---|---|---|---|
+| D88 One debounce hook | useDebouncedFilter.ts | 39 | Filter debounce hook | S17 |
+| D90 Home hero wording | page.tsx | 49 | Home hero wording | S17 |
+| D82 Multi-select opens on click | ST_FilterTextField.tsx | 41 | Filter editor fixes | S17 |
+| D83 Escape closes the editor | ST_FilterTextField.tsx | 41 | Filter editor fixes | S17 |
+| D81 Date filters compare dates | filterFns.ts | 40 | Date filter compare | S18 |
+| D86 Range editors show both inputs | ST_FilterRangeFields.tsx | 42 | Range filter editor | S18 |
 
 ## Notes
 
-- process.md P3, P4 changed since E5: re-read before the first launch. [ack 14:05]
-- run.md tick rules changed: one line per idle tick. [ack 14:05]
-- Owner tried the dropdown version and disliked it; do not propose it back. [ack 14:05]
-- Spec 10 builds on 07 from E3; 07 merges first. [ack 14:05]
-- SKIP 09: D38 superseded by D41, rebuilt next epic.
+- process.md P3, P4 changed since E11: re-read before the first launch. [ack 14:05]
+- SKIP 41: D82 superseded by D95, rebuilt next epic.
 ```
 
-- `Starts: S<n>` is the epic's start sprint, written once on go by `new_spec.py --epic` and never changed: no milestone of the epic sits in an earlier column.
-- Notes hold only what the specs cannot say: rule changes since the last epic, owner context, cross-epic order, the lead's moves during the run (SKIP, HOLD). Nothing restates a decision, a spec or a tracker.
+- `Decisions:` and the Decision cells (`D<n> <decision title>`): `new_epic_file.py`, on `epic`. One row per decision until the specs exist.
+- Files: the spec writer, before it writes specs: the files the decision changes, paths as the project writes them, several separated by `, `.
+- Spec, Milestone and Sprint: `ownership.py --epic E<n>`, from the specs. One row per decision and spec of the epic citing it (`(D82)`); a spec of the epic citing none of its decisions gets a row with an empty Decision cell. Milestone is the spec's milestone name, several joined by `; `. Sprint is that milestone's sprint, a range `S17 to S19` when the spec's milestones span several. Before go the sprints are provisional (the current sprint as the epic's start); go writes the real ones, and every later `sprints.py` run keeps the Sprint column of an unfinished epic in step with the grid. Rows are ordered by sprint, then spec number, then decision number.
+- `Specs:` and `Starts:`: `go.py`, on go. `Starts: S<n>` is the epic's start sprint, written once and never changed: no milestone of the epic sits in an earlier column.
+- The table shows the plan; it does not pass or fail it. `status.py` flags a decision or spec with no row, a Files path that does not exist, a row file no milestone of its spec owns, and a Sprint cell that disagrees with the grid.
+- `## Notes` exists only when something the specs cannot hold must be said: a rule changed since the last epic, owner context such as a tried-and-rejected option, a cross-epic order, the lead's moves during the run (SKIP, HOLD). Written with `new_epic_file.py <release> E<n> --note "<text>"`, which creates the section. Nothing restates a decision, a spec or a tracker.
 - An urgent note starts with `Urgent:`; a RULES line is one.
 - ` [ack HH:MM]` is appended by the runner when it has read the note; a note without it is unread.
 
 ## status/sprints.md
 
-Columns are the sprints `S1`, `S2`, ... that `ownership.py` computes. Rows are the milestones of specs that carry a `- Epic: E<n>` line (written under the title line by `new_spec.py --epic`), plus fix milestones; row text is the epic label, the spec number and the milestone name; rows sorted by epic, then spec number, then `status/ownership.md` order.
+Columns are the sprints `S1`, `S2`, ... that `ownership.py` computes. Rows are the milestones of specs that carry a `- Epic: E<n>` line (written under the title line by `new_spec.py --epic`), plus fix milestones; row text is the epic label, the spec number and the milestone name; rows sorted by epic, then spec number, then milestone order in the spec.
 
 ```md
 | Milestone | S1 | S2 |
