@@ -2,16 +2,16 @@
 """Write the swimlane data of a release: status/data/sprints.json and status/data/sprints.data.js
 (the same JSON as a script, so status/index.html also opens from file://).
 
-Usage: python3 -I swimlanes.py <release> [--owner X] [--root PATH]
+Usage: python3 -I sprints/swimlanes.py <release> [--owner X] [--root PATH]
 
-Reads status/sprints.md (grid), the ownership facts (ownership.compute, in memory: each
+Reads status/sprints.md (grid), the ownership facts (lib/ownership.py compute, in memory: each
 milestone's dependencies and files, each epic's critical path computed on the fly) and
 <release>-plan.md (Deliverables). Each epic's path milestones are marked critical; the data
 holds criticalPaths {"E6": [names]} and criticalPath, their union, for older pages.
 Refreshes status/index.html from templates/swimlanes.html when the template is newer or the
-page is missing. Both are renders, ignored by git (new_cycle.py and migrate_layout.py add
-the .gitignore lines), never committed. Writes nothing else. The lead runs it at go, the runner on merge, after
-sprints.py.
+page is missing. Both are renders, ignored by git (plan/new_cycle.py and migrate/layout.py add
+the .gitignore lines), never committed. Writes nothing else. sprints/refresh.py runs it last, after
+the grid chain.
 """
 import argparse
 import importlib.util
@@ -21,25 +21,30 @@ import shutil
 import sys
 from pathlib import Path
 
-RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
+
+def _common():
+    name = "expedition_lib_common"
+    if name not in sys.modules:
+        sys.dont_write_bytecode = True
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent.parent / "lib" / "common.py")
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+C = _common()
+
 NUM = r"\d{2}(?:\.\d+)?"
 PLAN_ROW_RE = re.compile(r"^\|\s*(" + NUM + r")\s*\|\s*\[(.+?)\]\((.+?)\)\s*\|\s*(E\d+)?\s*\|\s*(.+?)\s*\|\s*$", re.M)
 GRID_LABEL_RE = re.compile(r"^(E\d+)\s+(" + NUM + r")\s+(.+)$")
-TEMPLATE = Path(__file__).resolve().parent.parent / "templates" / "swimlanes.html"
+TEMPLATE = C.TEMPLATES / "swimlanes.html"
 
 
-def die(msg):
-    print(f"error: {msg}", file=sys.stderr)
-    sys.exit(1)
+die = C.die
 
 
 def load_ownership():
-    sys.dont_write_bytecode = True
-    path = Path(__file__).resolve().parent / "ownership.py"
-    spec = importlib.util.spec_from_file_location("ownership", path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+    return C.load("lib/ownership")
 
 
 def status_of(marker):
@@ -50,7 +55,7 @@ def build(folder, release, own):
     """The swimlane data dict of a release folder."""
     sprints_path = folder / own.SPRINTS_MD
     if not sprints_path.is_file():
-        die(f"{sprints_path.relative_to(folder)} missing: run sprints.py")
+        die(f"{sprints_path.relative_to(folder)} missing: run sprints/refresh.py")
     sprints_md = own.read(sprints_path)
     plan = folder / f"{release}-plan.md"
     plan_md = own.read(plan) if plan.is_file() else ""
@@ -62,7 +67,7 @@ def build(folder, release, own):
     if comp["errors"]:
         for e in comp["errors"]:
             print(f"error: {e}", file=sys.stderr)
-        die("the milestones do not schedule: fix the specs (ownership.py names the error)")
+        die("the milestones do not schedule: fix the specs (sprints/check.py names the error)")
     owners = {m["name"]: m for m in comp["milestones"]}
     paths = {f"E{e}": names for e, names in sorted(comp["paths"].items())}
     union = [n for names in paths.values() for n in names]
@@ -149,12 +154,12 @@ def write(folder, release, quiet=False):
 
 
 def main():
-    ap = argparse.ArgumentParser(usage="swimlanes.py <release> [--owner X] [--root PATH]")
+    ap = argparse.ArgumentParser(usage="sprints/swimlanes.py <release> [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: found from the cwd)")
     a = ap.parse_args()
-    if not RELEASE_RE.match(a.release):
+    if not C.RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
     own = load_ownership()
     root = own.repo_root(a.root, a.release)

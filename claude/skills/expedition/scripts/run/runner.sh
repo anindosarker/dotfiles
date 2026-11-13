@@ -19,8 +19,8 @@
 #        runner.sh stop "<window name>"          close a fork window ("<release> specs E<n>")
 #        runner.sh progress <release> [--wait N] [--root PATH]   the progress block: asked of the live runner
 #                                                (it writes the block to a file, answered first in its turn),
-#                                                else or after N seconds from status.py --progress
-#        runner.sh watch start|stop|status        the nudge watcher (scripts/nudge-watch.sh)
+#                                                else or after N seconds from status/progress.py
+#        runner.sh watch start|stop|status        the nudge watcher (scripts/run/nudge-watch.sh)
 #
 # Folder: start and fork open a new window in --cwd, else in the folder the script is called
 # from. A resumed runner or fork reopens in the folder stored in its registry entry. list, stop,
@@ -42,12 +42,12 @@
 # $EXPEDITION_FORK_MODEL, else fable. Forks are registry entries of kind "fork", no status file.
 set -euo pipefail
 
-SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 REGISTRY="$HOME/.claude/expedition-runners.json"
 STATE_DIR="$HOME/.claude/expedition-runners"
 SETTINGS="$SKILL_DIR/templates/runner-settings.json"
 BRIEF_TEMPLATE="$SKILL_DIR/templates/runner-brief.md"
-WATCHER="$SKILL_DIR/scripts/nudge-watch.sh"
+WATCHER="$SKILL_DIR/scripts/run/nudge-watch.sh"
 WATCH_PID="$STATE_DIR/nudge-watch.pid"
 
 die() { echo "error: $*" >&2; exit 1; }
@@ -346,7 +346,7 @@ cmd_fork() {
   if [ "$resume" = 1 ]; then
     prompt="Resumed. Finish the task of the first prompt of this session, then stop."
   elif [ -z "$prompt" ]; then
-    prompt="You are the spec writer for epic $epic of $release, decisions $ids. You hold the lead's full context. First read the epic file plan/epics/$epic.md in the release folder and every file its Notes name. Then, per SKILL.md stage 2: fill the Files column of the epic's Ownership table (the files each decision changes, as the project writes the paths); cut the epic into specs weighing the three aims; write the specs with new_spec.py; run ownership.py $release --epic $epic <spec numbers> to complete the table; check the plan with that output and your own judgment and regroup the specs if a clearly better cut exists; then reply by SendMessage to $from with one line: SPECS $epic <spec numbers>. Do nothing else."
+    prompt="You are the spec writer for epic $epic of $release, decisions $ids. You hold the lead's full context. First read the epic file plan/epics/$epic.md in the release folder and every file its Notes name. Then, per SKILL.md stage 2: fill the Files column of the epic's Ownership table (the files each decision changes, as the project writes the paths); cut the epic into specs weighing the three aims; write the specs with plan/new_spec.py; run epics/table.py $release $epic <spec numbers> to complete the table; check the plan with that output and your own judgment and regroup the specs if a clearly better cut exists; then reply by SendMessage to $from with one line: SPECS $epic <spec numbers>. Do nothing else."
   fi
   local -a cmd
   if [ "$resume" = 1 ]; then
@@ -426,7 +426,7 @@ cmd_send() {
 # progress <release> [--wait N] [--root PATH]: the progress block, at once. With a live runner it
 # types "PROGRESS <file>" into the runner window and waits up to N seconds (default 45) for the
 # runner to write the block to that file; the runner answers a PROGRESS line before anything
-# else in its turn. No live runner, or no answer in time: status.py --progress from the files,
+# else in its turn. No live runner, or no answer in time: status/progress.py from the files,
 # with one last line saying so.
 cmd_progress() {
   local release="" wait=45 root="" name target pf i
@@ -440,7 +440,7 @@ cmd_progress() {
   done
   [ -n "$release" ] || usage
   check_release "$release"
-  local -a status_cmd=(python3 -I "$SKILL_DIR/scripts/status.py" "$release" --progress)
+  local -a status_cmd=(python3 -I "$SKILL_DIR/scripts/status/progress.py" "$release")
   [ -z "$root" ] || status_cmd+=(--root "$root")
   name="$(runner_name "$release")"
   target="$(reg field "$name" tmux)"

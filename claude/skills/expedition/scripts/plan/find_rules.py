@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Print candidate project planning-rules paths, one per line, relative to the repo root.
 
-Usage: python3 -I find_rules.py [REPO]
+Usage: python3 -I plan/find_rules.py [REPO]
 
 Prints nothing when none are found. Matches files named like *plan*guide*.md
 or planning*.md (case-insensitive), and CLAUDE.md or AGENTS.md lines (root and
@@ -77,7 +77,7 @@ def find_rules(root):
 
 def main():
     if len(sys.argv) > 2 or (len(sys.argv) == 2 and sys.argv[1] in ("-h", "--help")):
-        print("usage: find_rules.py [REPO]", file=sys.stderr)
+        print("usage: plan/find_rules.py [REPO]", file=sys.stderr)
         sys.exit(2)
     for path in find_rules(repo_root(sys.argv[1] if len(sys.argv) == 2 else None)):
         print(path)

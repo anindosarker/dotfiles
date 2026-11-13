@@ -1,235 +1,77 @@
 #!/usr/bin/env python3
-"""Compute the ownership facts of a release from the milestone blocks of its specs, in memory.
-No file holds them: sprints.py, swimlanes.py, status.py, new_fix.py and go.py call compute().
-
-Usage: python3 -I ownership.py <release> [--owner X] [--root PATH]
-       python3 -I ownership.py <release> --epic E<n> [<spec numbers>]
-       python3 -I ownership.py <release> --overlap <spec numbers or D ids>
-       python3 -I ownership.py <release> --backfill-starts [--dry-run]
-
-Plain: prints the milestone and column count and one critical path per epic; writes nothing;
-exit 1 on an error (below). The spec writer runs it after each spec.
+"""The ownership facts of a release, computed in memory from the milestone blocks of its specs.
+Library, no CLI. No file holds the facts: every script that needs them calls compute().
 
 Reads every plan/specs/NN-<slug>.md for "### Milestone: <name>" blocks ("#### Milestone:"
 is accepted too) with the lines "- Files owned: a, b", "- Depends on: <milestone names,
 spec numbers or none>" and "- Review: none | fable", and the optional "- Starts: S<n>" (a
-milestone added after its epic's go, by new_fix.py: its own start sprint).
+milestone added after its epic's go, by plan/new_fix.py: its own start sprint).
 
 Edges: A to B when B lists A (or A's spec number) under Depends on, or when A and B
 share a file (lower spec number first). Two milestones of one spec that share a file
 while neither depends on the other are a collision; a dependency cycle is an error.
 
 A milestone's column is the longest chain ending at it plus one, over every epic, and never
-before its epic's start sprint: the "Starts: S<n>" line of plan/epics/E<n>.md (new_spec.py
---epic writes it on go), nor before the milestone's own "- Starts: S<n>" line. The floor
+before its epic's start sprint: the "Starts: S<n>" line of plan/epics/E<n>.md (epics/tag.py
+writes it on go), nor before the milestone's own "- Starts: S<n>" line. The floor
 propagates along the edges; an epic file without a Starts value means no floor. A milestone
 whose status/sprints.md row is running ("[ ]") or finished ("[x]", "[!]") keeps that column, and
-a finished one never collides on a shared file. --epic E<n> <spec numbers> uses the current
-sprint as a provisional floor for an epic with no Starts value yet, writing no Starts line.
-The current sprint is the first column of status/sprints.md holding a "[ ]" or "·" cell of an
-epic row; when there is none, the column after the last column holding an epic row (S1 for an
-empty grid). For an epic's own start its own rows are ignored.
+a finished one never collides on a shared file. The epic table (epics/table.py E<n> <spec
+numbers>) uses the current sprint as a provisional floor for an epic with no Starts value yet,
+writing no Starts line. The current sprint is the first column of status/sprints.md holding a
+"[ ]" or "·" cell of an epic row; when there is none, the column after the last column holding
+an epic row (S1 for an empty grid). For an epic's own start its own rows are ignored.
 
 Critical path per epic, computed on the fly (never stored): over that epic's milestones only (a
-spec's epic is its "- Epic: E<n>" line), with the Depends on and
-shared-file edges inside the epic; the longest chain, ties by lower spec number.
-
-Epic table: python3 -I ownership.py <release> --epic E<n> [<spec numbers>], the pre-go preview
-(the spec writer, then the lead's check reads its result). The epic's specs: the specs with an
-"- Epic: E<n>" line, plus the spec numbers given, else (no Starts value yet) every untagged spec
-citing a decision of the epic's "Decisions:" line; untagged ones count as E<n>. It fills the
-Spec, Milestone and Sprint columns of the "## Ownership" table in plan/epics/E<n>.md
-(reference/formats.md, Epic file): one row per decision and spec of the epic citing it, the
-Files a decision row carried split over those rows by the spec that owns each file (a file no
-citing spec owns stays on the lowest spec's row), one row with an empty Decision cell per spec
-of the epic citing none of its decisions; Milestone is the spec's milestone names joined by
-"; ", Sprint its column, "S17 to S19" when its milestones span several. Before go the sprints
-are provisional (the current sprint as the epic's start); a milestone with a grid row takes the
-grid's column. Rows ordered by sprint, spec number, decision number. Then it prints the facts:
-the sprints the epic spans, its critical path, every pair of the epic's specs owning the same
-file, each Files path that does not exist yet ("new or missing": a new file and a typo look
-the same), and a row file no milestone of its spec
-owns. No verdict. Commits nothing. Exit 1 only for an error below or an unreadable table.
-
-Backfill: ownership.py <release> --backfill-starts [--dry-run] writes "Starts: S<n>" into the
-epic file of every epic that has rows in status/sprints.md and no Starts value: the lowest
-column among its finished rows ("[x]", "[!]"), else the current sprint (that epic's own rows
-ignored). It commits nothing and prints the value per epic and every row whose column changes
-at the next ownership.py and sprints.py run, with its old and new column. Finished rows never
-move: sprints.py keeps their cells; a running row carries its "[ ]" to its new column.
+spec's epic is its "- Epic: E<n>" line), with the Depends on and shared-file edges inside the
+epic; the longest chain, ties by lower spec number.
 
 Errors: a file shared by two milestones of one column, a dependency cycle, a milestone without
-a Files owned line or with an unknown dependency. On an error nothing is written, exit 1.
+a Files owned line or with an unknown dependency.
 
-Layout: the release folder must hold plan/ (plan/specs, plan/epics), run/ (run/trackers,
-run/handoffs), status/ and queue.md. A folder without plan/ is refused with one line naming
-migrate_layout.py; a folder still on the old queue files, or with a queue.md that is not yet a
-kanban board, is refused with one line naming migrate_queue.py; a folder that still has
-status/ownership.md is refused with one line naming migrate_epics.py; a folder that still has
-run/trackers/fix-*-tracker.md (free-standing fix milestones of older releases) is refused with
-one line naming migrate_fixes.py.
-
-Check mode: ownership.py <release> --overlap <spec numbers or D ids> writes nothing. It
-reports every file the named specs' milestones own (for a D id: the specs citing it) that a
-milestone of a running epic also owns. A running epic is a [E<n>] tag in decisions.md on a
-decision without [Done]; a spec's epic is its own "- Epic: E<n>" line (new_spec.py --epic).
-Exit code 1 when a file is shared, 0 otherwise.
+Also here: the epic file's "## Ownership" table (read, render, fill: fill_epic, used by
+epics/table.py and run/go.py), the Sprint column sync (sync_sprint_columns, used by
+sprints/sync_epic_sprints.py and the refresh chain in lib/grid.py), the epic table gaps
+status/report.py prints, and the tracker and Deliverables readers of status/report.py and
+status/progress.py.
 """
-import argparse
 import collections
-import datetime
 import importlib.util
 import re
-import subprocess
 import sys
 from pathlib import Path
 
-RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
+
+def _common():
+    name = "expedition_lib_common"
+    if name not in sys.modules:
+        sys.dont_write_bytecode = True
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / "common.py")
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+C = _common()
+RELEASE_RE = C.RELEASE_RE
+SPECS_DIR, EPICS_DIR, TRACKERS_DIR, QUEUE_MD = C.SPECS_DIR, C.EPICS_DIR, C.TRACKERS_DIR, C.QUEUE_MD
+HANDOFFS_DIR, STATUS_DIR, SPRINTS_MD = C.HANDOFFS_DIR, C.STATUS_DIR, C.SPRINTS_MD
+LEGACY_OWNERSHIP_MD, LEGACY_FIX_GLOB = C.LEGACY_OWNERSHIP_MD, C.LEGACY_FIX_GLOB
+die, repo_root, detect_owner, release_folder = C.die, C.repo_root, C.detect_owner, C.release_folder
+ignore_renders, legacy_fixes, num_key, read = C.ignore_renders, C.legacy_fixes, C.num_key, C.read
+outside_fences, table_rows, insert_row = C.outside_fences, C.table_rows, C.insert_row
+
 SPEC_FILE_RE = re.compile(r"^(\d{2}(?:\.\d+)?)-([a-z0-9]+(?:-[a-z0-9]+)*)\.md$")
 SPEC_NUM_RE = re.compile(r"^\d{2}(?:\.\d+)?$")
 MILESTONE_RE = re.compile(r"^#{3,4}\s+Milestone:\s*(.+?)\s*$")
 HEADING_RE = re.compile(r"^#{1,6}\s")
 FIELD_RE = re.compile(r"^\s*(?:-\s*)?(Files owned|Depends on|Review|Starts):\s*(.*?)\s*$")
 TASK_RE = re.compile(r"^\s*-\s*Task\s+\d+:")
-SPECS_DIR = "plan/specs"
-EPICS_DIR = "plan/epics"
-TRACKERS_DIR = "run/trackers"
-QUEUE_MD = "queue.md"
-HANDOFFS_DIR = "run/handoffs"
-STATUS_DIR = "status"
-SPRINTS_MD = "status/sprints.md"
-LEGACY_OWNERSHIP_MD = "status/ownership.md"
-LEGACY_FIX_GLOB = "fix-*-tracker.md"
 D_HEAD_RE = re.compile(r"^###\s+D(\d+)\b")
 TAG_LINE_RE = re.compile(r"^\s*(?:\[(?:Done|E\d+)\]\s*)+$")
 D_CITE_RE = re.compile(r"\((D\d+[^)]*)\)")
 D_ID_RE = re.compile(r"^D(\d+)$")
 EPIC_LINE_RE = re.compile(r"^\s*-\s*Epic:\s*E(\d+)\s*$")
-
-
-def die(msg):
-    print(f"error: {msg}", file=sys.stderr)
-    sys.exit(1)
-
-
-def repo_root(flag, release, new=False):
-    """The repository root every script works in. Order: --root; else the git top level of the
-    cwd when it holds .ai/plans/<release>/; else the one direct child folder of the cwd or of
-    that top level that holds it. new=True (new_cycle.py, release not made yet) looks for
-    .ai/plans/ instead. Several matches stop with the list. No match falls back to the git top
-    level, so the caller's usual error follows."""
-    if flag:
-        p = Path(flag).resolve()
-        if not p.is_dir():
-            die(f"root not a folder: {p}")
-        return p
-    mark = Path(".ai", "plans") if new else Path(".ai", "plans", release)
-    try:
-        out = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
-        top = Path(out.stdout.strip()) if out.returncode == 0 else None
-    except FileNotFoundError:
-        top = None
-    if top and (top / mark).is_dir():
-        return top
-    found = []
-    for base in (Path.cwd(), top):
-        try:
-            kids = sorted(base.iterdir()) if base else []
-        except OSError:
-            continue
-        for d in kids:
-            try:
-                hit = d.is_dir() and (d / mark).is_dir()
-            except OSError:
-                hit = False
-            if hit and d.resolve() not in found:
-                found.append(d.resolve())
-    if len(found) == 1:
-        return found[0]
-    if found:
-        die(f"several folders hold {mark}/; pass --root with one of:\n"
-            + "\n".join(f"  {d}" for d in found))
-    if top is None:
-        die("not inside a git repository")
-    return top
-
-
-def detect_owner(root, flag):
-    if flag:
-        return flag
-    plans = root / ".ai" / "plans"
-    counts = collections.Counter(
-        p.name for p in plans.glob("v*.x/*") if p.is_dir()
-    )
-    if not counts:
-        die("no owner found under .ai/plans/v*.x/*/; pass --owner")
-    return counts.most_common(1)[0][0]
-
-
-RENDER_IGNORES = (".ai/plans/*/*/status/index.html", ".ai/plans/*/*/status/data/")
-
-
-def ignore_renders(folder):
-    """Append the status/ render lines to the repo's .gitignore when missing (repo root from
-    git rev-parse run in the plan folder). index.html and data/ are regenerated by
-    swimlanes.py and never committed; sprints.md stays in git."""
-    r = subprocess.run(["git", "-C", str(folder), "rev-parse", "--show-toplevel"],
-                       capture_output=True, text=True)
-    if r.returncode:
-        print(f"warning: {folder} is not in a git repo; .gitignore not touched", file=sys.stderr)
-        return
-    path = Path(r.stdout.strip()) / ".gitignore"
-    text = path.read_text(encoding="utf-8") if path.is_file() else ""
-    have = {l.strip() for l in text.splitlines()}
-    missing = [l for l in RENDER_IGNORES if l not in have]
-    if missing:
-        sep = "" if not text or text.endswith("\n") else "\n"
-        path.write_text(text + sep + "".join(l + "\n" for l in missing), encoding="utf-8")
-        print(f"{path}: added {', '.join(missing)}")
-
-
-def release_folder(root, owner, release):
-    folder = root / ".ai" / "plans" / release / owner
-    if not folder.is_dir():
-        die(f"release folder missing: {folder}")
-    if not (folder / "plan").is_dir():
-        die(f"{folder} has the old layout (no plan/): run python3 -I "
-            f"{Path(__file__).resolve().parent / 'migrate_layout.py'} {release}")
-    old = load_sibling("migrate_queue").refusal(folder, release)
-    if old:
-        die(old)
-    if (folder / LEGACY_OWNERSHIP_MD).is_file():
-        die(f"{folder} still has {LEGACY_OWNERSHIP_MD}: run python3 -I "
-            f"{Path(__file__).resolve().parent / 'migrate_epics.py'} {release}")
-    fixes = legacy_fixes(folder)
-    if fixes:
-        die(f"{folder} still has {len(fixes)} free-standing fix trackers ({fixes[0].name}): run python3 -I "
-            f"{Path(__file__).resolve().parent / 'migrate_fixes.py'} {release} --dry-run, then without --dry-run")
-    return folder
-
-
-def legacy_fixes(folder):
-    """The run/trackers/fix-<slug>-tracker.md files of an unmigrated folder, sorted."""
-    return sorted((folder / TRACKERS_DIR).glob(LEGACY_FIX_GLOB))
-
-
-def load_sibling(name):
-    sys.dont_write_bytecode = True
-    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / f"{name}.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def num_key(num):
-    if num is None:
-        return (1,)
-    return (0,) + tuple(int(x) for x in num.split("."))
-
-
-def read(p):
-    return p.read_text(encoding="utf-8", errors="replace")
-
 
 def split_files(value):
     """Files from a 'Files owned' value: the backticked spans, else comma parts; 'none' is empty."""
@@ -240,22 +82,6 @@ def split_files(value):
     if spans:
         return [s.strip() for s in spans if s.strip()]
     return [s.strip() for s in value.split(",") if s.strip()]
-
-
-def outside_fences(text):
-    fence = None
-    for i, line in enumerate(text.splitlines(), 1):
-        s = line.lstrip()
-        m = re.match(r"^(`{3,}|~{3,})", s)
-        if m:
-            mark = m.group(1)
-            if fence is None:
-                fence = mark
-            elif mark[0] == fence[0] and len(mark) >= len(fence) and s.strip() == mark:
-                fence = None
-            continue
-        if fence is None:
-            yield i, line
 
 
 def parse_spec(path):
@@ -607,66 +433,6 @@ def set_starts(path, value):
     return None
 
 
-def backfill_starts(folder, dry_run=False):
-    """--backfill-starts: Starts for every epic with grid rows and an epic file without one."""
-    n, rows = grid(folder)
-    starts = epic_starts(folder)
-    by_epic = collections.defaultdict(list)
-    for label, cells in rows:
-        m = re.match(r"^E(\d+)\s", label)
-        if m:
-            by_epic[int(m.group(1))].append((label, cells))
-    written = {}
-    for e in sorted(by_epic):
-        path = folder / EPICS_DIR / f"E{e}.md"
-        if not path.is_file():
-            print(f"E{e}: no epic file, no floor")
-            continue
-        if starts.get(e):
-            print(f"E{e}: Starts: {starts[e]} kept")
-            continue
-        done = [i + 1 for _, cells in by_epic[e] for i, c in enumerate(cells) if c in ("[x]", "[!]")]
-        value = f"S{min(done)}" if done else f"S{current_sprint(folder, exclude=e)}"
-        why = "lowest finished column" if done else "current sprint"
-        print(f"E{e}: Starts: {value} ({why})")
-        written[e] = value
-        if not dry_run:
-            set_starts(path, value)
-    milestones, errors = collect(folder)
-    if errors:
-        for e in errors:
-            print(f"error: {e}", file=sys.stderr)
-        return
-    fl = floors(folder, milestones)
-    for name, epic in epic_of_milestones(folder, milestones).items():
-        if epic in written:
-            fl[name] = int(written[epic][1:])
-    col, _, errs, _ = schedule(milestones, fl, started_columns(folder, milestones))
-    for e in errs:
-        print(f"error: {e}", file=sys.stderr)
-    if errs:
-        return
-    sp = load_sibling("sprints")
-    label = sp.epic_rows(folder, load_sibling("ownership"), milestones)
-    shown = [m for m in milestones if m["name"] in label]
-    text, _ = sp.build(folder.parent.name, shown, col, (n, [(sp.row_name(l), c) for l, c in rows]),
-                       num_key, label)
-    _, new_rows = table_rows(text, "Milestone")
-    before = {sp.row_name(l): c for l, c in rows}
-    moved = []
-    for r in new_rows:
-        name, cells = sp.row_name(r[0]), r[1:]
-        old_at = next((i + 1 for i, x in enumerate(before.get(name, [])) if x), None)
-        new_at = next((i + 1 for i, x in enumerate(cells) if x), None)
-        if old_at and old_at != new_at:
-            mark = next((x for x in cells if x), "")
-            moved.append(f"  {r[0]} {mark}: S{old_at} to S{new_at}")
-    print(f"rows that move: {len(moved) or 'none'}")
-    for line in moved:
-        print(line)
-    print("dry run; nothing written" if dry_run else "nothing committed")
-
-
 def path_text(names, by_name):
     return " > ".join(f"{by_name[n]['spec']} {n}" for n in names) or "none"
 
@@ -683,24 +449,6 @@ def find_cycle(nodes, succ):
                     seen.add(b)
                     stack.append((b, trail + [b]))
     return sorted(nodes)
-
-
-def table_rows(text, first_col):
-    """Header and data rows of the first pipe table whose header starts with first_col."""
-    lines = [l.strip() for l in text.splitlines()]
-    start = next((i for i, l in enumerate(lines)
-                  if re.match(r"^\|\s*" + re.escape(first_col) + r"\s*\|", l)), None)
-    if start is None:
-        return None, []
-    split = lambda l: [c.strip() for c in l.strip().strip("|").split("|")]
-    block = []
-    for l in lines[start:]:
-        if not l.startswith("|"):
-            break
-        block.append(l)
-    head = split(block[0])
-    data = [split(l) for l in block[1:] if not re.fullmatch(r"\|[\s:|-]+\|?", l)]
-    return head, data
 
 
 def read_tags(folder):
@@ -776,49 +524,6 @@ def supersedes(folder):
 def spec_epics(folder):
     """{spec number: (epic or None, sorted cited D numbers)}; epic from the spec's Epic line only."""
     return {num: (spec_epic(path), sorted(spec_cites(path))) for num, path in spec_files(folder)}
-
-
-def running_epics(tags):
-    """Epics with at least one decision not yet [Done]."""
-    return sorted({t["epic"] for t in tags.values() if t["epic"] and not t["done"]})
-
-
-def overlap(folder, items):
-    """Print files the named specs (or the specs citing the named D ids) share with
-    milestones of running epics. Returns the number of shared files."""
-    tags = read_tags(folder)
-    epics = spec_epics(folder)
-    files = dict(spec_files(folder))
-    targets = set()
-    for item in items:
-        d = D_ID_RE.match(item)
-        if d:
-            hit = [num for num, (_, cited) in epics.items() if int(d.group(1)) in cited]
-            if not hit:
-                print(f"{item}: no spec cites it yet, files unknown")
-            targets.update(hit)
-        elif SPEC_NUM_RE.match(item) and item in files:
-            targets.add(item)
-        else:
-            die(f"'{item}' is neither a spec number with a file nor a D id")
-    running = set(running_epics(tags))
-    owned = {}
-    for num, (epic, _) in epics.items():
-        if num in targets or epic not in running:
-            continue
-        for b in parse_spec(files[num]):
-            for f in b["files"] or []:
-                owned.setdefault(f, []).append(f"{b['name']} (E{epic})")
-    shared = 0
-    for num in sorted(targets, key=num_key):
-        for b in parse_spec(files[num]):
-            for f in b["files"] or []:
-                if f in owned:
-                    shared += 1
-                    print(f"{num} {b['name']}: `{f}` shared with {', '.join(owned[f])}")
-    print(f"running epics: {', '.join(f'E{n}' for n in sorted(running)) or 'none'}; "
-          f"checked specs: {', '.join(sorted(targets, key=num_key)) or 'none'}; shared files: {shared}")
-    return shared
 
 
 def compute(folder, assume=None):
@@ -1152,7 +857,7 @@ def fill_epic(folder, n, given=None, quiet=False):
     unreadable table, before writing."""
     path = epic_path(folder, n)
     if not path.is_file():
-        die(f"{path} missing: new_epic_file.py {folder.parent.name} E{n} <D ids>")
+        die(f"{path} missing: epics/new.py {folder.parent.name} E{n} <D ids>")
     text = read(path)
     old, err = read_table(text)
     if err:
@@ -1221,7 +926,7 @@ def unfinished_started_epics(folder):
 
 
 def sync_sprint_columns(folder, comp):
-    """sprints.py: set the Sprint cell of every row of each unfinished epic that has gone (a
+    """The refresh chain and sprints/sync_epic_sprints.py: set the Sprint cell of every row of each unfinished epic that has gone (a
     Starts value) from status/sprints.md; no other cell or line changes. Returns the paths
     written."""
     gcols = grid_columns(folder)
@@ -1254,7 +959,7 @@ def sync_sprint_columns(folder, comp):
 
 
 def epic_gaps(folder, comp):
-    """status.py: the gaps of the epic files' Ownership tables, as lines."""
+    """status/report.py: the gaps of the epic files' Ownership tables, as lines."""
     out = []
     done = finished_epics(folder)
     gcols = grid_columns(folder)
@@ -1294,59 +999,165 @@ def epic_gaps(folder, comp):
                     want = spec_sprint(by_spec.get(r["spec"], []), comp, gcols)
                     if want != r["sprint"]:
                         out.append(f"{rel}: {row_label(r)}: Sprint '{r['sprint']}' disagrees with "
-                                   f"the grid ('{want}')" + ("" if finished else ": sprints.py rewrites it"))
+                                   f"the grid ('{want}')" + ("" if finished else ": sprints/refresh.py rewrites it"))
     return out
 
 
-def check(folder):
-    """Plain run: the milestone and column count and each epic's critical path; exit 1 on an error."""
-    comp = compute(folder)
-    if not comp["milestones"] and not comp["errors"]:
-        comp["errors"].append("no '### Milestone:' blocks in plan/specs/*.md")
-    if comp["errors"]:
-        print_errors(comp["errors"], "ownership does not compute")
-    by_name = {m["name"]: m for m in comp["milestones"]}
-    print(f"{len(comp['milestones'])} milestones, {max(comp['col'].values())} columns")
-    for e, p in sorted(comp["paths"].items()):
-        print(f"E{e} path: {path_text(p, by_name)}")
+
+def refuse_superseded(folder, nums, what):
+    """Die when any of the D numbers is superseded."""
+    heads, bullets = supersedes(folder)
+    gone = {**bullets, **heads}
+    hit = sorted(n for n in nums if n in gone)
+    if hit:
+        die(f"{what} cites superseded " + ", ".join(f"D{n} (by D{gone[n]})" for n in hit)
+            + ": cite the current decision")
 
 
-def main():
-    ap = argparse.ArgumentParser(
-        usage="ownership.py <release> [--epic E<n> [<spec numbers>] | --overlap <spec or D ids> ... | "
-              "--backfill-starts [--dry-run]] [--owner X] [--root PATH]")
-    ap.add_argument("release")
-    ap.add_argument("--overlap", nargs="+", metavar="ID",
-                    help="check mode: files the named specs or D ids share with running epics")
-    ap.add_argument("--epic", nargs="+", metavar="ARG",
-                    help="E<n> [spec numbers]: fill the epic file's Ownership table and print the facts")
-    ap.add_argument("--backfill-starts", action="store_true",
-                    help="write Starts into epic files that have grid rows and none yet")
-    ap.add_argument("--dry-run", action="store_true", help="with --backfill-starts: write nothing")
-    ap.add_argument("--owner")
-    ap.add_argument("--root", help="repository root (default: found from the cwd)")
-    a = ap.parse_args()
-    if not RELEASE_RE.match(a.release):
-        die(f"bad release '{a.release}', expected like v0.9.x")
-    root = repo_root(a.root, a.release)
-    folder = release_folder(root, detect_owner(root, a.owner), a.release)
-    if a.backfill_starts:
-        backfill_starts(folder, a.dry_run)
-        return
-    if a.overlap:
-        items = [s.strip() for x in a.overlap for s in x.split(",") if s.strip()]
-        sys.exit(1 if overlap(folder, items) else 0)
-    if not (folder / SPECS_DIR).is_dir():
-        die(f"specs folder missing: {folder / SPECS_DIR}")
-    if a.epic:
-        m = re.match(r"^E(\d+)$", a.epic[0])
-        nums = [s.strip() for x in a.epic[1:] for s in x.split(",") if s.strip()]
-        if not m or not all(SPEC_NUM_RE.match(n) for n in nums):
-            die("--epic takes E<n> and optional spec numbers, e.g. --epic E6 09 10")
-        fill_epic(folder, int(m.group(1)), nums or None)
-        return
-    check(folder)
+# Trackers and the Deliverables table, for status/report.py and status/progress.py.
+DELIV_ROW_RE = re.compile(r"^\|\s*(\d{2}(?:\.\d+)?)\s*\|(.*)$")
+LINK_RE = re.compile(r"\]\(([^)\s]+\.md)\)")
+DELIVERABLES_HEAD = r"^## Deliverables\s*$(.*?)(?=^## |\Z)"
+SCOPE_MAX = 120
+STATUS_RE = re.compile(r"^Status:\s*(.*?)\s*$", re.M)
+STATUS_VALUE_RE = re.compile(r"^(planned|running|done|merged|skipped)\b\s*(?:\(([^)]*)\))?")
+TITLE_LINK_RE = re.compile(r"\[(.+?)\]\(")
+PLACEHOLDER_RE = re.compile(r"^(?:\[[^\]]*\]|\([^)]*\))$")
 
 
-if __name__ == "__main__":
-    main()
+def tracker_path(folder, num):
+    """run/trackers/<num>-tracker.md."""
+    return folder / TRACKERS_DIR / f"{num}-tracker.md"
+
+
+def tracker_status(folder, num, p=None):
+    """Return (state, sha) from the tracker's Status line, or None."""
+    p = p or tracker_path(folder, num)
+    if not p.is_file():
+        return None
+    m = STATUS_RE.search(read(p))
+    if not m:
+        return None
+    v = STATUS_VALUE_RE.match(m.group(1))
+    if not v:
+        return None
+    return v.group(1), (v.group(2) or "").strip()
+
+
+def spec_titles(plan):
+    """{spec number: title}: the link text of each Deliverables row."""
+    out = {}
+    if not plan.is_file():
+        return out
+    m = re.search(DELIVERABLES_HEAD, read(plan), re.M | re.S)
+    for line in (m.group(1).splitlines() if m else []):
+        r = DELIV_ROW_RE.match(line.strip())
+        t = TITLE_LINK_RE.search(r.group(2)) if r else None
+        if t:
+            out[r.group(1)] = t.group(1).strip()
+    return out
+
+
+def attention_reason(path):
+    """The first bullet under "## Attention" in a tracker, one line, without "- "; None when the
+    section has no bullet or only a template placeholder ("[...]" or "(none)")."""
+    if not path or not path.is_file():
+        return None
+    inside = False
+    for _, line in outside_fences(read(path)):
+        if line.startswith("## "):
+            if inside:
+                return None
+            inside = line.strip() == "## Attention"
+        elif inside and line.startswith("- "):
+            text = line[2:].strip()
+            return None if not text or PLACEHOLDER_RE.match(text) else text
+    return None
+
+
+def spec_rows(plan):
+    """Rows of the Deliverables table: [(num, link)], long scopes [(num, len)]."""
+    rows, long_scopes = [], []
+    if not plan.is_file():
+        return rows, long_scopes
+    m = re.search(DELIVERABLES_HEAD, read(plan), re.M | re.S)
+    if m:
+        for line in m.group(1).splitlines():
+            r = DELIV_ROW_RE.match(line.strip())
+            if r:
+                link = LINK_RE.search(r.group(2))
+                rows.append((r.group(1), link.group(1) if link else None))
+                cells = r.group(2).strip().strip("|").split("|")
+                if len(cells) >= 2 and len(cells[-1].strip()) > SCOPE_MAX:
+                    long_scopes.append((r.group(1), len(cells[-1].strip())))
+    return rows, long_scopes
+
+
+def other_trackers(folder, claimed, statuses):
+    """Trackers no spec or milestone owns: (key, path, first line)."""
+    out = []
+    if (folder / TRACKERS_DIR).is_dir():
+        for p in sorted((folder / TRACKERS_DIR).glob("*-tracker.md")):
+            if p.name not in claimed:
+                key = p.name[: -len("-tracker.md")]
+                lines = read(p).splitlines()
+                out.append((key, p, lines[0] if lines else ""))
+                statuses[key] = tracker_status(folder, key, p)
+    return out
+
+
+def aggregate(states):
+    """One spec state from its milestone tracker states, as tracker_status returns them."""
+    if not states or any(s is None for s in states):
+        return None
+    kinds = {"done" if s[0] in ("merged", "done") else s[0] for s in states}
+    if kinds == {"done"}:
+        return "merged", ", ".join(s[1] for s in states if s[1])
+    if kinds & {"running", "done"}:
+        return "running", ""
+    return "planned", ""
+
+
+def milestone_tracker(folder, num, spec_slug, idx, name):
+    """run/trackers/NN-<milestone-slug>-tracker.md; the first milestone also takes NN-<spec-slug>
+    and NN-tracker.md."""
+    t = folder / TRACKERS_DIR
+    cands = [t / f"{num}-{C.slugify(name)}-tracker.md"]
+    if idx == 0:
+        cands += [t / f"{num}-{spec_slug}-tracker.md", t / f"{num}-tracker.md"]
+    return next((c for c in cands if c.is_file()), cands[0])
+
+
+def new_collect(folder, plan):
+    """The specs of the Deliverables table with their milestone blocks, each block's tracker
+    path ("tracker"), each spec's state, the trackers no milestone owns and the gaps."""
+    rows, long_scopes = spec_rows(plan)
+    docs = [(num, folder / f) for num, f in rows if f and (folder / f).is_file()]
+    statuses, claimed, blocks, missing = {}, set(), {}, []
+    for num, p in docs:
+        m = re.match(r"^\d{2}(?:\.\d+)?-(.+)\.md$", p.name)
+        spec_slug = m.group(1) if m else ""
+        bl = parse_spec(p)
+        blocks[num] = bl
+        states = []
+        for i, b in enumerate(bl):
+            t = milestone_tracker(folder, num, spec_slug, i, b["name"])
+            b["tracker"] = t
+            if t.is_file():
+                claimed.add(t.name)
+                st = tracker_status(folder, num, t)
+                states.append(st)
+                if st is None:
+                    missing.append(f"no Status line: {t.name}")
+            else:
+                states.append(("planned", ""))
+                missing.append(f"no tracker yet: milestone {b['name']} ({t.relative_to(folder)})")
+        if not bl:
+            t = folder / TRACKERS_DIR / f"{num}-tracker.md"
+            states = [tracker_status(folder, num, t)] if t.is_file() else [("planned", "")]
+            if t.is_file():
+                claimed.add(t.name)
+        statuses[num] = aggregate(states)
+    extra = other_trackers(folder, claimed, statuses)
+    return {"rows": rows, "long": long_scopes, "docs": docs, "statuses": statuses,
+            "extra": extra, "blocks": blocks, "missing": missing}

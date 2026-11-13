@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Run every go step of an epic, in order, as one command (SKILL.md stage 1, On go).
 
-Usage: python3 -I go.py <release> E<n> --from <lead session name> [--owner X] [--root PATH]
+Usage: python3 -I run/go.py <release> E<n> --from <lead session name> [--owner X] [--root PATH]
 
 Steps, each skipped when already done, so a rerun after a failure picks up where it stopped:
 
-1. tag: new_spec.py <release> --epic E<n> <specs>: "- Epic: E<n>" in each spec, "[E<n>]" under
+1. tag: epics/tag.py <release> E<n> <specs>: "- Epic: E<n>" in each spec, "[E<n>]" under
    each decision, E<n> in the Deliverables rows, "Starts:" in the epic file, the epic's queue
    cards ticked and tagged #E<n>. The epic's specs: its tagged specs, the Spec column of its
    table, and (before the Starts line exists) every untagged spec citing one of its decisions.
@@ -13,23 +13,23 @@ Steps, each skipped when already done, so a rerun after a failure picks up where
    spec and decision carries E<n> and Starts has a value.
 2. commit: the epic's spec files and their trackers, decisions.md, queue.md, <release>-plan.md
    and the epic file, when any of them changed.
-3. grid: sprints.py, then swimlanes.py. Done when every milestone of the epic's specs has a row
-   in status/sprints.md.
-4. epic file: the "Specs:" line and the final table (ownership.py --epic, the Sprint column from
-   the grid); commits the epic files, status/sprints.md and queue.md when any of them changed.
+3. grid: sprints/refresh.py (the grid, the epic files' Sprint column, the queue sync, the
+   swimlane data). Done when every milestone of the epic's specs has a row in status/sprints.md.
+4. epic file: the "Specs:" line and the final table (the epics/table.py fill, the Sprint column
+   from the grid); commits the epic files, status/sprints.md and queue.md when any of them changed.
 5. close writer: runner.sh stop "<release> specs E<n>". Skipped when runner.sh list shows that
    window stopped; a window runner.sh does not list at all leaves nothing to close.
 6. run: runner.sh start <release> --from <lead> when runner.sh list shows no live runner of the
    release, then runner.sh send <release> "RUN E<n> <release folder> epic <release
    folder>/plan/epics/E<n>.md from <lead>" (<release folder> relative to the repository).
-7. next epic: new_epic_file.py <release> E<n+1>, when that file does not exist.
+7. next epic: epics/new.py <release> E<n+1>, when that file does not exist.
 
 Steps 5 and 6 have no trace in the plan files: each is recorded in status/data/go.log (a
 git-ignored script output, like the swimlane data) once it succeeds, and a rerun skips a step
 recorded there. On the first failure it prints one line naming the step, runs nothing after it
 and exits 1. On success it prints one summary line.
 
-runner.sh is scripts/runner.sh beside this file, or the path in the environment variable
+runner.sh is scripts/run/runner.sh beside this file, or the path in the environment variable
 EXPEDITION_RUNNER_SH (tests point it at a stub).
 """
 import argparse
@@ -41,7 +41,18 @@ import subprocess
 import sys
 from pathlib import Path
 
-RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
+
+def _common():
+    name = "expedition_lib_common"
+    if name not in sys.modules:
+        sys.dont_write_bytecode = True
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent.parent / "lib" / "common.py")
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+C = _common()
 HERE = Path(__file__).resolve().parent
 GO_LOG = "status/data/go.log"
 
@@ -50,17 +61,7 @@ class StepFailed(Exception):
     pass
 
 
-def die(msg):
-    print(f"error: {msg}", file=sys.stderr)
-    sys.exit(1)
-
-
-def load(name):
-    sys.dont_write_bytecode = True
-    spec = importlib.util.spec_from_file_location(name, HERE / f"{name}.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+die = C.die
 
 
 def last_line(r):
@@ -73,14 +74,14 @@ class Go:
     def __init__(self, root, folder, release, owner, n, lead):
         self.root, self.folder, self.release, self.owner = root, folder, release, owner
         self.n, self.lead = n, lead
-        self.own = load("ownership")
+        self.own = C.load("lib/ownership")
         self.path = self.own.epic_path(folder, n)
         self.runner = os.environ.get("EXPEDITION_RUNNER_SH") or str(HERE / "runner.sh")
         self.ran, self.skipped = [], []
 
     # helpers
     def script(self, name, *args):
-        r = subprocess.run([sys.executable, "-I", str(HERE / name), self.release, *args,
+        r = subprocess.run([sys.executable, "-I", str(C.SCRIPTS / name), self.release, *args,
                             "--owner", self.owner, "--root", str(self.root)],
                            capture_output=True, text=True)
         if r.returncode:
@@ -168,7 +169,7 @@ class Go:
                 and all(tags.get(d, {}).get("epic") == self.n for d in decisions)
                 and own.SPRINT_VALUE_RE.match(starts or "")):
             return False
-        self.script("new_spec.py", "--epic", f"E{self.n}", *specs)
+        self.script("epics/tag.py", f"E{self.n}", *specs)
         return True
 
     def step_commit(self):
@@ -186,8 +187,7 @@ class Go:
         have = self.own.grid_columns(self.folder)
         if all(m["name"] in have for m in self.milestones_of(specs)):
             return False
-        self.script("sprints.py")
-        self.script("swimlanes.py")
+        self.script("sprints/refresh.py")
         return True
 
     def step_epic_file(self):
@@ -200,7 +200,7 @@ class Go:
         try:
             own.fill_epic(self.folder, self.n, quiet=True)
         except SystemExit:
-            raise StepFailed("ownership.py --epic failed")
+            raise StepFailed("epics/table.py failed")
         return self.commit([self.folder / own.EPICS_DIR, self.folder / own.SPRINTS_MD,
                             self.folder / own.QUEUE_MD],
                            f"docs(plan): {self.release} E{self.n} go: grid and epic file")
@@ -236,7 +236,7 @@ class Go:
     def step_next(self):
         if self.own.epic_path(self.folder, self.n + 1).exists():
             return False
-        self.script("new_epic_file.py", f"E{self.n + 1}")
+        self.script("epics/new.py", f"E{self.n + 1}")
         return True
 
     STEPS = [("tag", "step_tag"), ("commit", "step_commit"), ("grid", "step_grid"),
@@ -265,19 +265,19 @@ class Go:
 
 
 def main():
-    ap = argparse.ArgumentParser(usage="go.py <release> E<n> --from <lead session name> [--owner X] [--root PATH]")
+    ap = argparse.ArgumentParser(usage="run/go.py <release> E<n> --from <lead session name> [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("epic")
     ap.add_argument("--from", dest="lead", required=True)
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: found from the cwd)")
     a = ap.parse_args()
-    if not RELEASE_RE.match(a.release):
+    if not C.RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
     m = re.match(r"^E(\d+)$", a.epic)
     if not m:
         die(f"bad epic '{a.epic}', expected like E12")
-    own = load("ownership")
+    own = C.load("lib/ownership")
     root = own.repo_root(a.root, a.release)
     owner = own.detect_owner(root, a.owner)
     folder = own.release_folder(root, owner, a.release)

@@ -2,12 +2,12 @@
 """Create or start the epic file plan/epics/E<n>.md of a release (reference/formats.md, Epic
 file), or append a note to it, and commit that one file.
 
-Usage: python3 -I new_epic_file.py <release> E<n> [--owner X] [--root PATH]
-       python3 -I new_epic_file.py <release> E<n> <D ids> [--owner X] [--root PATH]
-       python3 -I new_epic_file.py <release> E<n> --note "<text>" [--owner X] [--root PATH]
+Usage: python3 -I epics/new.py <release> E<n> [--owner X] [--root PATH]
+       python3 -I epics/new.py <release> E<n> <D ids> [--owner X] [--root PATH]
+       python3 -I epics/new.py <release> E<n> --note "<text>" [--owner X] [--root PATH]
 
 Stub (no D ids): writes "# E<n>", empty "Decisions:", "Specs:" and "Starts:" lines and the empty
-"## Ownership" table, no "## Notes" heading. Refuses when the file exists. go.py runs it for the
+"## Ownership" table, no "## Notes" heading. Refuses when the file exists. run/go.py runs it for the
 next epic the moment the previous epic's RUN is sent.
 
 Start the epic (D ids, on the owner's "epic"): creates the file when it does not exist, writes
@@ -23,39 +23,28 @@ the end of the file when it is missing. An urgent note starts with "Urgent:".
 import argparse
 import importlib.util
 import re
-import subprocess
 import sys
 from pathlib import Path
 
-RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
+
+def _common():
+    name = "expedition_lib_common"
+    if name not in sys.modules:
+        sys.dont_write_bytecode = True
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent.parent / "lib" / "common.py")
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+C = _common()
 EPIC_RE = re.compile(r"^E\d+$")
 D_RE = re.compile(r"^D(\d+)$")
-
-
-def die(msg):
-    print(f"error: {msg}", file=sys.stderr)
-    sys.exit(1)
-
-
-def load_ownership():
-    sys.dont_write_bytecode = True
-    path = Path(__file__).resolve().parent / "ownership.py"
-    spec = importlib.util.spec_from_file_location("ownership", path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+die = C.die
 
 
 def stub(own, epic):
     return f"# {epic}\n\nDecisions:\nSpecs:\nStarts:\n\n" + "\n".join([own.OWN_HEAD, ""] + own.render_table([])) + "\n"
-
-
-def commit(root, path, message):
-    for args in (["add", "--", str(path)],
-                 ["commit", "-q", "-m", message, "--only", "--", str(path)]):
-        r = subprocess.run(["git", "-C", str(root)] + args, capture_output=True, text=True)
-        if r.returncode:
-            die(f"git {args[0]} failed: {r.stderr.strip() or r.stdout.strip()}")
 
 
 def start(own, folder, path, epic, nums):
@@ -114,7 +103,7 @@ def note(own, path, text_line):
 
 def main():
     ap = argparse.ArgumentParser(
-        usage="new_epic_file.py <release> E<n> [<D ids> | --note \"<text>\"] [--owner X] [--root PATH]")
+        usage="epics/new.py <release> E<n> [<D ids> | --note \"<text>\"] [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("epic")
     ap.add_argument("ids", nargs="*")
@@ -122,7 +111,7 @@ def main():
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: found from the cwd)")
     a = ap.parse_args()
-    if not RELEASE_RE.match(a.release):
+    if not C.RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
     if not EPIC_RE.match(a.epic):
         die(f"bad epic '{a.epic}', expected like E3")
@@ -133,7 +122,7 @@ def main():
         die("give D ids or --note, not both")
     if a.note is not None and ("\u2014" in a.note or not a.note.strip()):
         die("the note is empty or contains an em dash")
-    own = load_ownership()
+    own = C.load("lib/ownership")
     root = own.repo_root(a.root, a.release)
     folder = own.release_folder(root, own.detect_owner(root, a.owner), a.release)
     path = folder / own.EPICS_DIR / f"{a.epic}.md"
@@ -142,15 +131,15 @@ def main():
         if not path.is_file():
             die(f"{path} missing")
         note(own, path, a.note)
-        commit(root, path, f"docs(plan): {a.release} {a.epic} note")
+        C.commit(root, [path], f"docs(plan): {a.release} {a.epic} note")
     elif items:
         if start(own, folder, path, a.epic, [int(D_RE.match(i).group(1)) for i in items]):
-            commit(root, path, f"docs(plan): {a.release} {a.epic} epic started")
+            C.commit(root, [path], f"docs(plan): {a.release} {a.epic} epic started")
     else:
         if path.exists():
             die(f"refusing to overwrite {path}")
         path.write_text(stub(own, a.epic), encoding="utf-8")
-        commit(root, path, f"docs(plan): {a.release} {a.epic} epic file")
+        C.commit(root, [path], f"docs(plan): {a.release} {a.epic} epic file")
     print(path)
 
 

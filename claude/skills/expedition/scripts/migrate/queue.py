@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Move a release folder to queue.md as a kanban board in the current card format (board.py
+"""Move a release folder to queue.md as a kanban board in the current card format (lib/board.py
 has the format: tags #D<n> and #E<n> only, the tick in Decided mirrors decisions.md).
 
-Usage: python3 -I migrate_queue.py <release> [--dry-run] [--owner X] [--root PATH]
+Usage: python3 -I migrate/queue.py <release> [--dry-run] [--owner X] [--root PATH]
 
 Three inputs, one output:
 
@@ -63,7 +63,18 @@ import subprocess
 import sys
 from pathlib import Path
 
-RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
+
+def _common():
+    name = "expedition_lib_common"
+    if name not in sys.modules:
+        sys.dont_write_bytecode = True
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent.parent / "lib" / "common.py")
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+C = _common()
 HERE = Path(__file__).resolve().parent
 FINDINGS = "findings.md"
 ATT_DIRS = ("run/attentions", "attentions")
@@ -102,7 +113,7 @@ def refusal(folder, release):
     queue.md that is not a kanban board yet."""
     old = old_files(folder)
     queue = Path(folder) / QUEUE
-    run = f"run python3 -I {HERE / 'migrate_queue.py'} {release}"
+    run = f"run python3 -I {HERE / 'queue.py'} {release}"
     if old and not queue.is_file():
         return f"{folder} has {' and '.join(old)} and no {QUEUE}: {run}"
     if queue.is_file():
@@ -238,21 +249,12 @@ def decided_counts(text, tags):
     return ready, epic, done, closed
 
 
-def die(msg):
-    print(f"error: {msg}", file=sys.stderr)
-    sys.exit(1)
+die, read = C.die, C.read
 
 
 def load(name):
-    sys.dont_write_bytecode = True
-    spec = importlib.util.spec_from_file_location(name, HERE / f"{name}.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def read(p):
-    return p.read_text(encoding="utf-8", errors="replace")
+    """lib/board.py or lib/ownership.py, by their old names."""
+    return C.load(f"lib/{name}")
 
 
 def fenced(lines):
@@ -518,13 +520,13 @@ def git_rm(root, path):
 
 
 def main():
-    ap = argparse.ArgumentParser(usage="migrate_queue.py <release> [--dry-run] [--owner X] [--root PATH]")
+    ap = argparse.ArgumentParser(usage="migrate/queue.py <release> [--dry-run] [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: found from the cwd)")
     a = ap.parse_args()
-    if not RELEASE_RE.match(a.release):
+    if not C.RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
     own = load("ownership")
     root = own.repo_root(a.root, a.release)

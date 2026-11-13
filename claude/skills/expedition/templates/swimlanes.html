@@ -570,7 +570,7 @@ function loadScript(bust) {
   const s = document.createElement("script");
   s.src = "data/sprints.data.js" + (bust ? `?t=${Date.now()}` : "");
   s.onload = () => { load(window.SPRINT_DATA); s.remove(); };
-  s.onerror = () => { $("#board").innerHTML = `<p class="p-6 text-sm text-subtext0">data/sprints.data.js not found. Run <code class="font-mono">python3 -I swimlanes.py &lt;release&gt;</code></p>`; };
+  s.onerror = () => { $("#board").innerHTML = `<p class="p-6 text-sm text-subtext0">data/sprints.data.js not found. Run <code class="font-mono">python3 -I sprints/refresh.py &lt;release&gt;</code></p>`; };
   document.head.appendChild(s);
 }
 loadScript(false);

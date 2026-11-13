@@ -1,60 +1,53 @@
 #!/usr/bin/env python3
-"""Write status/sprints.md for a release from the ownership facts (ownership.compute, in memory):
-the grid of milestones (rows) and sprints (columns), ticked later by the run.
+"""The status/sprints.md grid of a release, built from the ownership facts (lib/ownership.py
+compute, in memory): milestones (rows) and sprints (columns). Library, no CLI.
 
-Usage: python3 -I sprints.py <release> [--owner X] [--root PATH]
-
-Columns are ownership.py's arithmetic: the longest chain ending at a milestone plus one, never
-before its epic's "Starts: S<n>" line in plan/epics/E<n>.md. The file holds "# <release> sprints", an "Updated:" line and the grid
-"| Milestone | S1 | ... |" only: "·" in a milestone's own column, blank elsewhere. Cells
-are "·", "[ ]", "[x]" or "[!]".
+Columns are the ownership arithmetic: the longest chain ending at a milestone plus one, never
+before its epic's "Starts: S<n>" line in plan/epics/E<n>.md. The file holds "# <release> sprints",
+an "Updated:" line and the grid "| Milestone | S1 | ... |" only: "·" in a milestone's own column,
+blank elsewhere. Cells are "·", "[ ]", "[x]" or "[!]".
 
 When status/sprints.md exists, a row that still exists keeps every cell as it is once it is
 finished ("[x]" or "[!]"). Every other row is placed again; a running row carries its "[ ]"
 to its new column. A row whose milestone no longer exists is dropped, unless it carries a run
 mark: then it is kept with a warning.
 
-Rows: every milestone of a spec that carries a "- Epic: E<n>" line (new_spec.py --epic). An
-epic's milestones start at its start sprint (the current sprint at its go), a milestone added
-after go at its own "- Starts: S<n>" line (new_fix.py); dependent ones open the next column. Row
-text is the epic label, the spec number and the milestone name, "E1 01 Filtering"; rows sorted
-by epic, spec number, then milestone order in the spec. The lead reruns it on go, the runner on merge.
+Rows: every milestone of a spec that carries a "- Epic: E<n>" line (epics/tag.py). An epic's
+milestones start at its start sprint (the current sprint at its go), a milestone added after go
+at its own "- Starts: S<n>" line (plan/new_fix.py); dependent ones open the next column. Row text
+is the epic label, the spec number and the milestone name, "E1 01 Filtering"; rows sorted by
+epic, spec number, then milestone order in the spec.
 
-It then rewrites the Sprint column of the "## Ownership" table of every unfinished epic that has
-gone (a Starts value, not every decision [Done]) from the new grid, touching only that column
-(ownership.sync_sprint_columns); finished epics' files are left alone. The runner commits the
-epic files it changed together with the grid.
-
-It also syncs the Decided cards of queue.md with the tag lines of decisions.md (board.sync: the
-tick and the #E<n> tag), so a "[Done]" written since the last script run reaches the board.
+write_grid() writes the grid only (sprints/grid.py). refresh() is the chain every grid change
+runs, in this order: the grid; the Sprint column of the "## Ownership" table of every unfinished
+epic that has gone (a Starts value, not every decision [Done]), touching only that column
+(lib/ownership.py sync_sprint_columns), finished epics' files left alone; then the Decided cards
+of queue.md synced with the tag lines of decisions.md (lib/board.py sync: the tick and the
+#E<n> tag), so a "[Done]" written since the last script run reaches the board. sprints/refresh.py,
+run/go.py (through sprints/refresh.py), plan/new_fix.py and migrate/fixes.py use refresh(); the
+swimlane data (sprints/swimlanes.py) follows it.
 """
-import argparse
 import datetime
 import importlib.util
 import re
 import sys
 from pathlib import Path
 
-RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
+
+def _common():
+    name = "expedition_lib_common"
+    if name not in sys.modules:
+        sys.dont_write_bytecode = True
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / "common.py")
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+C = _common()
 RUN_MARKS = ("[ ]", "[x]", "[!]")
 FINISHED = ("[x]", "[!]")
 PLANNED = "·"
-
-
-def die(msg):
-    print(f"error: {msg}", file=sys.stderr)
-    sys.exit(1)
-
-
-def load_ownership():
-    sys.dont_write_bytecode = True
-    path = Path(__file__).resolve().parent / "ownership.py"
-    spec = importlib.util.spec_from_file_location("ownership", path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
 ROW_PREFIX_RE = re.compile(r"^E\d+\s+\d{2}(?:\.\d+)?\s+(.*)$")
 
 
@@ -64,12 +57,12 @@ def row_name(text):
     return m.group(1) if m else text
 
 
-def read_grid(path, own):
+def read_grid(path, own=None):
     """Existing grid: (column count, rows as [(name, cells)], column labels) from the
     "| Milestone" table. Row names lose their prefix."""
     if not path.is_file():
         return 0, [], []
-    head, data = own.table_rows(own.read(path), "Milestone")
+    head, data = C.table_rows(C.read(path), "Milestone")
     if head is None:
         return 0, [], []
     n = len(head) - 1
@@ -120,10 +113,6 @@ def build(release, milestones, col, existing, num_key, label=None):
             return [v[1] if i + 1 == v[0] else "" for i in range(width)]
         return (v + [""] * width)[:width]
 
-    def first_col(name):
-        c = cells_of(name)
-        return next((i for i, x in enumerate(c) if x), width)
-
     old_order = {name: i for i, (name, _) in enumerate(rows_old)}
     rows = sorted(names + kept, key=lambda n: (
         label.get(n) or 10 ** 6, num_key(spec.get(n)), order.get(n, len(order) + old_order.get(n, 0))))
@@ -143,47 +132,53 @@ def epic_rows(folder, own, milestones):
             if m["spec"] in epics and epics[m["spec"]][0]}
 
 
-def write(folder, release, quiet=False):
-    own = load_ownership()
+def compute_or_die(own, folder):
+    """The ownership facts; dies when the milestones do not schedule."""
     comp = own.compute(folder)
     if comp["errors"]:
         for e in comp["errors"]:
             print(f"error: {e}", file=sys.stderr)
-        die("the milestones do not schedule: fix the specs (ownership.py names the error)")
+        C.die("the milestones do not schedule: fix the specs (sprints/check.py names the error)")
+    return comp
+
+
+def write_grid(folder, release, quiet=False):
+    """Write status/sprints.md; returns (text, the ownership facts)."""
+    own = C.load("lib/ownership")
+    comp = compute_or_die(own, folder)
     milestones, col = comp["milestones"], comp["col"]
-    path = folder / own.SPRINTS_MD
+    path = folder / C.SPRINTS_MD
     path.parent.mkdir(exist_ok=True)
-    n_old, rows_old, _ = read_grid(path, own)
+    n_old, rows_old, _ = read_grid(path)
     label = epic_rows(folder, own, milestones)
     milestones = [m for m in milestones if m["name"] in label]
-    text, warnings = build(release, milestones, col, (n_old, rows_old), own.num_key, label)
+    text, warnings = build(release, milestones, col, (n_old, rows_old), C.num_key, label)
     for w in warnings:
         print(f"warning: {w}", file=sys.stderr)
     path.write_text(text, encoding="utf-8")
     if not quiet:
         print(path)
-    for p in own.sync_sprint_columns(folder, comp):
+    return text, comp
+
+
+def sync_epics(folder, comp):
+    """The Sprint column of every unfinished epic's table, from the grid; prints each file."""
+    for p in C.load("lib/ownership").sync_sprint_columns(folder, comp):
         print(f"{p}: Sprint column synced with the grid")
-    bd = own.load_sibling("board")
-    changed = bd.sync_file(folder / own.QUEUE_MD, bd.decision_tags(own, folder), folder / ".ids.lock")
+
+
+def sync_queue(folder):
+    """The Decided cards of queue.md, from the tag lines of decisions.md; prints the cards."""
+    own, bd = C.load("lib/ownership"), C.load("lib/board")
+    changed = bd.sync_file(folder / C.QUEUE_MD, bd.decision_tags(own, folder), folder / ".ids.lock")
     if changed:
-        print(f"{folder / own.QUEUE_MD}: synced with decisions.md: {', '.join(f'Q{n}' for n in changed)}")
+        print(f"{folder / C.QUEUE_MD}: synced with decisions.md: {', '.join(f'Q{n}' for n in changed)}")
+
+
+def refresh(folder, release, quiet=False):
+    """The chain after a grid change: the grid, the epic files' Sprint column, the queue sync.
+    Returns the grid text."""
+    text, comp = write_grid(folder, release, quiet)
+    sync_epics(folder, comp)
+    sync_queue(folder)
     return text
-
-
-def main():
-    ap = argparse.ArgumentParser(usage="sprints.py <release> [--owner X] [--root PATH]")
-    ap.add_argument("release")
-    ap.add_argument("--owner")
-    ap.add_argument("--root", help="repository root (default: found from the cwd)")
-    a = ap.parse_args()
-    if not RELEASE_RE.match(a.release):
-        die(f"bad release '{a.release}', expected like v0.9.x")
-    own = load_ownership()
-    root = own.repo_root(a.root, a.release)
-    folder = own.release_folder(root, own.detect_owner(root, a.owner), a.release)
-    write(folder, a.release)
-
-
-if __name__ == "__main__":
-    main()

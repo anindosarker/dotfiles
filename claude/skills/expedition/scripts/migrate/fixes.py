@@ -3,7 +3,7 @@
 run/trackers/fix-<slug>-tracker.md (a tracker and a "fix <name>" grid row, no spec, no epic)
 becomes a follow-up spec with one milestone inside an epic.
 
-Usage: python3 -I migrate_fixes.py <release> [--dry-run] [--map <slug>=E<n>:<NN>]...
+Usage: python3 -I migrate/fixes.py <release> [--dry-run] [--map <slug>=E<n>:<NN>]...
        [--owner X] [--root PATH]
 
 Epic and parent spec of each fix, from the first evidence that decides:
@@ -32,7 +32,7 @@ kept. The grid row "fix <name>" becomes "E<n> NN.M <name>" with its cells unchan
 milestone name is the tracker title without the cited ids (kept with them when the shorter
 name is taken). References to the old tracker path in handoffs, epic files, queue.md, specs
 and trackers are rewritten; a `fix-<slug>` mention in queue.md or an epic file becomes
-"spec NN.M". Then sprints.py and swimlanes.py run.
+"spec NN.M". Then the refresh chain (lib/grid.py refresh) and sprints/swimlanes.py run.
 
 --dry-run prints one line per fix (slug, epic, parent spec, new spec number, evidence, "unsure"
 when rule 3 decided or a tie was broken) and writes nothing. Commits nothing. A second run
@@ -47,7 +47,18 @@ import subprocess
 import sys
 from pathlib import Path
 
-RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
+
+def _common():
+    name = "expedition_lib_common"
+    if name not in sys.modules:
+        sys.dont_write_bytecode = True
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent.parent / "lib" / "common.py")
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+C = _common()
 HERE = Path(__file__).resolve().parent
 NUM = r"\d{2}(?:\.\d+)?"
 SLUG_RE = re.compile(r"^fix-(.+)-tracker\.md$")
@@ -57,17 +68,12 @@ SPEC_PATH_RE = re.compile(r"plan/specs/(" + NUM + r")-")
 MAP_RE = re.compile(r"^([a-z0-9]+(?:-[a-z0-9]+)*)=E(\d+):(" + NUM + r")$")
 
 
-def die(msg):
-    print(f"error: {msg}", file=sys.stderr)
-    sys.exit(1)
+die = C.die
 
 
 def load(name):
-    sys.dont_write_bytecode = True
-    spec = importlib.util.spec_from_file_location(name, HERE / f"{name}.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+    """The scripts this one used under their old names: ownership, board, migrate_queue."""
+    return C.load({"ownership": "lib/ownership", "board": "lib/board", "migrate_queue": "migrate/queue"}[name])
 
 
 def parse_tracker(own, path):
@@ -275,7 +281,7 @@ def rewrite_refs(text, old_name, new_rel, slug, num, tokens):
 
 
 def main():
-    ap = argparse.ArgumentParser(usage="migrate_fixes.py <release> [--dry-run] [--map <slug>=E<n>:<NN>]... "
+    ap = argparse.ArgumentParser(usage="migrate/fixes.py <release> [--dry-run] [--map <slug>=E<n>:<NN>]... "
                                        "[--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("--dry-run", action="store_true")
@@ -283,7 +289,7 @@ def main():
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: found from the cwd)")
     a = ap.parse_args()
-    if not RELEASE_RE.match(a.release):
+    if not C.RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
     own = load("ownership")
     bd = load("board")
@@ -292,12 +298,12 @@ def main():
     if not folder.is_dir():
         die(f"release folder missing: {folder}")
     if not (folder / "plan").is_dir():
-        die(f"{folder} has the old layout (no plan/): run python3 -I {HERE / 'migrate_layout.py'} {a.release}")
+        die(f"{folder} has the old layout (no plan/): run python3 -I {HERE / 'layout.py'} {a.release}")
     old = load("migrate_queue").refusal(folder, a.release)
     if old:
         die(old)
     if (folder / own.LEGACY_OWNERSHIP_MD).is_file():
-        die(f"{folder} still has {own.LEGACY_OWNERSHIP_MD}: run python3 -I {HERE / 'migrate_epics.py'} {a.release}")
+        die(f"{folder} still has {own.LEGACY_OWNERSHIP_MD}: run python3 -I {HERE / 'epics.py'} {a.release}")
     fixes = [parse_tracker(own, p) for p in own.legacy_fixes(folder)]
     if not fixes:
         print("no free-standing fix trackers; nothing to change")
@@ -346,7 +352,6 @@ def main():
         print("dry run; nothing written")
         return
 
-    new_spec = load("new_spec")
     plan_md = folder / f"{a.release}-plan.md"
     plan_text = own.read(plan_md)
     grid_path = folder / own.SPRINTS_MD
@@ -371,7 +376,7 @@ def main():
         if r.returncode:
             fx["path"].rename(new_tracker)
         row = f"| {num} | [{fx['title']}](plan/specs/{spec_path.name}) | E{e} | {fx['title']} |"
-        plan_text = new_spec.insert_row(plan_text, num, row)
+        plan_text = C.insert_row(plan_text, num, row)
         if label:
             grid_text = re.sub(r"^\|\s*" + re.escape(label) + r"\s*\|",
                                lambda _: f"| E{e} {num} {name} |", grid_text, count=1, flags=re.M)
@@ -392,8 +397,8 @@ def main():
         print(f"fix-{fx['slug']}: {spec_path.relative_to(folder)}, {tracker_rel}")
     plan_md.write_text(plan_text, encoding="utf-8")
     grid_path.write_text(grid_text, encoding="utf-8")
-    load("sprints").write(folder, a.release)
-    load("swimlanes").write(folder, a.release)
+    C.load("lib/grid").refresh(folder, a.release)
+    C.load("sprints/swimlanes").write(folder, a.release)
     print(f"{len(plan)} fixes moved into epics; nothing committed")
 
 

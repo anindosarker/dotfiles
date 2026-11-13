@@ -2,13 +2,13 @@
 """Add a fix found during a run to the epic it belongs to. A fix is never free-standing: it is a
 milestone of the spec it repairs, or a small follow-up spec in a running epic.
 
-Usage: python3 -I new_fix.py <release> <slug> "<Title>" <spec> --files a,b --checks "<checks>"
+Usage: python3 -I plan/new_fix.py <release> <slug> "<Title>" <spec> --files a,b --checks "<checks>"
        [--cites "Q3, Q4"] [--depends "<milestone names>"] [--epic E<n>] [--owner X] [--root PATH]
 
 <spec> is the spec whose work the fix repairs. The form follows from the grid:
 - The spec has a status/sprints.md row that is not "[x]" (it is still building): a new
   "### Milestone: <Title>" block is appended after the spec's last milestone block, with its
-  tracker run/trackers/NN-<title slug>-tracker.md (the name status.py looks up); the title is
+  tracker run/trackers/NN-<title slug>-tracker.md (the name status/report.py looks up); the title is
   added to the Milestone cell of the spec's rows in the epic file's Ownership table.
 - Every row of the spec is "[x]" (merged): a follow-up spec NN.M (the next free number after
   NN) with that one milestone: plan/specs/NN.M-<slug>.md with "- Epic: E<n>", an Acceptance
@@ -26,11 +26,12 @@ Refuses, writing nothing: a D id among --cites (a decision goes through the queu
 epic); a Q id not in queue.md; a spec with no file; a spec with no Epic line (not gone yet: write
 the change into the spec); no epic running for a follow-up spec (file a queue card instead);
 several running and no --epic; a milestone name already taken; milestones that no longer
-schedule (ownership.py names the error). Then each cited card moves to the end of Autofix,
-ticked, without tags, under the .ids.lock lock; status/sprints.md and the swimlane data are
-regenerated (the lock is free meanwhile, sprints.py takes it); the files written, the grid and
-the epic files sprints.py synced are committed under the lock (shared-file rules). Prints one line naming the form, the
-spec, the milestone and its sprint.
+schedule (sprints/check.py names the error). Then each cited card moves to the end of Autofix,
+ticked, without tags, under the .ids.lock lock; the refresh chain (lib/grid.py refresh: the grid,
+the epic files' Sprint column, the queue sync) and the swimlane data run (the lock is free
+meanwhile, the queue sync takes it); the files written, the grid and the epic files the chain
+synced are committed under the lock (shared-file rules), never pushed. Prints one line naming
+the form, the spec, the milestone and its sprint.
 """
 import argparse
 import contextlib
@@ -38,34 +39,27 @@ import fcntl
 import importlib.util
 import io
 import re
-import subprocess
 import sys
 from pathlib import Path
 
-RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
+
+def _common():
+    name = "expedition_lib_common"
+    if name not in sys.modules:
+        sys.dont_write_bytecode = True
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent.parent / "lib" / "common.py")
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+C = _common()
 SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 NUM_RE = re.compile(r"^\d{2}(?:\.\d+)?$")
 CITES_RE = re.compile(r"^[QD]\d+(\s*,\s*[QD]\d+)*$")
 EPIC_RE = re.compile(r"^E(\d+)$")
 UNFINISHED = ("[ ]", "·", "[!]")
-
-
-def die(msg):
-    print(f"error: {msg}", file=sys.stderr)
-    sys.exit(1)
-
-
-def load(name):
-    sys.dont_write_bytecode = True
-    path = Path(__file__).resolve().parent / f"{name}.py"
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def slugify(name):
-    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+die, slugify, load = C.die, C.slugify, C.load
 
 
 def block_text(name, files, deps, start, title, cites, checks, level="###"):
@@ -78,8 +72,8 @@ def block_text(name, files, deps, start, title, cites, checks, level="###"):
     return "\n".join(lines) + "\n"
 
 
-def tracker_text(new_spec, num, title, cites):
-    text = new_spec.tracker_text(num, title)
+def tracker_text(num, title, cites):
+    text = C.tracker_text(num, title)
     if cites:
         text = text.replace(f"# {num}: {title}, tracker", f"# {num}: {title} ({', '.join(cites)}), tracker", 1)
     return text
@@ -88,7 +82,7 @@ def tracker_text(new_spec, num, title, cites):
 def append_block(text, block):
     """The spec text with block after the end of its last milestone block (the next heading of
     the same or a higher level, else the end of the file)."""
-    own = load("ownership")
+    own = load("lib/ownership")
     lines = text.split("\n")
     last, level = None, None
     for i, line in enumerate(lines):
@@ -128,7 +122,7 @@ def running_epics(rows):
 
 def main():
     ap = argparse.ArgumentParser(
-        usage='new_fix.py <release> <slug> "<Title>" <spec> --files a,b --checks "<checks>" '
+        usage='plan/new_fix.py <release> <slug> "<Title>" <spec> --files a,b --checks "<checks>" '
               '[--cites "Q3, Q4"] [--depends "<milestone names>"] [--epic E<n>] [--owner X] [--root PATH]'
     )
     ap.add_argument("release")
@@ -143,7 +137,7 @@ def main():
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: found from the cwd)")
     a = ap.parse_args()
-    if not RELEASE_RE.match(a.release):
+    if not C.RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
     if not SLUG_RE.match(a.slug):
         die(f"bad slug '{a.slug}', expected lowercase-with-dashes")
@@ -172,16 +166,15 @@ def main():
             die(f"bad epic '{a.epic}', expected like E12")
         want_epic = int(m.group(1))
 
-    own = load("ownership")
-    bd = load("board")
-    new_spec = load("new_spec")
+    own = load("lib/ownership")
+    bd = load("lib/board")
     root = own.repo_root(a.root, a.release)
     folder = own.release_folder(root, own.detect_owner(root, a.owner), a.release)
     with open(folder / ".ids.lock", "a") as lock:
-        run(a, own, bd, new_spec, root, folder, ids, files, want_epic, lock)
+        run(a, own, bd, root, folder, ids, files, want_epic, lock)
 
 
-def run(a, own, bd, new_spec, root, folder, ids, files, want_epic, lock):
+def run(a, own, bd, root, folder, ids, files, want_epic, lock):
     fcntl.flock(lock, fcntl.LOCK_EX)
     queue = folder / own.QUEUE_MD
     have = {c["num"] for c in bd.parse(own.read(queue))["cards"]}
@@ -202,7 +195,7 @@ def run(a, own, bd, new_spec, root, folder, ids, files, want_epic, lock):
             die(f"spec {a.spec} is still building in E{epic}: the fix is its milestone, --epic E{want_epic} does not apply")
     else:
         if not running:
-            die("no epic is running: file a queue card instead (new_item.py <release> Q \"<title>\")")
+            die("no epic is running: file a queue card instead (queue/item.py <release> Q \"<title>\")")
         if want_epic:
             if want_epic not in running:
                 die(f"E{want_epic} is not running; running: {', '.join(f'E{e}' for e in running)}")
@@ -255,7 +248,7 @@ def run(a, own, bd, new_spec, root, folder, ids, files, want_epic, lock):
                              + (f" ({', '.join(ids)})" if ids else "") + ".\n\n"
                              "- Acceptance: the checks of Task 1 pass.\n\n"
                              "## 2. Instructions for AI\n\n### 2.1 Milestones\n\n" + block)
-        writes[plan] = new_spec.insert_row(plan_text, num,
+        writes[plan] = C.insert_row(plan_text, num,
                                            f"| {num} | [{a.title}](plan/specs/{spec_path.name}) | E{epic} | {a.title} |")
         epic_file = own.epic_path(folder, epic)
         if epic_file.is_file():
@@ -272,7 +265,7 @@ def run(a, own, bd, new_spec, root, folder, ids, files, want_epic, lock):
         tracker = trackers / f"{num}-{a.slug}-tracker.md"
     if tracker.exists():
         die(f"refusing to overwrite {tracker}")
-    writes[tracker] = tracker_text(new_spec, num, a.title, ids)
+    writes[tracker] = tracker_text(num, a.title, ids)
 
     old = {p: (own.read(p) if p.exists() else None) for p in writes}
     for p, t in writes.items():
@@ -293,12 +286,12 @@ def run(a, own, bd, new_spec, root, folder, ids, files, want_epic, lock):
         bd.write(queue, q_text)
     fcntl.flock(lock, fcntl.LOCK_UN)
     with contextlib.redirect_stdout(io.StringIO()):
-        load("sprints").write(folder, a.release, quiet=True)
-        load("swimlanes").write(folder, a.release, quiet=True)
+        load("lib/grid").refresh(folder, a.release, quiet=True)
+        load("sprints/swimlanes").write(folder, a.release, quiet=True)
     fcntl.flock(lock, fcntl.LOCK_EX)
     paths = [str(p) for p in writes] + [str(folder / own.SPRINTS_MD)] + ([str(queue)] if ids else [])
     paths += [str(p) for p in sorted((folder / own.EPICS_DIR).glob("E*.md"))]
-    commit(root, paths, f"docs(plan): {a.release} fix {num} {a.title}")
+    C.commit(root, paths, f"docs(plan): {a.release} fix {num} {a.title}")
     fcntl.flock(lock, fcntl.LOCK_UN)
     col = own.compute(folder)["col"].get(a.title)
     rel = tracker.relative_to(folder).as_posix()
@@ -306,20 +299,6 @@ def run(a, own, bd, new_spec, root, folder, ids, files, want_epic, lock):
         print(f"milestone of spec {num}: '{a.title}' in E{epic}, S{col}, tracker {rel}")
     else:
         print(f"follow-up spec {num} of spec {a.spec}: milestone '{a.title}' in E{epic}, S{col}, tracker {rel}")
-
-
-def commit(root, paths, message):
-    git = lambda *args: subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
-    tracked = [p for p in paths if Path(p).exists()]
-    r = git("add", "--", *tracked)
-    if r.returncode:
-        die(f"git add failed: {(r.stderr or r.stdout).strip()}")
-    staged = git("diff", "--cached", "--name-only", "--", *tracked).stdout.split()
-    if not staged:
-        return
-    r = git("commit", "-q", "-m", message, "--only", "--", *tracked)
-    if r.returncode:
-        die(f"git commit failed: {(r.stderr or r.stdout).strip()}")
 
 
 if __name__ == "__main__":

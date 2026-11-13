@@ -2,13 +2,13 @@
 """Allocate the next D or Q id of a release and file the item under it, so two sessions
 on one checkout never pick the same number.
 
-Usage: python3 -I new_item.py <release> D|Q "<title>" [--source Q<n>]
+Usage: python3 -I queue/item.py <release> D|Q "<title>" [--source Q<n>]
        [--bullet "<text>"] [--owner X] [--root PATH]
-       python3 -I new_item.py <release> --move Q<n> Open|Later|Dropped|Autofix
-       python3 -I new_item.py <release> --fact Q<n> "<text>"
+       python3 -I queue/item.py <release> --move Q<n> Open|Later|Dropped|Autofix
+       python3 -I queue/item.py <release> --fact Q<n> "<text>"
 
 Under an exclusive lock on <release folder>/.ids.lock, re-reading the files right before the
-write (queue.md is a kanban board the owner may drag in the editor; board.py edits it in place
+write (queue.md is a kanban board the owner may drag in the editor; lib/board.py edits it in place
 and leaves every other byte as it was):
 
 - D: under the last "## Round" heading of decisions.md: the heading, the --bullet line if
@@ -21,8 +21,8 @@ and leaves every other byte as it was):
   --source; a card leaving Decided loses its #D and #E tags). --fact: one tab-indented fact
   sub-bullet at the end of card Q<n>.
 
-Every call then syncs the Decided cards with the tag lines of decisions.md (board.sync: the
-tick and the #E<n> tag), so a "[Done]" the lead wrote by hand reaches the board on the next call.
+Every call then syncs the Decided cards with the tag lines of decisions.md (lib/board.py sync:
+the tick and the #E<n> tag), so a "[Done]" the lead wrote by hand reaches the board on the next call.
 
 queue.md is created from templates/queue.md when missing. Commits the files it wrote and
 prints the id alone, e.g. Q11.
@@ -36,23 +36,21 @@ import subprocess
 import sys
 from pathlib import Path
 
-RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
+
+def _common():
+    name = "expedition_lib_common"
+    if name not in sys.modules:
+        sys.dont_write_bytecode = True
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent.parent / "lib" / "common.py")
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+C = _common()
 SOURCE_RE = re.compile(r"^Q\d+$")
 ROUND_RE = re.compile(r"^## Round\b")
-
-
-def die(msg):
-    print(f"error: {msg}", file=sys.stderr)
-    sys.exit(1)
-
-
-def load(name):
-    sys.dont_write_bytecode = True
-    path = Path(__file__).resolve().parent / f"{name}.py"
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+die, git = C.die, C.git
 
 
 def highest(paths, kind):
@@ -90,12 +88,6 @@ def under_last_round(text, block, today):
     return "\n".join(out).lstrip("\n") + "\n"
 
 
-def git(root, *args):
-    r = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
-    if r.returncode != 0:
-        die(f"git {' '.join(args[:1])} failed: {(r.stderr or r.stdout).strip()}")
-
-
 def exclude_lock(root):
     """Keep .ids.lock out of git status: one line in the repo's info/exclude."""
     r = subprocess.run(["git", "-C", str(root), "rev-parse", "--git-path", "info/exclude"],
@@ -114,7 +106,7 @@ def exclude_lock(root):
 
 def main():
     ap = argparse.ArgumentParser(
-        usage='new_item.py <release> D|Q "<title>" [--source Q<n>] [--bullet "<text>"] | '
+        usage='queue/item.py <release> D|Q "<title>" [--source Q<n>] [--bullet "<text>"] | '
               '<release> --move Q<n> Open|Later|Dropped|Autofix | <release> --fact Q<n> "<text>" '
               '[--owner X] [--root PATH]'
     )
@@ -128,7 +120,7 @@ def main():
     ap.add_argument("--move", nargs=2, metavar=("Q<n>", "LANE"))
     ap.add_argument("--fact", nargs=2, metavar=("Q<n>", "TEXT"))
     a = ap.parse_args()
-    if not RELEASE_RE.match(a.release):
+    if not C.RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
     card_op = a.move or a.fact
     if a.move and a.fact:
@@ -157,8 +149,8 @@ def main():
         if "\u2014" in val:
             die(f"{label} contains an em dash")
 
-    own = load("ownership")
-    bd = load("board")
+    own = C.load("lib/ownership")
+    bd = C.load("lib/board")
     root = own.repo_root(a.root, a.release)
     folder = own.release_folder(root, own.detect_owner(root, a.owner), a.release)
     queue = folder / own.QUEUE_MD
@@ -168,7 +160,7 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_EX)
         exclude_lock(root)
         if not queue.is_file():
-            tpl = Path(__file__).resolve().parent.parent / "templates" / "queue.md"
+            tpl = C.TEMPLATES / "queue.md"
             queue.write_text(tpl.read_text(encoding="utf-8"), encoding="utf-8")
         board = queue.read_text(encoding="utf-8")
         new = None

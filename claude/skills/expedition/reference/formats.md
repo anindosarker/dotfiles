@@ -22,11 +22,11 @@ Every item has an ID heading. Its first bullet is required and self-explanatory:
 - `[E<n>]` is written by whoever sends RUN. `[Done]` is written by the runner on merge, or by the lead when a decision with nothing to run is recorded.
 - Re-read the file right before every write, make a targeted edit, commit at once. No held edits.
 - The next D or Q number is read from the file at write time, never from memory.
-- Ids come only from `python3 -I <skill>/scripts/new_item.py <release> D|Q "<title>"`, never typed. It locks, appends the heading or the card, commits and prints the id; the session then writes a decision's bullets under its heading.
+- Ids come only from `python3 -I <skill>/scripts/queue/item.py <release> D|Q "<title>"`, never typed. It locks, appends the heading or the card, commits and prints the id; the session then writes a decision's bullets under its heading.
 - No id is mentioned in chat or a tracker before it is allocated: refer to the item by its title.
 - An id never changes after allocation.
 - A duplicate filed twice keeps both ids. The later card gets the fact `Same as Q<n>.` and moves to Dropped.
-- Fallback rule: a session that finds its own id taken renumbers its own item only, never the other's. With `new_item.py` this no longer happens.
+- Fallback rule: a session that finds its own id taken renumbers its own item only, never the other's. With `queue/item.py` this no longer happens.
 - Agents on milestone branches never edit `decisions.md`.
 
 ## queue.md
@@ -68,7 +68,7 @@ kanban-plugin: basic
 %%
 ```
 
-- Sessions change the file only through the scripts: `new_item.py` (`Q`, `D --source`, `--move`, `--fact`), `new_fix.py`, and the tag sync in `new_spec.py --epic` and `sprints.py`. They re-read it inside the lock, find a card by its `**Q<n>**` token and its lane by the `## ` heading above it, and leave every other byte as found, the `%% kanban:settings` block included. The extension may drop the frontmatter when it saves its settings; the next script write puts it back.
+- Sessions change the file only through the scripts: `queue/item.py` (`Q`, `D --source`, `--move`, `--fact`), `plan/new_fix.py`, and the tag sync in `epics/tag.py` and `sprints/refresh.py`. They re-read it inside the lock, find a card by its `**Q<n>**` token and its lane by the `## ` heading above it, and leave every other byte as found, the `%% kanban:settings` block included. The extension may drop the frontmatter when it saves its settings; the next script write puts it back.
 - Five lanes, always all present, in this order. The lane is the card's state:
 
   | Lane | Meaning |
@@ -97,11 +97,11 @@ kanban-plugin: basic
   | Decided | `[x]`, no `#E` tag | Closed: the decision carries `[Done]` alone, or is superseded or deferred |
   | Dropped, Autofix | `[x]` | Closed |
 
-  `decisions.md` is the record. The tick and `#E<n>` of a Decided card mirror the decision's tag line; `new_spec.py --epic`, `sprints.py` and every `new_item.py` call sync them, and `status.py` flags a card that disagrees.
+  `decisions.md` is the record. The tick and `#E<n>` of a Decided card mirror the decision's tag line; `epics/tag.py`, `sprints/refresh.py` and every `queue/item.py` call sync them, and `status/report.py` flags a card that disagrees.
 - Facts are sub-bullets indented with one tab: path:line, measurement, lookup result. Every sub-bullet is a fact. Options are never written in the file. A `#word` that is not a tag is written in backticks, so the extension shows no tag badge.
-- New cards go to the end of Open. A moved card goes, with its facts, to the end of its lane. Decided only through `new_item.py <release> D "<title>" --source Q<n>`, which adds `#D<n>` to the title and leaves the card unticked; a card already in Decided keeps the highest decision number. A card leaving Decided loses its `#D` and `#E` tags.
-- `new_fix.py` moves each card a fix cites to Autofix, ticked and without tags; the fix is traced through its task line and its tracker's first line, for example `(Q9)`.
-- A lookup agent adds its facts to the card it was given with `new_item.py <release> --fact Q<n> "<text>"`.
+- New cards go to the end of Open. A moved card goes, with its facts, to the end of its lane. Decided only through `queue/item.py <release> D "<title>" --source Q<n>`, which adds `#D<n>` to the title and leaves the card unticked; a card already in Decided keeps the highest decision number. A card leaving Decided loses its `#D` and `#E` tags.
+- `plan/new_fix.py` moves each card a fix cites to Autofix, ticked and without tags; the fix is traced through its task line and its tracker's first line, for example `(Q9)`.
+- A lookup agent adds its facts to the card it was given with `queue/item.py <release> --fact Q<n> "<text>"`.
 - Citations elsewhere: `(Q3)` in specs and trackers; a decision that came from a card ends with `- Source: Q3`; a fix's tracker cites `(Q3, Q4)` on its first line.
 - The run reports; it does not solve. Do not research solutions for a run card.
 - Not a queue card: spec text that lags shipped code, a tracker gap, a process lesson, a tooling fact with one right answer. Those go to the tracker Notes, a decision or the spec file directly (`process.md` holds project facts only); the owner sees choices only.
@@ -152,7 +152,7 @@ One file per release, template [../templates/decisions.md](../templates/decision
 
 ## Epic file
 
-`plan/epics/E<n>.md`, one per epic, started by `new_epic_file.py`; lifecycle in SKILL.md stage 1, reading and ack in [run.md](run.md), Epics.
+`plan/epics/E<n>.md`, one per epic, started by `epics/new.py`; lifecycle in SKILL.md stage 1, reading and ack in [run.md](run.md), Epics.
 
 ```md
 # E12
@@ -178,18 +178,18 @@ Starts: S17
 - SKIP 41: D82 superseded by D95, rebuilt next epic.
 ```
 
-- `Decisions:` and the Decision cells (`D<n> <decision title>`): `new_epic_file.py`, on `epic`. One row per decision until the specs exist.
+- `Decisions:` and the Decision cells (`D<n> <decision title>`): `epics/new.py`, on `epic`. One row per decision until the specs exist.
 - Files: the spec writer, before it writes specs: the files the decision changes, paths as the project writes them, several separated by `, `.
-- Spec, Milestone and Sprint: `ownership.py --epic E<n>`, from the specs. One row per decision and spec of the epic citing it (`(D82)`); a spec of the epic citing none of its decisions gets a row with an empty Decision cell. Milestone is the spec's milestone name, several joined by `; `. Sprint is that milestone's sprint, a range `S17 to S19` when the spec's milestones span several. Before go the sprints are provisional (the current sprint as the epic's start); go writes the real ones, and every later `sprints.py` run keeps the Sprint column of an unfinished epic in step with the grid. Rows are ordered by sprint, then spec number, then decision number.
-- `Specs:` and `Starts:`: `go.py`, on go. `Starts: S<n>` is the epic's start sprint, written once and never changed: no milestone of the epic sits in an earlier column.
-- The table shows the plan; it does not pass or fail it. `ownership.py --epic` lists the Files paths that do not exist yet (a new file and a typo look the same); `status.py` does not. `status.py` flags a decision or spec with no row, a row file no milestone of its spec owns, and a Sprint cell that disagrees with the grid.
-- `## Notes` exists only when something the specs cannot hold must be said: a rule changed since the last epic, owner context such as a tried-and-rejected option, a cross-epic order, the lead's moves during the run (SKIP, HOLD). Written with `new_epic_file.py <release> E<n> --note "<text>"`, which creates the section. Nothing restates a decision, a spec or a tracker.
+- Spec, Milestone and Sprint: `epics/table.py E<n>`, from the specs. One row per decision and spec of the epic citing it (`(D82)`); a spec of the epic citing none of its decisions gets a row with an empty Decision cell. Milestone is the spec's milestone name, several joined by `; `. Sprint is that milestone's sprint, a range `S17 to S19` when the spec's milestones span several. Before go the sprints are provisional (the current sprint as the epic's start); go writes the real ones, and every later `sprints/refresh.py` run keeps the Sprint column of an unfinished epic in step with the grid. Rows are ordered by sprint, then spec number, then decision number.
+- `Specs:` and `Starts:`: `run/go.py`, on go. `Starts: S<n>` is the epic's start sprint, written once and never changed: no milestone of the epic sits in an earlier column.
+- The table shows the plan; it does not pass or fail it. `epics/table.py` lists the Files paths that do not exist yet (a new file and a typo look the same); `status/report.py` does not. `status/report.py` flags a decision or spec with no row, a row file no milestone of its spec owns, and a Sprint cell that disagrees with the grid.
+- `## Notes` exists only when something the specs cannot hold must be said: a rule changed since the last epic, owner context such as a tried-and-rejected option, a cross-epic order, the lead's moves during the run (SKIP, HOLD). Written with `epics/new.py <release> E<n> --note "<text>"`, which creates the section. Nothing restates a decision, a spec or a tracker.
 - An urgent note starts with `Urgent:`; a RULES line is one.
 - ` [ack HH:MM]` is appended by the runner when it has read the note; a note without it is unread.
 
 ## status/sprints.md
 
-Columns are the sprints `S1`, `S2`, ... that `ownership.py` computes. Rows are the milestones of specs that carry a `- Epic: E<n>` line (written under the title line by `new_spec.py --epic`); row text is the epic label, the spec number and the milestone name; rows sorted by epic, then spec number, then milestone order in the spec.
+Columns are the sprints `S1`, `S2`, ... that `lib/ownership.py` computes. Rows are the milestones of specs that carry a `- Epic: E<n>` line (written under the title line by `epics/tag.py`); row text is the epic label, the spec number and the milestone name; rows sorted by epic, then spec number, then milestone order in the spec.
 
 ```md
 | Milestone | S1 | S2 |
@@ -230,7 +230,7 @@ Checks:
 - `Checks:` is followed by one bullet per check: command, commit, result. The integration milestone's suite run on the staging branch gets its own bullet.
 - `## Attention` and `## Notes` are optional. Empty is the normal case. Do not spend tokens on notes.
 - Never: review-round narration, check output, commit lists.
-- Writers: `new_fix.py` creates a fix's tracker with `Status: planned`; `new_spec.py` creates the spec's first milestone's tracker with `Status: planned`; the spec writer creates every further milestone's tracker from the template with `Status: planned` in stage 2, when the milestone block is written. In the run, the builder fills it, the fixer and the verifier update it. One worktree per milestone, so no conflicts.
+- Writers: `plan/new_fix.py` creates a fix's tracker with `Status: planned`; `plan/new_spec.py` creates the spec's first milestone's tracker with `Status: planned`; the spec writer creates every further milestone's tracker from the template with `Status: planned` in stage 2, when the milestone block is written. In the run, the builder fills it, the fixer and the verifier update it. One worktree per milestone, so no conflicts.
 - The runner writes handoffs. Both sessions write `decisions.md` and `queue.md` (Shared files).
 
 ## process.md
@@ -266,7 +266,7 @@ Written with the `write-handoff` skill.
 - Every expedition handoff starts its State section with these three bullets:
 
   ```
-  - Stage: <the Stage line of status.py, e.g. discuss, run (S2)>
+  - Stage: <the Stage line of status/report.py, e.g. discuss, run (S2)>
   - Next: `/expedition <stage> <release>`, <where to start, e.g. Q1 or spec 04.1>
   - Runner: window `<release> runner<n>` in tmux session <name>, or none; registry `~/.claude/expedition-runners.json`
 - Writer: session `<name>` `<uuid from $CLAUDE_CODE_SESSION_ID>`, so the next session can ask it or grep its transcript (`/recall`).
