@@ -4,13 +4,13 @@
 # typed into its window by "send", and replies "DONE ..." or "BLOCKED ..." by SendMessage
 # (reference/run.md).
 #
-# Usage: runner.sh start <release> [--model M] [--new] [--from <lead>]   reuse the live runner, resume a dead one, or open the next number; --new opens another runner beside the live one
+# Usage: runner.sh start <release> [--model M] [--new] [--from <lead>] [--cwd PATH]   reuse the live runner, resume a dead one, or open the next number; --new opens another runner beside the live one
 #        runner.sh list                          registry entries with busy or idle
 #        runner.sh stop <release>                close the window, mark the entry stopped
 #        runner.sh send [--from <lead>] <release> "<line>"   type "ultracode <line>" into the runner window
 #                                                and submit it (typed prompts opt the turn in to
 #                                                ultracode; a SendMessage does not)
-#        runner.sh fork <release> E<n> "<D ids>" --from <lead> [--model M]
+#        runner.sh fork <release> E<n> "<D ids>" --from <lead> [--model M] [--cwd PATH]
 #                                                open window "<release> specs E<n>": a forked session
 #                                                of the lead ($CLAUDE_CODE_SESSION_ID) that writes
 #                                                the epic's specs and replies "SPECS E<n> ...";
@@ -18,6 +18,10 @@
 #                                                fork whose window died is resumed, not forked again
 #        runner.sh stop "<window name>"          close a fork window ("<release> specs E<n>")
 #        runner.sh watch start|stop|status        the nudge watcher (scripts/nudge-watch.sh)
+#
+# Folder: start and fork open a new window in --cwd, else in the folder the script is called
+# from. A resumed runner or fork reopens in the folder stored in its registry entry. list, stop,
+# send, resume and watch never use the caller's folder.
 #
 # Lead: start, send and fork run inside tmux record the calling window as registry key "lead"
 # ({"tmux": "<session>:<window id>", "session": $CLAUDE_CODE_SESSION_ID, "name": --from or the
@@ -46,7 +50,7 @@ WATCH_PID="$STATE_DIR/nudge-watch.pid"
 die() { echo "error: $*" >&2; exit 1; }
 
 usage() {
-  echo "usage: runner.sh start <release> [--model M] [--new] [--from <lead>] | list | stop <release or window name> | send <release> \"<line>\" | resume <release or window name> | fork <release> E<n> \"<D ids>\" --from <lead> [--model M] | watch start|stop|status" >&2
+  echo "usage: runner.sh start <release> [--model M] [--new] [--from <lead>] [--cwd PATH] | list | stop <release or window name> | send <release> \"<line>\" | resume <release or window name> | fork <release> E<n> \"<D ids>\" --from <lead> [--model M] [--cwd PATH] | watch start|stop|status" >&2
   exit 2
 }
 
@@ -171,12 +175,23 @@ check_release() {
   [[ "$1" =~ ^v[0-9]+\.[0-9]+\.x$ ]] || die "bad release '$1', expected like v0.9.x"
 }
 
+# new_cwd [PATH]: the absolute folder a new window opens in: PATH, else the caller's folder.
+new_cwd() {
+  if [ -n "${1:-}" ]; then
+    [ -d "$1" ] || die "--cwd not a folder: $1"
+    (cd "$1" && pwd)
+  else
+    pwd
+  fi
+}
+
 cmd_start() {
-  local release="" model="${EXPEDITION_RUNNER_MODEL:-fable}" new=0 from=""
+  local release="" model="${EXPEDITION_RUNNER_MODEL:-fable}" new=0 from="" cwd_flag=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --model) [ $# -ge 2 ] || usage; model="$2"; shift 2 ;;
       --from) [ $# -ge 2 ] || usage; from="$2"; shift 2 ;;
+      --cwd) [ $# -ge 2 ] || usage; cwd_flag="$2"; shift 2 ;;
       --new) new=1; shift ;;
       -*) usage ;;
       *) [ -z "$release" ] || usage; release="$1"; shift ;;
@@ -187,7 +202,7 @@ cmd_start() {
   local name
   if [ "$new" = 1 ]; then name="$(next_runner_name "$release")"; else name="$(runner_name "$release")"; fi
   local cwd
-  cwd="$(pwd)"
+  cwd="$(new_cwd "$cwd_flag")"
   mkdir -p "$STATE_DIR"
 
   local state uuid target resume=0
@@ -287,11 +302,12 @@ cmd_stop() {
 }
 
 cmd_fork() {
-  local release="" epic="" ids="" from="" prompt="" model="${EXPEDITION_FORK_MODEL:-fable}"
+  local release="" epic="" ids="" from="" prompt="" model="${EXPEDITION_FORK_MODEL:-fable}" cwd_flag=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --model) [ $# -ge 2 ] || usage; model="$2"; shift 2 ;;
       --from) [ $# -ge 2 ] || usage; from="$2"; shift 2 ;;
+      --cwd) [ $# -ge 2 ] || usage; cwd_flag="$2"; shift 2 ;;
       --prompt) [ $# -ge 2 ] || usage; prompt="$2"; shift 2 ;;  # tests only: replaces the prompt
       -*) usage ;;
       *)
@@ -309,7 +325,7 @@ cmd_fork() {
   [ -n "$from" ] || die "--from <lead session name> is required"
   record_lead "$from"
   local name="$release specs $epic" cwd target uuid resume=0 parent="${CLAUDE_CODE_SESSION_ID:-}"
-  cwd="$(pwd)"
+  cwd="$(new_cwd "$cwd_flag")"
   uuid="$(reg field "$name" uuid)"
   if [ -n "$uuid" ] && [ "$(reg field "$name" state)" != stopped ]; then
     if window_alive "$(reg field "$name" tmux)"; then

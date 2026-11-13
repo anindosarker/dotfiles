@@ -441,12 +441,12 @@ def main():
     ap.add_argument("release")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--owner")
-    ap.add_argument("--root", help="repository root (default: git top level)")
+    ap.add_argument("--root", help="repository root (default: found from the cwd)")
     a = ap.parse_args()
     if not RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
     own = load("ownership")
-    root = own.repo_root(a.root)
+    root = own.repo_root(a.root, a.release)
     owner = own.detect_owner(root, a.owner)
     folder = root / ".ai" / "plans" / a.release / owner
     if not folder.is_dir():

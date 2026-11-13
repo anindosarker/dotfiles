@@ -49,7 +49,7 @@ A fix milestone (no spec of its own) gets a tracker, `run/trackers/fix-<slug>-tr
 
 ## Scripts
 
-Run from inside the repo, as `python3 -I <script> <release>`. They never overwrite an authored file.
+Run as `python3 -I <script> <release>` from the repo, a folder inside it, or the folder one level above it: each script takes the git top level of the cwd when it holds `.ai/plans/<release>/`, else the one direct child folder that does (`new_cycle.py`: `.ai/plans/`). Several matches stop with a list; `--root PATH` picks one. They never overwrite an authored file.
 
 | Script | Does | When |
 |---|---|---|

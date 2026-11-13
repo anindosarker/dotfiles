@@ -152,12 +152,12 @@ def main():
     ap = argparse.ArgumentParser(usage="swimlanes.py <release> [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("--owner")
-    ap.add_argument("--root", help="repository root (default: git top level)")
+    ap.add_argument("--root", help="repository root (default: found from the cwd)")
     a = ap.parse_args()
     if not RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
     own = load_ownership()
-    root = own.repo_root(a.root)
+    root = own.repo_root(a.root, a.release)
     folder = own.release_folder(root, own.detect_owner(root, a.owner), a.release)
     write(folder, a.release)
 

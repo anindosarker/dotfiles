@@ -119,7 +119,7 @@ def main():
     ap.add_argument("title", nargs="?")
     ap.add_argument("--from", dest="source_of")
     ap.add_argument("--owner")
-    ap.add_argument("--root", help="repository root (default: git top level)")
+    ap.add_argument("--root", help="repository root (default: found from the cwd)")
     ap.add_argument("--source")
     ap.add_argument("--bullet")
     ap.add_argument("--move", nargs=2, metavar=("Q<n>", "LANE"))
@@ -161,7 +161,7 @@ def main():
 
     own = load("ownership")
     bd = load("board")
-    root = own.repo_root(a.root)
+    root = own.repo_root(a.root, a.release)
     folder = own.release_folder(root, own.detect_owner(root, a.owner), a.release)
     queue = folder / own.QUEUE_MD
     today = datetime.date.today().isoformat()

@@ -13,7 +13,7 @@ The core loop: two sessions on one checkout. The lead (this session) discusses w
 
 Arguments: `$ARGUMENTS`. Stage missing: run `python3 -I ${CLAUDE_SKILL_DIR}/scripts/status.py <release>`, take its inferred stage, and say which stage you picked.
 
-Mechanical steps use the scripts, never hand-written files. The main agent calls scripts, never does a script's job by hand, never spawns an agent only to call one (the spec writer, a forked session, calls `new_spec.py` as part of its work):
+Mechanical steps use the scripts, never hand-written files. The scripts find the release folder from the cwd or one level below it, so sessions never `cd` for them and use `git -C <repo>` for git. The main agent calls scripts, never does a script's job by hand, never spawns an agent only to call one (the spec writer, a forked session, calls `new_spec.py` as part of its work):
 
 - New release folder: `python3 -I ${CLAUDE_SKILL_DIR}/scripts/new_cycle.py v0.<n>.x`
 - New spec or follow-up spec: `python3 -I ${CLAUDE_SKILL_DIR}/scripts/new_spec.py v0.<n>.x NN <slug> "<Title>" "<scope>"` (the `plan/specs/NN-<slug>.md` stub, the first milestone's tracker `run/trackers/NN-<slug>-tracker.md` with `Status: planned`, and the `<release>-plan.md` row)
@@ -26,7 +26,7 @@ Mechanical steps use the scripts, never hand-written files. The main agent calls
 - Old layout (no `plan/`): `python3 -I ${CLAUDE_SKILL_DIR}/scripts/migrate_layout.py v0.<n>.x` once; the other scripts refuse the folder until then
 - Epics run before start sprints existed (grid rows, no `Starts:`): `python3 -I ${CLAUDE_SKILL_DIR}/scripts/ownership.py v0.<n>.x --backfill-starts [--dry-run]` once, then `ownership.py`, `sprints.py`, `swimlanes.py`
 - Old queue files (`findings.md` or `run/attentions/`, no `queue.md`), or a `queue.md` that is not a kanban board yet: `python3 -I ${CLAUDE_SKILL_DIR}/scripts/migrate_queue.py v0.<n>.x [--dry-run]` once; the other scripts refuse the folder until then
-- Runner session: `${CLAUDE_SKILL_DIR}/scripts/runner.sh start|list|stop|send v0.<n>.x`, run from the lead's working directory: the runner and the spec forks start in the same folder as the lead, never one level down; call the script in a Bash call of its own, never after a `cd` in the same command, because it takes the cwd it is called from
+- Runner session: `${CLAUDE_SKILL_DIR}/scripts/runner.sh start|list|stop|send v0.<n>.x`: the runner and the spec forks run in the lead's working directory, never one level down; `start` and `fork` open the new window in the folder they are called from, or in `--cwd PATH`
 - Mid-run fix: `python3 -I ${CLAUDE_SKILL_DIR}/scripts/new_fix.py v0.<n>.x <slug> "Q3, Q4"` (the tracker stub citing the queue cards, each card moved to Autofix, and a grid row in the current sprint column)
 - Queue cards: `python3 -I ${CLAUDE_SKILL_DIR}/scripts/new_item.py v0.<n>.x --move Q<n> Open|Later|Dropped|Autofix` and `--fact Q<n> "<text>"`; next card: `status.py v0.<n>.x --next` (the first card in Open with its facts, or `none`)
 - State and gaps: `python3 -I ${CLAUDE_SKILL_DIR}/scripts/status.py v0.<n>.x`

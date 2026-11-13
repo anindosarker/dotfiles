@@ -47,22 +47,6 @@ def die(msg):
     sys.exit(1)
 
 
-def repo_root(flag=None):
-    if flag:
-        p = Path(flag).resolve()
-        if not p.is_dir():
-            die(f"root not a folder: {p}")
-        return p
-    try:
-        out = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True,
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        die("not inside a git repository")
-    return Path(out.stdout.strip())
-
-
 def detect_owner(root, flag):
     if flag:
         return flag
@@ -294,7 +278,7 @@ def main():
     ap.add_argument("--epic", help="tag mode: write - Epic: E<n> into each spec and [E<n>] under each cited decision")
     ap.add_argument("--owner")
     ap.add_argument("--template")
-    ap.add_argument("--root", help="repository root (default: git top level)")
+    ap.add_argument("--root", help="repository root (default: found from the cwd)")
     a = ap.parse_args()
     if not RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
@@ -304,7 +288,7 @@ def main():
         items = [s.strip() for x in a.rest for s in x.split(",") if s.strip()]
         if not items:
             die("--epic needs spec numbers or D ids")
-        root = repo_root(a.root)
+        root = load_ownership().repo_root(a.root, a.release)
         folder = load_ownership().release_folder(root, detect_owner(root, a.owner), a.release)
         tag_epic(folder, a.epic, items)
         return
@@ -321,7 +305,7 @@ def main():
         if "\u2014" in val:
             die(f"{label} contains an em dash")
 
-    root = repo_root(a.root)
+    root = load_ownership().repo_root(a.root, a.release)
     own = load_ownership()
     folder = own.release_folder(root, detect_owner(root, a.owner), a.release)
     plan = folder / f"{a.release}-plan.md"

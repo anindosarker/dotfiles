@@ -45,18 +45,6 @@ def load_ownership():
     return mod
 
 
-def repo_root(flag=None):
-    if flag:
-        p = Path(flag).resolve()
-        if not p.is_dir():
-            die(f"root not a folder: {p}")
-        return p
-    r = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
-    if r.returncode:
-        die("not inside a git repository")
-    return Path(r.stdout.strip())
-
-
 def detect_owner(root, flag):
     if flag:
         return flag
@@ -123,12 +111,12 @@ def main():
     ap = argparse.ArgumentParser(usage="migrate_layout.py <release> [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("--owner")
-    ap.add_argument("--root", help="repository root (default: git top level)")
+    ap.add_argument("--root", help="repository root (default: found from the cwd)")
     a = ap.parse_args()
     sys.stdout.reconfigure(line_buffering=True)
     if not RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
-    root = repo_root(a.root)
+    root = load_ownership().repo_root(a.root, a.release)
     owner = detect_owner(root, a.owner)
     folder = root / ".ai" / "plans" / a.release / owner
     if not folder.is_dir():

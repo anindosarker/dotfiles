@@ -70,7 +70,7 @@ def main():
     ap.add_argument("--depends", default="")
     ap.add_argument("--title")
     ap.add_argument("--owner")
-    ap.add_argument("--root", help="repository root (default: git top level)")
+    ap.add_argument("--root", help="repository root (default: found from the cwd)")
     a = ap.parse_args()
     if not RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
@@ -91,7 +91,7 @@ def main():
     title = f"{words} ({cites})"
 
     own = load("ownership")
-    root = own.repo_root(a.root)
+    root = own.repo_root(a.root, a.release)
     folder = own.release_folder(root, own.detect_owner(root, a.owner), a.release)
     if not (folder / own.SPECS_DIR).is_dir():
         die(f"specs folder missing: {folder / own.SPECS_DIR}")

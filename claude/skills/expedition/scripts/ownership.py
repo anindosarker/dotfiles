@@ -95,20 +95,46 @@ def die(msg):
     sys.exit(1)
 
 
-def repo_root(flag=None):
+def repo_root(flag, release, new=False):
+    """The repository root every script works in. Order: --root; else the git top level of the
+    cwd when it holds .ai/plans/<release>/; else the one direct child folder of the cwd or of
+    that top level that holds it. new=True (new_cycle.py, release not made yet) looks for
+    .ai/plans/ instead. Several matches stop with the list. No match falls back to the git top
+    level, so the caller's usual error follows."""
     if flag:
         p = Path(flag).resolve()
         if not p.is_dir():
             die(f"root not a folder: {p}")
         return p
+    mark = Path(".ai", "plans") if new else Path(".ai", "plans", release)
     try:
-        out = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True,
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError):
+        out = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+        top = Path(out.stdout.strip()) if out.returncode == 0 else None
+    except FileNotFoundError:
+        top = None
+    if top and (top / mark).is_dir():
+        return top
+    found = []
+    for base in (Path.cwd(), top):
+        try:
+            kids = sorted(base.iterdir()) if base else []
+        except OSError:
+            continue
+        for d in kids:
+            try:
+                hit = d.is_dir() and (d / mark).is_dir()
+            except OSError:
+                hit = False
+            if hit and d.resolve() not in found:
+                found.append(d.resolve())
+    if len(found) == 1:
+        return found[0]
+    if found:
+        die(f"several folders hold {mark}/; pass --root with one of:\n"
+            + "\n".join(f"  {d}" for d in found))
+    if top is None:
         die("not inside a git repository")
-    return Path(out.stdout.strip())
+    return top
 
 
 def detect_owner(root, flag):
@@ -870,11 +896,11 @@ def main():
                     help="write Starts into epic files that have grid rows and none yet")
     ap.add_argument("--dry-run", action="store_true", help="with --backfill-starts: write nothing")
     ap.add_argument("--owner")
-    ap.add_argument("--root", help="repository root (default: git top level)")
+    ap.add_argument("--root", help="repository root (default: found from the cwd)")
     a = ap.parse_args()
     if not RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
-    root = repo_root(a.root)
+    root = repo_root(a.root, a.release)
     folder = release_folder(root, detect_owner(root, a.owner), a.release)
     if a.backfill_starts:
         backfill_starts(folder, a.dry_run)

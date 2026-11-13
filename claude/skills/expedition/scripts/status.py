@@ -85,22 +85,6 @@ def die(msg):
     sys.exit(1)
 
 
-def repo_root(flag=None):
-    if flag:
-        p = Path(flag).resolve()
-        if not p.is_dir():
-            die(f"root not a folder: {p}")
-        return p
-    try:
-        out = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True,
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        die("not inside a git repository")
-    return Path(out.stdout.strip())
-
-
 def detect_owner(root, flag):
     if flag:
         return flag
@@ -649,11 +633,11 @@ def main():
     ap.add_argument("release")
     ap.add_argument("--next", action="store_true")
     ap.add_argument("--owner")
-    ap.add_argument("--root", help="repository root (default: git top level)")
+    ap.add_argument("--root", help="repository root (default: found from the cwd)")
     a = ap.parse_args()
     if not RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
-    root = repo_root(a.root)
+    root = load_ownership().repo_root(a.root, a.release)
     owner = detect_owner(root, a.owner)
     folder = load_ownership().release_folder(root, owner, a.release)
     queue = folder / QUEUE_MD
