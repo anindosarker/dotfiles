@@ -206,6 +206,11 @@ function chain(id) {
 }
 
 const visible = (m) => !(state.status === "done" && m.status !== "done") && !(state.status === "open" && m.status === "done");
+// Under a status filter, lanes and sprint columns with nothing that passes it are not drawn; "all" draws everything.
+const filtering = () => state.status !== "all";
+const allLanes = () => D.epics.filter((e) => e !== "Fixes" || state.fixes);
+const shownLanes = () => allLanes().filter((e) => !filtering() || D.milestones.some((m) => m.epic === e && visible(m)));
+const shownSprints = (lanes) => D.sprints.map((_, i) => i).filter((i) => !filtering() || D.milestones.some((m) => m.sprint === i && lanes.includes(m.epic) && visible(m)));
 const laneInfo = (epic) => {
   const ms = D.milestones.filter((m) => m.epic === epic);
   const span = ms.length ? [Math.min(...ms.map((m) => m.sprint)), Math.max(...ms.map((m) => m.sprint))] : null;
@@ -228,15 +233,18 @@ function expandAllBtn() {
   return `<button data-all data-tip="${any ? "Collapse all" : "Expand all"}" aria-label="${any ? "Collapse all lanes" : "Expand all lanes"}"
     class="relative ml-auto inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-subtext0 normal-case tracking-normal hover:bg-surface0 hover:text-text">${icon(any ? "fold-all" : "unfold-all")}</button>`;
 }
-function headerRow(lanes, now, firstLabel) {
+function headerRow(sprints, now, firstLabel) {
+  // Sprint totals stay real: they count every lane, not only the lanes the filter leaves.
+  const lanes = allLanes();
   const nowBg = (i) => i === now ? " bg-blue/[0.06]" : "";
   const handle = (key) => `<div data-resize="${key}" class="group absolute inset-y-0 -right-1.5 z-30 flex w-3 cursor-col-resize justify-center"></div>`;
   let html = `<div class="sticky left-0 z-30 flex items-end border-b border-r border-surface0 bg-crust px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-subtext0">${firstLabel}${expandAllBtn()}${handle("label")}</div>`;
-  D.sprints.forEach((s, i) => {
+  sprints.forEach((i, k) => {
+    const s = D.sprints[i];
     const ms = D.milestones.filter((m) => m.sprint === i && lanes.includes(m.epic));
     const done = ms.filter((m) => m.status === "done").length;
     const pct = ms.length ? Math.round((done / ms.length) * 100) : 0;
-    html += `<div class="relative border-b border-r border-surface0 bg-crust/60 px-3 py-2.5 last:border-r-0${nowBg(i)}">${i < D.sprints.length - 1 || !state.fill ? handle("col:" + s) : ""}
+    html += `<div class="relative border-b border-r border-surface0 bg-crust/60 px-3 py-2.5 last:border-r-0${nowBg(i)}">${k < sprints.length - 1 || !state.fill ? handle("col:" + s) : ""}
       <div class="flex items-center justify-between gap-1">
         <span class="text-sm font-semibold">${esc(s)}</span>
         ${i === now ? `<span class="rounded-full bg-blue/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue">now</span>` : ""}
@@ -264,19 +272,20 @@ function laneLabel(epic, extra = "") {
   </div>`;
 }
 
-function renderEpic(lanes, now, focus) {
-  const cols = D.sprints.length;
+function renderEpic(lanes, sprints, now, focus) {
   const nowBg = (i) => i === now ? " bg-blue/[0.06]" : "";
-  let html = headerRow(lanes, now, "Epic");
+  let html = headerRow(sprints, now, "Epic");
   lanes.forEach((epic) => {
     const { ms } = laneInfo(epic);
     const collapsed = isCollapsed(epic);
     html += laneLabel(epic);
-    for (let i = 0; i < cols; i++) {
+    for (const i of sprints) {
       const cards = ms.filter((m) => m.sprint === i);
       html += `<div class="flex min-h-14 flex-col gap-1.5 border-b border-r border-surface0 p-2 last:border-r-0${nowBg(i)}">`;
       if (collapsed) {
-        if (cards.length) html += `<div data-lane="${esc(epic)}" class="card ${cards.every((m) => m.status === "done") ? "done" : "planned"} text-subtext0">${cards.length} milestone${cards.length > 1 ? "s" : ""}</div>`;
+        // The aggregated chip follows the status filter like the cards it stands for.
+        const shown = cards.filter(visible);
+        if (shown.length) html += `<div data-lane="${esc(epic)}" class="card ${shown.every((m) => m.status === "done") ? "done" : "planned"} text-subtext0">${shown.length} milestone${shown.length > 1 ? "s" : ""}</div>`;
       } else {
         cards.forEach((m) => {
           html += `<div class="${cardClass(m, focus)}" data-id="${esc(m.id)}" title="${esc(m.specTitle || m.name)}">${m.number ? `<span class="num mr-1 font-mono text-[10px] text-subtext0">${esc(m.number)}</span>` : ""}${esc(m.name)}</div>`;
@@ -288,10 +297,9 @@ function renderEpic(lanes, now, focus) {
   return html;
 }
 
-function renderMilestone(lanes, now, focus) {
-  const cols = D.sprints.length;
+function renderMilestone(lanes, sprints, now, focus) {
   const nowBg = (i) => i === now ? " bg-blue/[0.06]" : "";
-  let html = headerRow(lanes, now, "Milestone");
+  let html = headerRow(sprints, now, "Milestone");
   lanes.forEach((epic) => {
     const { ms } = laneInfo(epic);
     const collapsed = isCollapsed(epic);
@@ -305,7 +313,7 @@ function renderMilestone(lanes, now, focus) {
         <span class="w-6 shrink-0 font-mono text-[10px] text-subtext0">${esc(m.number ?? "")}</span>
         <span class="truncate text-xs" title="${esc(m.specTitle || m.name)}">${esc(m.name)}</span>
       </div>`;
-      for (let i = 0; i < cols; i++) {
+      for (const i of sprints) {
         html += `<div class="flex items-center border-b border-r border-surface0 px-2 py-1.5 last:border-r-0${nowBg(i)}">`;
         if (m.sprint === i) html += `<div class="${cardClass(m, focus)} flex w-full items-center gap-1.5" data-id="${esc(m.id)}" title="${esc(m.name)}">${icon(STATUS_ICON[m.status], "size-3 shrink-0")}<span class="truncate">${esc(m.status)}</span></div>`;
         html += `</div>`;
@@ -318,13 +326,15 @@ function renderMilestone(lanes, now, focus) {
 function render() {
   const board = $("#board");
   board.classList.toggle("compact", state.compact);
-  const lanes = D.epics.filter((e) => e !== "Fixes" || state.fixes);
-  board.style.gridTemplateColumns = template();
+  const lanes = shownLanes();
+  const sprints = shownSprints(lanes);
+  board.style.gridTemplateColumns = lanes.length ? template() : "1fr";
   $("#zoom").style.zoom = state.zoom / 100;
   $("#detail-wrap").style.width = state.panelW + "px";
   const now = nowSprint();
   const focus = state.sel ? chain(state.sel) : null;
-  board.innerHTML = state.view === "milestone" ? renderMilestone(lanes, now, focus) : renderEpic(lanes, now, focus);
+  board.innerHTML = !lanes.length ? `<p class="p-6 text-sm text-subtext0">Nothing ${state.status === "done" ? "done" : "open"}.</p>`
+    : state.view === "milestone" ? renderMilestone(lanes, sprints, now, focus) : renderEpic(lanes, sprints, now, focus);
   syncControls();
   renderDetail();
   watchLayout();
@@ -334,7 +344,8 @@ function render() {
 
 const labelWidth = () => state.label || (state.view === "milestone" ? 260 : 128);
 function template() {
-  const cols = D.sprints.map((s) => {
+  const cols = shownSprints(shownLanes()).map((i) => {
+    const s = D.sprints[i];
     const w = state.widths[s] ?? state.col;
     return state.fill ? `minmax(${w}px, 1fr)` : `${w}px`;
   });
