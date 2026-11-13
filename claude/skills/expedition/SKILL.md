@@ -49,7 +49,7 @@ Writing a rule: one rule per topic, two to five bullets; each bullet a full sent
 ## Owner input
 
 - Owner words: `record it`, `accepted`, `k`, `epic`, `hold D<n>`, `go`, `epic go`.
-- `progress` (or "status"): the lead runs `python3 -I ${CLAUDE_SKILL_DIR}/scripts/status.py <release> --progress` and replies with its output unchanged and nothing else: no added sentence, no item, no commit id, no ack, no list of waiting work. Example output:
+- `progress` (or "status"): while a runner is live and an epic has an unfinished row, the lead types `runner.sh send <release> "PROGRESS"` and ends its turn with the one line `Asked the runner.`; the runner runs `status.py <release> --progress`, corrects the block from what only it knows (a milestone that is built and stopped goes under `Blocked` with who it waits on, the owner or the lead, and for what), and sends the block back by `SendMessage`; the lead passes that message on unchanged, and when the block says a milestone waits on the lead, does that work in the same turn. No runner live, or nothing unfinished: the lead runs `python3 -I ${CLAUDE_SKILL_DIR}/scripts/status.py <release> --progress` itself. Either way the reply is the block and nothing else: no added sentence, no item, no commit id, no ack, no list of waiting work. Example output:
 
   ```
   **E12** · Specs 6/12
@@ -59,7 +59,7 @@ Writing a rule: one rule per topic, two to five bullets; each bullet a full sent
     - 47 Comparison page: the table names a feature tablecn dropped; keep or remove the row.
   ```
 
-  `Running` lists each spec with a milestone running, including a spec that is being retried or fixed. `Blocked` lists only work that has stopped, with the run's own reason from the tracker.
+  `Running` lists each spec with a milestone running, including a spec that is being retried or fixed. `Blocked` lists only work that has stopped, with the run's own reason and who it waits on (`waits on the owner: ...` or `waits on the lead: ...`).
 - Reporting on epic work (after a regroup, an added fix, a note to the runner, a release check): the default report is that same progress block. Add a plain sentence only when the block cannot show what was done or what the owner has to do. No commit id, sprint number, file path or script leftover; a leftover is fixed, or filed as a queue card when it needs a decision. A reply to a skill-update prompt keeps the form that prompt asks for.
 - `resume` (or "resume E<n>", "resume the runner"): send the one word `resume` to every live window `runner.sh list` shows (`runner.sh resume <release>` for the runner, `runner.sh resume "<release> specs E<n>"` for each fork), in one turn, then post the next item. No picking a window, no status checks, no pane reading or report of a session's state, no audits; the lead does its own work only when the owner says so.
 - A runner or fork window that hits a usage limit is never stopped, replaced or re-forked: it continues by itself when the limit resets, and `resume` typed into it (or `claude --resume <uuid>` after a crash) brings it back. `runner.sh stop` marks the entry stopped, after which `fork` cannot resume it. A decision with nothing to run is tagged `[Done]` when recorded.
