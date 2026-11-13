@@ -107,10 +107,14 @@ def read_old(text):
             if line.strip():
                 unplaced.append((i + 1, line))
             continue
-        if not fenced and not cur["tagged"] and not cur["body"] and TAG_LINE_RE.match(line):
+        if not fenced and not cur["body"] and TAG_LINE_RE.match(line):
+            # A tag line written twice by hand (the old file has five) is one tag line.
             e = re.search(r"\[E(\d+)\]", line)
-            cur["epic"] = int(e.group(1)) if e else None
-            cur["done"] = "[Done]" in line
+            if e:
+                cur["epic"] = int(e.group(1))
+            elif not cur["tagged"]:
+                cur["epic"] = None
+            cur["done"] = cur.get("done", False) and cur["tagged"] or "[Done]" in line
             cur["tagged"] = True
             continue
         if fenced or line.strip():

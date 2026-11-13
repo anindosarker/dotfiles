@@ -173,7 +173,7 @@ def sync_decisions(folder, locked=False):
     """The cards of decisions.md, to the lanes of the Done rule; prints the cards moved. Takes
     the .ids.lock lock unless the caller holds it (locked=True)."""
     dc = C.load("lib/decisions")
-    moved = dc.sync_file(folder, None if locked else folder / ".ids.lock")
+    moved = dc.sync_file(folder, None if locked else C.lock_file(folder))
     if moved:
         print(f"{folder / 'decisions.md'}: lanes synced: {dc.moved_text(moved)}")
 
@@ -182,7 +182,7 @@ def sync_queue(folder, locked=False):
     """The Decided cards of queue.md, from the lanes of decisions.md; prints the cards. Takes
     the .ids.lock lock unless the caller holds it (locked=True)."""
     own, bd = C.load("lib/ownership"), C.load("lib/board")
-    lock = None if locked else folder / ".ids.lock"
+    lock = None if locked else C.lock_file(folder)
     changed = bd.sync_file(folder / C.QUEUE_MD, bd.decision_tags(own, folder), lock)
     if changed:
         print(f"{folder / C.QUEUE_MD}: synced with decisions.md: {', '.join(f'Q{n}' for n in changed)}")

@@ -185,6 +185,14 @@ def legacy_fixes(folder):
     return sorted((folder / TRACKERS_DIR).glob(LEGACY_FIX_GLOB))
 
 
+def lock_file(folder):
+    """The release's write lock, status/data/.ids.lock: git-ignored with the rest of status/data,
+    which is created here when a fresh clone does not have it yet."""
+    data = folder / STATUS_DIR / "data"
+    data.mkdir(parents=True, exist_ok=True)
+    return data / ".ids.lock"
+
+
 def num_key(num):
     """Sort key of a spec number ("41", "41.1"); None sorts last."""
     if num is None:

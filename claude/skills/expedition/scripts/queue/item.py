@@ -7,7 +7,7 @@ Usage: python3 -I queue/item.py <release> D|Q "<title>" [--source Q<n>]
        python3 -I queue/item.py <release> --move Q<n> Open|Later|Dropped|Autofix
        python3 -I queue/item.py <release> --fact Q<n> "<text>"
 
-Under an exclusive lock on <release folder>/.ids.lock, re-reading the files right before the
+Under an exclusive lock on <release folder>/status/data/.ids.lock, re-reading the files right before the
 write (queue.md is a kanban board the owner may drag in the editor; lib/board.py edits it in place
 and leaves every other byte as it was):
 
@@ -53,22 +53,6 @@ def _common():
 C = _common()
 SOURCE_RE = re.compile(r"^Q\d+$")
 die = C.die
-
-
-def exclude_lock(root):
-    """Keep .ids.lock out of git status: one line in the repo's info/exclude."""
-    r = subprocess.run(["git", "-C", str(root), "rev-parse", "--git-path", "info/exclude"],
-                       capture_output=True, text=True)
-    if r.returncode != 0:
-        return
-    path = Path(r.stdout.strip())
-    if not path.is_absolute():
-        path = root / path
-    text = path.read_text(encoding="utf-8") if path.is_file() else ""
-    if ".ids.lock" not in text.split("\n"):
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text + ("" if not text or text.endswith("\n") else "\n") + ".ids.lock\n",
-                        encoding="utf-8")
 
 
 def main():
@@ -125,9 +109,8 @@ def main():
     dc = C.load("lib/decisions")
     target = folder / "decisions.md"
 
-    with open(folder / ".ids.lock", "a") as lock:
+    with open(C.lock_file(folder), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        exclude_lock(root)
         if not queue.is_file():
             tpl = C.TEMPLATES / "queue.md"
             queue.write_text(tpl.read_text(encoding="utf-8"), encoding="utf-8")

@@ -170,7 +170,7 @@ def main():
     bd = load("lib/board")
     root = own.repo_root(a.root, a.release)
     folder = own.release_folder(root, own.detect_owner(root, a.owner), a.release)
-    with open(folder / ".ids.lock", "a") as lock:
+    with open(C.lock_file(folder), "a") as lock:
         run(a, own, bd, root, folder, ids, files, want_epic, lock)
 
 

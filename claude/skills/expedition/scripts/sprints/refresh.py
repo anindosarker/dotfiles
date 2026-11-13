@@ -43,7 +43,7 @@ def main():
     if not C.RELEASE_RE.match(a.release):
         C.die(f"bad release '{a.release}', expected like v0.9.x")
     _, folder = C.find_folder(a.release, a.owner, a.root)
-    with open(folder / ".ids.lock", "a") as lock:
+    with open(C.lock_file(folder), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         C.load("lib/grid").refresh(folder, a.release, locked=True)
         C.load("sprints/swimlanes").write(folder, a.release)

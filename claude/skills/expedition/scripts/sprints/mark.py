@@ -74,7 +74,7 @@ def main():
     num, name, _ = hit
     mark = g.MARKS[a.action]
     grid = folder / C.SPRINTS_MD
-    with open(folder / ".ids.lock", "a") as lock:
+    with open(C.lock_file(folder), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         old, text = g.set_mark(grid, name, mark) if grid.is_file() else (None, None)
         if old is None:

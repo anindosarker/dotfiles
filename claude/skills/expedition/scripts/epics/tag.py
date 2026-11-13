@@ -109,7 +109,7 @@ def tag_epic(folder, epic, items):
         print(f"kept specs: {', '.join(kept_specs)}")
     dc = C.load("lib/decisions")
     tagged, kept = [], []
-    with open(folder / ".ids.lock", "a") as lock:
+    with open(C.lock_file(folder), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         text = path.read_text(encoding="utf-8")
         cards = {c["num"]: c for c in dc.parse(text)["cards"]}
@@ -132,7 +132,7 @@ def tag_epic(folder, epic, items):
     if kept:
         print(f"kept: {', '.join(sorted(kept, key=lambda k: int(k.split()[0][1:])))}")
     bd = C.load("lib/board")
-    changed = bd.sync_file(folder / own.QUEUE_MD, bd.decision_tags(own, folder), folder / ".ids.lock")
+    changed = bd.sync_file(folder / own.QUEUE_MD, bd.decision_tags(own, folder), C.lock_file(folder))
     print(f"queue.md cards ticked and tagged: {', '.join(f'Q{n}' for n in changed) or 'none'}")
 
 def main():

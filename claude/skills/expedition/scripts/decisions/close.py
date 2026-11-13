@@ -49,7 +49,7 @@ def main():
     root, folder = C.find_folder(a.release, a.owner, a.root)
     dc, bd, own = C.load("lib/decisions"), C.load("lib/board"), C.load("lib/ownership")
     path = folder / "decisions.md"
-    with open(folder / ".ids.lock", "a") as lock:
+    with open(C.lock_file(folder), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         text = path.read_text(encoding="utf-8")
         card = next((c for c in dc.parse(text)["cards"] if c["num"] == num), None)
