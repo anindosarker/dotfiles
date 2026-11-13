@@ -10,13 +10,13 @@ when Open is empty.
 unfinished row in status/sprints.md ("[ ]", "·" or "[!]"), "**E<n>** · Specs d/t" (t the epic's
 specs in the grid, d those whose rows are all "[x]"), then "- **Running**" (specs with a "[ ]" row)
 and "- **Blocked**" (specs with a "[!]" row, with the first ## Attention bullet of that milestone's
-tracker as the reason), each spec as its number and its Deliverables title. Fix rows are ignored.
+tracker as the reason), each spec as its number and its Deliverables title.
 With nothing unfinished: the last epic's line, then "Nothing running." and the unticked Decided
 cards of queue.md as "Ready for an epic: **Q<n>**, ...".
 
 Layout: <release>-plan.md (## Goals and ## Deliverables only), plan/specs/NN-<slug>.md,
 plan/epics/E<n>.md, queue.md, status/index.html, status/sprints.md (sprints.py), run/trackers/
-(one per milestone, NN-<slug>-tracker.md or fix-<slug>-tracker.md). The ownership facts come from
+(one per milestone, NN-<slug>-tracker.md). The ownership facts come from
 ownership.compute, in memory.
 
 Decisions (### D<n>) get a derived state table from the spec files that cite them and the
@@ -49,11 +49,12 @@ Deliverables Scope cell over 120 characters; a spec with no "### Milestone:" blo
 Checks, no Acceptance line; milestones ownership.py would refuse (collision, cycle);
 status/sprints.md missing, without a "| Milestone" grid, with text under the grid, with a cell
 not one of [x], [ ], ·, [!] or blank, or with rows that differ from the milestones of the specs
-with an Epic line and the fix trackers. Ownership also prints each tagged epic's critical path,
+with an Epic line. Ownership also prints each tagged epic's critical path,
 computed on the fly. A folder without plan/ is refused (migrate_layout.py), a folder still on
 the old queue files too (migrate_queue.py), a folder that still has status/ownership.md too
-(migrate_epics.py). A tracker Status of merged counts as done. A fix tracker (and any tracker
-no milestone owns) counts as citing the queue cards named on its first line.
+(migrate_epics.py), a folder that still has run/trackers/fix-*-tracker.md too (migrate_fixes.py).
+A tracker Status of merged counts as done. A tracker no milestone owns counts as citing the
+queue cards named on its first line.
 """
 import argparse
 import collections
@@ -495,7 +496,7 @@ def spec_rows(plan):
 
 
 def other_trackers(folder, claimed, statuses):
-    """Trackers no spec or milestone owns (fix milestones and the like): (key, path, first line)."""
+    """Trackers no spec or milestone owns: (key, path, first line)."""
     out = []
     if (folder / TRACKERS_DIR).is_dir():
         for p in sorted((folder / TRACKERS_DIR).glob("*-tracker.md")):
@@ -651,7 +652,7 @@ def new_print(folder, plan, d, own):
             print(f"  {len(grid)} rows, {len(head) - 1} columns, {ticked} done")
             if owned is not None:
                 in_epic = sp.epic_rows(folder, own, owned)
-                names = [m["name"] for m in owned if m["name"] in in_epic or m["spec"] == own.FIX]
+                names = [m["name"] for m in owned if m["name"] in in_epic]
                 for n in names:
                     if n not in grid:
                         print(f"  milestone not in status/sprints.md: {n} (run sprints.py)")

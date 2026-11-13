@@ -20,7 +20,7 @@ D id) gets the tag line "[E<n>]" directly under its heading in decisions.md, and
 Deliverables row gets E<n> in its Epic cell, and plan/epics/E<n>.md gets "Starts: S<n>" under
 its Specs: line: the current sprint of status/sprints.md as it is at that moment (the first
 column holding a "[ ]" or "·" cell of another epic's row, else the column after the last column
-holding another epic's row; S1 for an empty grid; fix rows never count). An existing Epic line, epic tag or Starts value is kept and
+holding another epic's row; S1 for an empty grid). An existing Epic line, epic tag or Starts value is kept and
 reported; a missing epic file is refused. Each file is read right before its write. Then the
 Decided cards of queue.md are synced with the tag lines (board.sync): each card whose decision
 now carries "[E<n>]" is ticked and gets "#E<n>".

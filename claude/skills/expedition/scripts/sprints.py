@@ -10,19 +10,15 @@ before its epic's "Starts: S<n>" line in plan/epics/E<n>.md. The file holds "# <
 are "·", "[ ]", "[x]" or "[!]".
 
 When status/sprints.md exists, a row that still exists keeps every cell as it is once it is
-finished ("[x]" or "[!]"). Every other epic row is placed again; a running row carries its
-"[ ]" to its new column. Fix rows (no epic) are placed after the epic rows: a new fix row, and
-an unfinished one left of the current sprint, go to the current sprint with their mark; an
-unfinished fix row at or right of it stays. The current sprint is the first column holding a
-"[ ]" or "·" cell of an epic row, else the column after the last column holding an epic row (S1
-on an empty grid). A row whose milestone no longer exists is dropped, unless it carries a run
+finished ("[x]" or "[!]"). Every other row is placed again; a running row carries its "[ ]"
+to its new column. A row whose milestone no longer exists is dropped, unless it carries a run
 mark: then it is kept with a warning.
 
-Rows: every milestone of a spec that carries a "- Epic: E<n>" line (new_spec.py --epic), and
-every fix milestone. An epic's milestones start at its start sprint (the current sprint at its
-go); dependent ones open the next column. Row text is the epic label, the spec number and the
-milestone name, "E1 01 Filtering" ("fix <name>" for a fix milestone); rows sorted by epic,
-spec number, then milestone order in the spec. The lead reruns it on go, the runner on merge.
+Rows: every milestone of a spec that carries a "- Epic: E<n>" line (new_spec.py --epic). An
+epic's milestones start at its start sprint (the current sprint at its go), a milestone added
+after go at its own "- Starts: S<n>" line (new_fix.py); dependent ones open the next column. Row
+text is the epic label, the spec number and the milestone name, "E1 01 Filtering"; rows sorted
+by epic, spec number, then milestone order in the spec. The lead reruns it on go, the runner on merge.
 
 It then rewrites the Sprint column of the "## Ownership" table of every unfinished epic that has
 gone (a Starts value, not every decision [Done]) from the new grid, touching only that column
@@ -59,11 +55,11 @@ def load_ownership():
     return mod
 
 
-ROW_PREFIX_RE = re.compile(r"^(?:E\d+\s+\d{2}(?:\.\d+)?|fix)\s+(.*)$")
+ROW_PREFIX_RE = re.compile(r"^E\d+\s+\d{2}(?:\.\d+)?\s+(.*)$")
 
 
 def row_name(text):
-    """Milestone name of a grid row, without the epic label and spec number (or "fix")."""
+    """Milestone name of a grid row, without the epic label and spec number."""
     m = ROW_PREFIX_RE.match(text)
     return m.group(1) if m else text
 
@@ -94,21 +90,8 @@ def mark_of(cells):
     return next((c for c in cells if c in RUN_MARKS), PLANNED)
 
 
-def current_column(cells_by_row, epic_rows):
-    """The first column holding a "[ ]" or "·" cell of an epic row, else the column after the
-    last column holding an epic row (1 when there is none). 1-based."""
-    width = max((len(c) for c in cells_by_row.values()), default=0)
-    epic = [cells_by_row[n] for n in epic_rows if n in cells_by_row]
-    for i in range(width):
-        if any(i < len(c) and c[i] in ("[ ]", PLANNED) for c in epic):
-            return i + 1
-    used = [i + 1 for c in epic for i, x in enumerate(c) if x]
-    return max(used) + 1 if used else 1
-
-
 def build(release, milestones, col, existing, num_key, label=None):
-    """Return (text, warnings) for status/sprints.md. label maps a milestone name to its epic number
-    (None for a fix milestone)."""
+    """Return (text, warnings) for status/sprints.md. label maps a milestone name to its epic number."""
     n_old, rows_old = existing
     label = label or {}
     old = dict(rows_old)
@@ -117,27 +100,12 @@ def build(release, milestones, col, existing, num_key, label=None):
     spec = {m["name"]: m["spec"] for m in milestones}
     order = {m["name"]: i for i, m in enumerate(milestones)}
     place = {}
-    fixes = [n for n in names if spec[n] == "fix"]
     for name in names:
         cells = old.get(name)
         if cells is not None and finished(cells):
             place[name] = list(cells)
-        elif name not in fixes:
+        else:
             place[name] = (col[name], mark_of(cells or []))
-    epic_rows = [n for n in names if n not in fixes]
-
-    def as_cells(v, width):
-        if isinstance(v, tuple):
-            return [v[1] if i + 1 == v[0] else "" for i in range(max(width, v[0]))]
-        return list(v)
-    width0 = max([n_old] + [v[0] for v in place.values() if isinstance(v, tuple)] + [1])
-    cur = current_column({n: as_cells(place[n], width0) for n in epic_rows}, epic_rows)
-    for name in fixes:
-        if name in place:
-            continue
-        cells = old.get(name)
-        at = next((i + 1 for i, c in enumerate(cells or []) if c), None)
-        place[name] = (at if at and at >= cur else cur, mark_of(cells or []))
     kept = []
     for name, cells in rows_old:
         if name not in col and marked(cells):
@@ -158,12 +126,11 @@ def build(release, milestones, col, existing, num_key, label=None):
 
     old_order = {name: i for i, (name, _) in enumerate(rows_old)}
     rows = sorted(names + kept, key=lambda n: (
-        label.get(n) or 10 ** 6, num_key(spec.get(n, "fix")), order.get(n, len(order) + old_order.get(n, 0))))
+        label.get(n) or 10 ** 6, num_key(spec.get(n)), order.get(n, len(order) + old_order.get(n, 0))))
     now = datetime.datetime.now()
     head = "| Milestone | " + " | ".join(f"S{i + 1}" for i in range(width)) + " |"
     sep = "|---|" + "---|" * width
-    show = lambda name: (f"E{label[name]} {spec[name]} {name}" if label.get(name)
-                         else f"fix {name}" if spec.get(name, "fix") == "fix" else name)
+    show = lambda name: f"E{label[name]} {spec[name]} {name}" if label.get(name) else name
     body = "".join(f"| {show(name)} | " + " | ".join(cells_of(name)) + " |\n" for name in rows)
     text = f"# {release} sprints\n\nUpdated: {now:%Y-%m-%d %H:%M}\n\n{head}\n{sep}\n{body}"
     return text, warnings
@@ -188,7 +155,7 @@ def write(folder, release, quiet=False):
     path.parent.mkdir(exist_ok=True)
     n_old, rows_old, _ = read_grid(path, own)
     label = epic_rows(folder, own, milestones)
-    milestones = [m for m in milestones if m["name"] in label or m["spec"] == own.FIX]
+    milestones = [m for m in milestones if m["name"] in label]
     text, warnings = build(release, milestones, col, (n_old, rows_old), own.num_key, label)
     for w in warnings:
         print(f"warning: {w}", file=sys.stderr)

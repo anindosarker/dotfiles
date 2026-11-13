@@ -61,6 +61,6 @@ Updated: 2026-11-04 16:35
 | E1 03 Header, menu, drag  | ·   | [x] | ·   | ·   | ·   |
 | E1 04 Toolbar chrome      | ·   | [x] | ·   | ·   | ·   |
 | E1 05 Defaults and stories | ·   | ·   | [x] | ·   | ·   |
-| fix Component fixes Q3 to Q6 | ·   | ·   | [x] | ·   | ·   |
+| E1 05.1 Component fixes  | ·   | ·   | [x] | ·   | ·   |
 | E1 06 Docs                | ·   | ·   | ·   | [x] | ·   |
 | E1 07 Release 0.8.0       | ·   | ·   | ·   | ·   | [ ] |

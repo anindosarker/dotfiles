@@ -11,17 +11,17 @@ Folded into stage 1: the run's cards in `queue.md` are queue cards like any othe
 5. File bugs found during triage in `queue.md` (`new_item.py <release> Q`).
 6. A decision that changes an earlier one: SKILL.md, Changing a decision.
 7. Route each piece of follow-up work (rules below).
-8. The new decisions join the next epic (SKILL.md, Epics): the spec writer (a forked session) writes their specs; a fix with no spec: `scripts/new_fix.py`.
+8. The new decisions join the next epic (SKILL.md, Epics): the spec writer (a forked session) writes their specs.
 9. Handoff: only when the owner asks.
 
 ## Routing
 
 | Follow-up | Goes to | Example |
 |---|---|---|
-| Minor: fits the current decisions, touches one area, can land before the next spec | follow-up spec `NN.1`, `NN.2` of the current release, placed before the next dependent spec; or a fix milestone when no spec is needed | review fixes after spec 04 and before release spec 05 become `04.1` |
+| Minor: fits the current decisions, touches one area, can land before the next spec | follow-up spec `NN.1`, `NN.2` of the current release, placed before the next dependent spec | review fixes after spec 04 and before release spec 05 become `04.1` |
 | Major: a new public API, re-decides an accepted decision, spans several specs, or needs its own release | a new release folder, made with `scripts/new_cycle.py` | a new feature area found during the run |
 
 - In doubt: a new release. A follow-up spec that grows past the current decisions blocks the release.
 - A decision moved to another release gets the bullet `- Deferred to v0.<n>.x`. That release's specs cite it as `(v0.<m>.x D<n>)`.
-- `new_spec.py` adds the Specs row; the follow-up spec's milestones get their column from `ownership.py` and their grid rows from `sprints.py`. A fix milestone gets its tracker and its grid row in the current sprint column from `new_fix.py`.
+- `new_spec.py` adds the Specs row; the follow-up spec's milestones get their column from `ownership.py` and their grid rows from `sprints.py`. A fix found while an epic runs needs no decision and goes through `new_fix.py` (SKILL.md, stage 3).
 - A follow-up spec's milestones run as their own milestones in the column `ownership.py` gives them, with their own Workflow, or as a single Agent when nothing follows ([run.md](run.md), Orchestration).

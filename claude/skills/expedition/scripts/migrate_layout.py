@@ -10,7 +10,9 @@ templates/swimlanes.html to status/index.html. Rewrites links: specs/ to plan/sp
 sprints.md link) in <release>-plan.md; specs/, epics/, trackers/, handoffs/,
 sprints.md paths of this release inside the handoffs and the epic files.
 A folder without a kanban-board queue.md, or with a board in the old card format, then goes
-through migrate_queue.py, and every folder through migrate_epics.py, before the reruns.
+through migrate_queue.py, and every folder through migrate_epics.py, before the reruns. A folder
+with run/trackers/fix-*-tracker.md stops there after the migrate_fixes.py dry run, with one line
+naming the remaining steps.
 Appends the status/index.html and status/data/ render lines to the repo's .gitignore when
 missing (renders, never committed). Then reruns ownership.py, sprints.py, swimlanes.py and status.py. Commits nothing. Refuses a
 folder that already has plan/specs/; a target folder that exists already (an epic file
@@ -180,6 +182,12 @@ def main():
     r = subprocess.run([sys.executable, "-I", str(HERE / "migrate_epics.py")] + args, cwd=str(root))
     if r.returncode:
         die(f"migrate_epics.py failed (exit {r.returncode}); the moves stay, fix and rerun it")
+    if load_ownership().legacy_fixes(folder):
+        print("== migrate_fixes.py --dry-run")
+        subprocess.run([sys.executable, "-I", str(HERE / "migrate_fixes.py")] + args + ["--dry-run"], cwd=str(root))
+        die(f"free-standing fix trackers left: check the table above, run migrate_fixes.py {a.release} "
+            f"(with --map <slug>=E<n>:<NN> where a choice is wrong), then ownership.py, sprints.py, "
+            f"swimlanes.py, status.py")
     for script in ("ownership.py", "sprints.py", "swimlanes.py", "status.py"):
         print(f"== {script}")
         r = subprocess.run([sys.executable, "-I", str(HERE / script)] + args, cwd=str(root))

@@ -79,11 +79,9 @@ def build(folder, release, own):
         if col is None:
             continue
         m = GRID_LABEL_RE.match(label)
-        if m:
-            epic, number, name = m.groups()
-        else:
-            fix = re.match(r"^fix\s+(.+)$", label)
-            epic, number, name = "Fixes", None, fix.group(1) if fix else label
+        if not m:
+            continue
+        epic, number, name = m.groups()
         o = owners.get(name, {})
         spec = specs.get(number, {}) if number else {}
         milestones.append({
@@ -106,7 +104,7 @@ def build(folder, release, own):
     for ms in milestones:
         if ms["epic"] not in epics:
             epics.append(ms["epic"])
-    epics.sort(key=lambda e: (e == "Fixes", int(e[1:]) if e[1:].isdigit() else 0))
+    epics.sort(key=lambda e: int(e[1:]))
     repo = next((p.parent for p in folder.parents if p.name == ".ai"), None)
     return {
         "release": release,

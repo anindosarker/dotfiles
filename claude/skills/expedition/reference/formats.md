@@ -100,9 +100,9 @@ kanban-plugin: basic
   `decisions.md` is the record. The tick and `#E<n>` of a Decided card mirror the decision's tag line; `new_spec.py --epic`, `sprints.py` and every `new_item.py` call sync them, and `status.py` flags a card that disagrees.
 - Facts are sub-bullets indented with one tab: path:line, measurement, lookup result. Every sub-bullet is a fact. Options are never written in the file. A `#word` that is not a tag is written in backticks, so the extension shows no tag badge.
 - New cards go to the end of Open. A moved card goes, with its facts, to the end of its lane. Decided only through `new_item.py <release> D "<title>" --source Q<n>`, which adds `#D<n>` to the title and leaves the card unticked; a card already in Decided keeps the highest decision number. A card leaving Decided loses its `#D` and `#E` tags.
-- `new_fix.py` moves each card a fix milestone cites to Autofix, ticked and without tags; the fix is traced through the fix tracker's first line, for example `(Q9)`.
+- `new_fix.py` moves each card a fix cites to Autofix, ticked and without tags; the fix is traced through its task line and its tracker's first line, for example `(Q9)`.
 - A lookup agent adds its facts to the card it was given with `new_item.py <release> --fact Q<n> "<text>"`.
-- Citations elsewhere: `(Q3)` in specs and trackers; a decision that came from a card ends with `- Source: Q3`; a fix tracker's first line cites `(Q3, Q4)`.
+- Citations elsewhere: `(Q3)` in specs and trackers; a decision that came from a card ends with `- Source: Q3`; a fix's tracker cites `(Q3, Q4)` on its first line.
 - The run reports; it does not solve. Do not research solutions for a run card.
 - Not a queue card: spec text that lags shipped code, a tracker gap, a process lesson, a tooling fact with one right answer. Those go to the tracker Notes, a decision or the spec file directly (`process.md` holds project facts only); the owner sees choices only.
 
@@ -189,7 +189,7 @@ Starts: S17
 
 ## status/sprints.md
 
-Columns are the sprints `S1`, `S2`, ... that `ownership.py` computes. Rows are the milestones of specs that carry a `- Epic: E<n>` line (written under the title line by `new_spec.py --epic`), plus fix milestones; row text is the epic label, the spec number and the milestone name; rows sorted by epic, then spec number, then milestone order in the spec.
+Columns are the sprints `S1`, `S2`, ... that `ownership.py` computes. Rows are the milestones of specs that carry a `- Epic: E<n>` line (written under the title line by `new_spec.py --epic`); row text is the epic label, the spec number and the milestone name; rows sorted by epic, then spec number, then milestone order in the spec.
 
 ```md
 | Milestone | S1 | S2 |
@@ -201,7 +201,7 @@ Columns are the sprints `S1`, `S2`, ... that `ownership.py` computes. Rows are t
 
 ## Tracker
 
-One per milestone: `run/trackers/NN-<slug>-tracker.md` for a milestone of spec NN, `run/trackers/fix-<slug>-tracker.md` for a fix milestone. Template [../templates/tracker.md](../templates/tracker.md).
+One per milestone: `run/trackers/NN-<slug>-tracker.md` for a milestone of spec NN (the first milestone may use the spec's slug, a later one the slug of its name). A fix follows the spec it belongs to: `NN-<title slug>-tracker.md` for a fix milestone of spec NN, `NN.M-<slug>-tracker.md` for a follow-up spec. Template [../templates/tracker.md](../templates/tracker.md).
 
 ```md
 # 01: examples per edition, tracker
@@ -226,11 +226,11 @@ Checks:
 
 - `Status:` is `planned`, `running`, `merged (<commit>)` or `skipped (D<n>)` (a SKIP, `D<n>` the superseding decision).
 - Required: the header lines and one line per task, with the last commit and the workflow run id of the run that covered the task.
-- A fix milestone's tracker cites its queue cards on its first line, for example `# Component fixes (Q3, Q4), tracker`.
+- A fix's tracker cites its queue cards on its first line, for example `# 41: Range field blur (Q3, Q4), tracker`.
 - `Checks:` is followed by one bullet per check: command, commit, result. The integration milestone's suite run on the staging branch gets its own bullet.
 - `## Attention` and `## Notes` are optional. Empty is the normal case. Do not spend tokens on notes.
 - Never: review-round narration, check output, commit lists.
-- Writers: `new_fix.py` creates a fix milestone's tracker with `Status: planned`; `new_spec.py` creates the spec's first milestone's tracker with `Status: planned`; the spec writer creates every further milestone's tracker from the template with `Status: planned` in stage 2, when the milestone block is written. In the run, the builder fills it, the fixer and the verifier update it. One worktree per milestone, so no conflicts.
+- Writers: `new_fix.py` creates a fix's tracker with `Status: planned`; `new_spec.py` creates the spec's first milestone's tracker with `Status: planned`; the spec writer creates every further milestone's tracker from the template with `Status: planned` in stage 2, when the milestone block is written. In the run, the builder fills it, the fixer and the verifier update it. One worktree per milestone, so no conflicts.
 - The runner writes handoffs. Both sessions write `decisions.md` and `queue.md` (Shared files).
 
 ## process.md

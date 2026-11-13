@@ -12,27 +12,26 @@ exit 1 on an error (below). The spec writer runs it after each spec.
 
 Reads every plan/specs/NN-<slug>.md for "### Milestone: <name>" blocks ("#### Milestone:"
 is accepted too) with the lines "- Files owned: a, b", "- Depends on: <milestone names,
-spec numbers or none>" and "- Review: none | fable", and every run/trackers/fix-<slug>-tracker.md
-as a fix milestone (no spec; its name is the tracker title, its files come from a
-"Files owned:" line and its dependencies from a "Depends on:" line, both optional).
+spec numbers or none>" and "- Review: none | fable", and the optional "- Starts: S<n>" (a
+milestone added after its epic's go, by new_fix.py: its own start sprint).
 
 Edges: A to B when B lists A (or A's spec number) under Depends on, or when A and B
 share a file (lower spec number first). Two milestones of one spec that share a file
 while neither depends on the other are a collision; a dependency cycle is an error.
-Fix milestones take part through Depends on only: the run places them in the
-current sprint column (sprints.py, new_fix.py).
 
 A milestone's column is the longest chain ending at it plus one, over every epic, and never
 before its epic's start sprint: the "Starts: S<n>" line of plan/epics/E<n>.md (new_spec.py
---epic writes it on go). The floor propagates along the edges; an epic file without a Starts
-value means no floor; fix milestones have none. --epic E<n> <spec numbers> uses the current
+--epic writes it on go), nor before the milestone's own "- Starts: S<n>" line. The floor
+propagates along the edges; an epic file without a Starts value means no floor. A milestone
+whose status/sprints.md row is running ("[ ]") or finished ("[x]", "[!]") keeps that column, and
+a finished one never collides on a shared file. --epic E<n> <spec numbers> uses the current
 sprint as a provisional floor for an epic with no Starts value yet, writing no Starts line.
 The current sprint is the first column of status/sprints.md holding a "[ ]" or "·" cell of an
 epic row; when there is none, the column after the last column holding an epic row (S1 for an
-empty grid). Fix rows never count, and for an epic's own start its own rows are ignored.
+empty grid). For an epic's own start its own rows are ignored.
 
 Critical path per epic, computed on the fly (never stored): over that epic's milestones only (a
-spec's epic is its "- Epic: E<n>" line; fix milestones are in no epic), with the Depends on and
+spec's epic is its "- Epic: E<n>" line), with the Depends on and
 shared-file edges inside the epic; the longest chain, ties by lower spec number.
 
 Epic table: python3 -I ownership.py <release> --epic E<n> [<spec numbers>], the pre-go preview
@@ -66,7 +65,9 @@ Layout: the release folder must hold plan/ (plan/specs, plan/epics), run/ (run/t
 run/handoffs), status/ and queue.md. A folder without plan/ is refused with one line naming
 migrate_layout.py; a folder still on the old queue files, or with a queue.md that is not yet a
 kanban board, is refused with one line naming migrate_queue.py; a folder that still has
-status/ownership.md is refused with one line naming migrate_epics.py.
+status/ownership.md is refused with one line naming migrate_epics.py; a folder that still has
+run/trackers/fix-*-tracker.md (free-standing fix milestones of older releases) is refused with
+one line naming migrate_fixes.py.
 
 Check mode: ownership.py <release> --overlap <spec numbers or D ids> writes nothing. It
 reports every file the named specs' milestones own (for a D id: the specs citing it) that a
@@ -88,7 +89,7 @@ SPEC_FILE_RE = re.compile(r"^(\d{2}(?:\.\d+)?)-([a-z0-9]+(?:-[a-z0-9]+)*)\.md$")
 SPEC_NUM_RE = re.compile(r"^\d{2}(?:\.\d+)?$")
 MILESTONE_RE = re.compile(r"^#{3,4}\s+Milestone:\s*(.+?)\s*$")
 HEADING_RE = re.compile(r"^#{1,6}\s")
-FIELD_RE = re.compile(r"^\s*(?:-\s*)?(Files owned|Depends on|Review):\s*(.*?)\s*$")
+FIELD_RE = re.compile(r"^\s*(?:-\s*)?(Files owned|Depends on|Review|Starts):\s*(.*?)\s*$")
 TASK_RE = re.compile(r"^\s*-\s*Task\s+\d+:")
 SPECS_DIR = "plan/specs"
 EPICS_DIR = "plan/epics"
@@ -98,7 +99,7 @@ HANDOFFS_DIR = "run/handoffs"
 STATUS_DIR = "status"
 SPRINTS_MD = "status/sprints.md"
 LEGACY_OWNERSHIP_MD = "status/ownership.md"
-FIX = "fix"
+LEGACY_FIX_GLOB = "fix-*-tracker.md"
 D_HEAD_RE = re.compile(r"^###\s+D(\d+)\b")
 TAG_LINE_RE = re.compile(r"^\s*(?:\[(?:Done|E\d+)\]\s*)+$")
 D_CITE_RE = re.compile(r"\((D\d+[^)]*)\)")
@@ -200,7 +201,16 @@ def release_folder(root, owner, release):
     if (folder / LEGACY_OWNERSHIP_MD).is_file():
         die(f"{folder} still has {LEGACY_OWNERSHIP_MD}: run python3 -I "
             f"{Path(__file__).resolve().parent / 'migrate_epics.py'} {release}")
+    fixes = legacy_fixes(folder)
+    if fixes:
+        die(f"{folder} still has {len(fixes)} free-standing fix trackers ({fixes[0].name}): run python3 -I "
+            f"{Path(__file__).resolve().parent / 'migrate_fixes.py'} {release} --dry-run, then without --dry-run")
     return folder
+
+
+def legacy_fixes(folder):
+    """The run/trackers/fix-<slug>-tracker.md files of an unmigrated folder, sorted."""
+    return sorted((folder / TRACKERS_DIR).glob(LEGACY_FIX_GLOB))
 
 
 def load_sibling(name):
@@ -212,7 +222,7 @@ def load_sibling(name):
 
 
 def num_key(num):
-    if num is None or num == FIX:
+    if num is None:
         return (1,)
     return (0,) + tuple(int(x) for x in num.split("."))
 
@@ -252,7 +262,8 @@ def parse_spec(path):
     """Milestone blocks of one spec file, in order.
 
     Each block: dict name, line, files (list or None when the line is missing),
-    deps (raw text or None), review (text or None), tasks (list of (line, text)).
+    deps (raw text or None), review (text or None), starts (column number or None),
+    tasks (list of (line, text)).
     """
     blocks = []
     cur = None
@@ -261,7 +272,7 @@ def parse_spec(path):
         m = MILESTONE_RE.match(line)
         if m:
             cur = {"name": m.group(1), "line": i, "files": None, "deps": None,
-                   "review": None, "tasks": []}
+                   "review": None, "starts": None, "tasks": []}
             level = len(line) - len(line.lstrip("#"))
             blocks.append(cur)
             continue
@@ -277,29 +288,14 @@ def parse_spec(path):
                 cur["files"] = split_files(val)
             elif key == "Depends on":
                 cur["deps"] = val
+            elif key == "Starts":
+                s = SPRINT_VALUE_RE.match(val)
+                cur["starts"] = int(s.group(1)) if s else None
             else:
                 cur["review"] = val
         elif TASK_RE.match(line):
             cur["tasks"].append((i, line.strip()))
     return blocks
-
-
-def fix_milestone(path):
-    """A fix tracker as a milestone: name from the title, optional files and deps lines."""
-    lines = read(path).splitlines()
-    first = lines[0] if lines else ""
-    name = re.sub(r"^#\s*", "", first).strip()
-    name = re.sub(r",\s*tracker\s*$", "", name).strip() or path.name[: -len("-tracker.md")]
-    files, deps = [], None
-    for line in lines[1:]:
-        if line.startswith("## "):
-            break
-        f = FIELD_RE.match(line)
-        if f and f.group(1) == "Files owned":
-            files = split_files(f.group(2))
-        elif f and f.group(1) == "Depends on":
-            deps = f.group(2)
-    return {"name": name, "files": files, "deps": deps, "path": path}
 
 
 def spec_files(folder):
@@ -353,12 +349,6 @@ def collect(folder):
             b["spec"] = num
             b["path"] = path
             raw.append(b)
-    trackers = folder / TRACKERS_DIR
-    if trackers.is_dir():
-        for p in sorted(trackers.glob("fix-*-tracker.md")):
-            f = fix_milestone(p)
-            f.update(spec=FIX, review=None, line=1, tasks=[])
-            raw.append(f)
     names = [b["name"] for b in raw]
     for name, c in collections.Counter(names).items():
         if c > 1:
@@ -366,8 +356,7 @@ def collect(folder):
             errors.append(f"milestone '{name}' defined {c} times: {where}")
     specs = collections.defaultdict(list)
     for b in raw:
-        if b["spec"] != FIX:
-            specs[b["spec"]].append(b["name"])
+        specs[b["spec"]].append(b["name"])
     out = []
     for i, b in enumerate(raw):
         where = f"{b['path'].relative_to(folder)}:{b['line']}"
@@ -383,16 +372,19 @@ def collect(folder):
         for u in unknown:
             errors.append(f"{where}: milestone '{b['name']}' depends on unknown '{u}'")
         out.append({"name": b["name"], "spec": b["spec"], "order": i, "deps": deps,
-                    "files": b["files"] or [], "review": b.get("review")})
+                    "files": b["files"] or [], "review": b.get("review"), "starts": b.get("starts")})
     return out, errors
 
 
-def schedule(milestones, floor=None):
+def schedule(milestones, floor=None, fixed=None):
     """Return (columns, graph, errors, warnings) for milestones with resolved deps.
 
     floor: {name: lowest column} (the epic's start sprint); the column is never below it.
+    fixed: {name: (column, finished)} of the started milestones (a "[ ]", "[x]" or "[!]" grid
+    cell): they keep that column; two milestones sharing a file never collide when one of them
+    is finished ("[x]" or "[!]").
 
-    milestones: list of dicts name, spec, order, deps, files (spec 'fix' for a fix milestone).
+    milestones: list of dicts name, spec, order, deps, files.
     graph: {"succ": {name: set of successors}, "derived": {name: {pred: [files]}}}, the
     explicit and shared-file edges the columns come from; derived holds the shared-file ones.
     """
@@ -421,8 +413,6 @@ def schedule(milestones, floor=None):
     derived = collections.defaultdict(dict)
     owners = collections.defaultdict(list)
     for m in milestones:
-        if m["spec"] == FIX:
-            continue
         for f in m["files"]:
             if m["name"] not in owners[f]:
                 owners[f].append(m["name"])
@@ -459,10 +449,10 @@ def schedule(milestones, floor=None):
         errors.append("dependency cycle: " + " > ".join(find_cycle(left, succ)))
         return {}, {}, errors, warnings
 
-    floor = floor or {}
+    floor, fixed = floor or {}, fixed or {}
     col, prev = {}, {}
     for n in topo:
-        col[n] = max(col.get(n, 1), floor.get(n, 1))
+        col[n] = fixed[n][0] if n in fixed else max(col.get(n, 1), floor.get(n, 1))
         for b in succ[n]:
             if col[n] + 1 > col.get(b, 1):
                 col[b] = col[n] + 1
@@ -472,6 +462,8 @@ def schedule(milestones, floor=None):
     for f, names in owners.items() if not errors else ():
         seen = {}
         for n in names:
+            if n in fixed and fixed[n][1]:
+                continue
             if col[n] in seen:
                 errors.append(f"collision: file '{f}' owned by '{seen[col[n]]}' and '{n}' in column S{col[n]}")
             seen[col[n]] = n
@@ -543,8 +535,8 @@ def grid(folder):
 
 def current_sprint(folder, exclude=None):
     """The first column holding a "[ ]" or "·" cell of an epic row, else the column after the
-    last column holding an epic row (1-based, 1 for an empty grid). Fix rows never count; the
-    rows of epic exclude (a number) are ignored."""
+    last column holding an epic row (1-based, 1 for an empty grid). The rows of epic exclude (a
+    number) are ignored."""
     n, rows = grid(folder)
     epic = []
     for label, cells in rows:
@@ -558,9 +550,24 @@ def current_sprint(folder, exclude=None):
     return max(used) + 1 if used else 1
 
 
+def started_columns(folder, milestones):
+    """{milestone name: (grid column, finished)} of each milestone whose status/sprints.md row
+    is running ("[ ]") or finished ("[x]" or "[!]")."""
+    names = {m["name"] for m in milestones}
+    out = {}
+    for label, cells in grid(folder)[1]:
+        m = re.match(r"^E\d+\s+\d{2}(?:\.\d+)?\s+(.*)$", label)
+        name = m.group(1) if m else label
+        at = next((i + 1 for i, c in enumerate(cells) if c in ("[ ]", "[x]", "[!]")), None)
+        if name in names and at:
+            out[name] = (at, cells[at - 1] != "[ ]")
+    return out
+
+
 def floors(folder, milestones, assume=None):
     """{milestone name: start sprint} from the epic files; an epic named by assume with no
-    Starts value gets the current sprint (the pre-go preview)."""
+    Starts value gets the current sprint (the pre-go preview). A milestone's own Starts line
+    raises its floor."""
     starts = epic_starts(folder)
     provisional = set((assume or {}).values())
     cur = {}
@@ -574,6 +581,9 @@ def floors(folder, milestones, assume=None):
         elif epic in provisional:
             cur.setdefault(epic, current_sprint(folder, exclude=epic))
             out[name] = cur[epic]
+    for m in milestones:
+        if m.get("starts"):
+            out[m["name"]] = max(out.get(m["name"], 1), m["starts"])
     return out
 
 
@@ -631,14 +641,14 @@ def backfill_starts(folder, dry_run=False):
     for name, epic in epic_of_milestones(folder, milestones).items():
         if epic in written:
             fl[name] = int(written[epic][1:])
-    col, _, errs, _ = schedule(milestones, fl)
+    col, _, errs, _ = schedule(milestones, fl, started_columns(folder, milestones))
     for e in errs:
         print(f"error: {e}", file=sys.stderr)
     if errs:
         return
     sp = load_sibling("sprints")
     label = sp.epic_rows(folder, load_sibling("ownership"), milestones)
-    shown = [m for m in milestones if m["name"] in label or m["spec"] == FIX]
+    shown = [m for m in milestones if m["name"] in label]
     text, _ = sp.build(folder.parent.name, shown, col, (n, [(sp.row_name(l), c) for l, c in rows]),
                        num_key, label)
     _, new_rows = table_rows(text, "Milestone")
@@ -812,22 +822,23 @@ def overlap(folder, items):
 
 
 def compute(folder, assume=None):
-    """The ownership facts of a release, in memory, from the milestone blocks of its specs, the
-    fix trackers and the epics' Starts lines. Returns {"milestones", "col", "graph", "paths",
-    "errors"}: milestones in spec order (fix milestones last), each a dict name, spec, order,
-    deps (names), files, review; col {name: column}; paths {epic: [names]}, the critical path
+    """The ownership facts of a release, in memory, from the milestone blocks of its specs and
+    the epics' Starts lines. Returns {"milestones", "col", "graph", "paths",
+    "errors"}: milestones in spec order, each a dict name, spec, order,
+    deps (names), files, review, starts; col {name: column}; paths {epic: [names]}, the critical path
     of each epic; errors, a list (then col and paths are empty). assume maps untagged spec
     numbers to an epic number (the pre-go preview)."""
     milestones, errors = collect(folder)
     col, graph, paths = {}, {}, {}
     if not errors:
-        col, graph, errors, _ = schedule(milestones, floors(folder, milestones, assume))
+        col, graph, errors, _ = schedule(milestones, floors(folder, milestones, assume),
+                                         started_columns(folder, milestones))
     if not errors:
         paths = epic_paths(milestones, graph, epic_of_milestones(folder, milestones, assume))
     return {"milestones": milestones, "col": col, "graph": graph, "paths": paths, "errors": errors}
 
 
-GRID_ROW_RE = re.compile(r"^(?:E\d+\s+\d{2}(?:\.\d+)?|fix)\s+(.*)$")
+GRID_ROW_RE = re.compile(r"^E\d+\s+\d{2}(?:\.\d+)?\s+(.*)$")
 
 
 def grid_columns(folder):
@@ -1012,11 +1023,10 @@ def sprint_text(cols):
 
 
 def spec_milestones(comp):
-    """{spec number: [milestone dicts]} of the spec milestones (fix milestones left out)."""
+    """{spec number: [milestone dicts]}."""
     out = collections.defaultdict(list)
     for m in comp["milestones"]:
-        if m["spec"] != FIX:
-            out[m["spec"]].append(m)
+        out[m["spec"]].append(m)
     return out
 
 
@@ -1292,7 +1302,7 @@ def check(folder):
     """Plain run: the milestone and column count and each epic's critical path; exit 1 on an error."""
     comp = compute(folder)
     if not comp["milestones"] and not comp["errors"]:
-        comp["errors"].append("no '### Milestone:' blocks in plan/specs/*.md and no run/trackers/fix-*-tracker.md")
+        comp["errors"].append("no '### Milestone:' blocks in plan/specs/*.md")
     if comp["errors"]:
         print_errors(comp["errors"], "ownership does not compute")
     by_name = {m["name"]: m for m in comp["milestones"]}
