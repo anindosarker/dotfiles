@@ -61,7 +61,6 @@
   <symbol id="ic-circle-dashed" viewBox="0 0 24 24"><path d="M10.1 2.182a10 10 0 0 1 3.8 0"/><path d="M13.9 21.818a10 10 0 0 1-3.8 0"/><path d="M17.609 3.721a10 10 0 0 1 2.69 2.7"/><path d="M2.182 13.9a10 10 0 0 1 0-3.8"/><path d="M20.279 17.609a10 10 0 0 1-2.7 2.69"/><path d="M21.818 10.1a10 10 0 0 1 0 3.8"/><path d="M3.721 6.391a10 10 0 0 1 2.7-2.69"/><path d="M6.391 20.279a10 10 0 0 1-2.69-2.7"/></symbol>
   <symbol id="ic-workflow" viewBox="0 0 24 24"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></symbol>
   <symbol id="ic-flame" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
-  <symbol id="ic-bug" viewBox="0 0 24 24"><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/></symbol>
   <symbol id="ic-fold" viewBox="0 0 24 24"><path d="M12 22v-6"/><path d="M12 8V2"/><path d="M4 12H2"/><path d="M10 12H8"/><path d="M16 12h-2"/><path d="M22 12h-2"/><path d="m15 19-3-3-3 3"/><path d="m15 5-3 3-3-3"/></symbol>
   <symbol id="ic-sliders" viewBox="0 0 24 24"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></symbol>
   <symbol id="ic-panel" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/></symbol>
@@ -99,7 +98,6 @@
     <div class="flex gap-1.5">
       <button class="ibtn" id="t-arrows" data-tip="Dependency arrows" aria-label="Dependency arrows"><svg class="i"><use href="#ic-workflow"/></svg></button>
       <button class="ibtn" id="t-crit" data-tip="Highlight critical path" aria-label="Critical path"><svg class="i"><use href="#ic-flame"/></svg></button>
-      <button class="ibtn" id="t-fixes" data-tip="Show fixes" aria-label="Fixes"><svg class="i"><use href="#ic-bug"/></svg></button>
       <button class="ibtn" id="t-compact" data-tip="Compact cards" aria-label="Compact"><svg class="i"><use href="#ic-fold"/></svg></button>
     </div>
 
@@ -152,11 +150,12 @@
 
 <script>
 const SIZE_DEFAULTS = { zoom: 100, col: 150, label: 0, widths: {}, panelW: 320, fill: true, pinPanel: false };
-const state = { view: "epic", status: "all", arrows: true, crit: false, fixes: true, compact: false, ...SIZE_DEFAULTS, widths: {}, sel: null, toggled: { epic: new Set(), milestone: new Set() } };
+const state = { view: "epic", status: "all", arrows: true, crit: false, compact: false, ...SIZE_DEFAULTS, widths: {}, sel: null, toggled: { epic: new Set(), milestone: new Set() } };
 try {
   Object.assign(state, JSON.parse(localStorage.getItem("swimlanes-ui") || "{}"));
   state.sel = null;
   delete state.panel;
+  delete state.fixes;
   // Per view, only lanes the viewer toggled away from the default are stored:
   // Epics view starts collapsed (stores opened lanes), Milestones view starts expanded (stores closed lanes).
   const tg = JSON.parse(localStorage.getItem("swimlanes-lanes") || "{}");
@@ -181,6 +180,12 @@ const EMPTY = `<div class="flex h-full flex-col items-center justify-center gap-
 
 function load(data) {
   D = data;
+  // Older data has a "Fixes" lane of rows outside any epic: drop that lane, and any row
+  // without a lane, so they are neither drawn nor counted.
+  D.epics = D.epics.filter((e) => e !== "Fixes");
+  D.milestones = D.milestones.filter((m) => D.epics.includes(m.epic));
+  const ids = new Set(D.milestones.map((m) => m.id));
+  D.milestones.forEach((m) => { m.depends = m.depends.filter((d) => ids.has(d)); });
   byId = new Map(D.milestones.map((m) => [m.id, m]));
   dependents = new Map(D.milestones.map((m) => [m.id, []]));
   D.milestones.forEach((m) => m.depends.forEach((d) => dependents.get(d)?.push(m.id)));
@@ -193,7 +198,7 @@ function load(data) {
 }
 
 function nowSprint() {
-  const open = D.milestones.filter((m) => m.status !== "done" && m.epic !== "Fixes").map((m) => m.sprint);
+  const open = D.milestones.filter((m) => m.status !== "done").map((m) => m.sprint);
   return open.length ? Math.min(...open) : -1;
 }
 
@@ -208,7 +213,7 @@ function chain(id) {
 const visible = (m) => !(state.status === "done" && m.status !== "done") && !(state.status === "open" && m.status === "done");
 // Under a status filter, lanes and sprint columns with nothing that passes it are not drawn; "all" draws everything.
 const filtering = () => state.status !== "all";
-const allLanes = () => D.epics.filter((e) => e !== "Fixes" || state.fixes);
+const allLanes = () => D.epics;
 const shownLanes = () => allLanes().filter((e) => !filtering() || D.milestones.some((m) => m.epic === e && visible(m)));
 const shownSprints = (lanes) => D.sprints.map((_, i) => i).filter((i) => !filtering() || D.milestones.some((m) => m.sprint === i && lanes.includes(m.epic) && visible(m)));
 const laneInfo = (epic) => {
@@ -364,7 +369,6 @@ function syncControls() {
   document.querySelectorAll("[data-status]").forEach((b) => b.setAttribute("aria-pressed", state.status === b.dataset.status));
   $("#t-arrows").setAttribute("aria-pressed", state.arrows);
   $("#t-crit").setAttribute("aria-pressed", state.crit);
-  $("#t-fixes").setAttribute("aria-pressed", state.fixes);
   $("#t-compact").setAttribute("aria-pressed", state.compact);
   $("#s-zoom").value = state.zoom; $("#v-zoom").textContent = state.zoom + "%";
   $("#s-fill").checked = state.fill;
@@ -489,7 +493,7 @@ document.addEventListener("click", (e) => {
   if (t.dataset.go) revealCard(t.dataset.go);
 });
 const toggle = (id, key) => $(id).addEventListener("click", () => { state[key] = !state[key]; render(); });
-toggle("#t-arrows", "arrows"); toggle("#t-crit", "crit"); toggle("#t-fixes", "fixes"); toggle("#t-compact", "compact");
+toggle("#t-arrows", "arrows"); toggle("#t-crit", "crit"); toggle("#t-compact", "compact");
 
 const slider = (id, key) => $(id).addEventListener("input", (e) => { state[key] = +e.target.value; render(); });
 slider("#s-zoom", "zoom");
