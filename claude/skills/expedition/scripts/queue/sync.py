@@ -5,7 +5,7 @@ run reaches the board. Prints the cards it changed. Commits nothing.
 
 Usage: python3 -I queue/sync.py <release> [--owner X] [--root PATH]
 
-queue/item.py, epics/tag.py and sprints/refresh.py run the same sync.
+queue/item.py, epics/tag.py, sprints/refresh.py and sprints/mark.py run the same sync.
 """
 import argparse
 import importlib.util

@@ -17,9 +17,6 @@
 #                                                its own --session-id is in the registry, and a
 #                                                fork whose window died is resumed, not forked again
 #        runner.sh stop "<window name>"          close a fork window ("<release> specs E<n>")
-#        runner.sh progress <release> [--wait N] [--root PATH]   the progress block: asked of the live runner
-#                                                (it writes the block to a file, answered first in its turn),
-#                                                else or after N seconds from status/progress.py
 #        runner.sh watch start|stop|status        the nudge watcher (scripts/run/nudge-watch.sh)
 #
 # Folder: start and fork open a new window in --cwd, else in the folder the script is called
@@ -53,7 +50,7 @@ WATCH_PID="$STATE_DIR/nudge-watch.pid"
 die() { echo "error: $*" >&2; exit 1; }
 
 usage() {
-  echo "usage: runner.sh start <release> [--model M] [--new] [--from <lead>] [--cwd PATH] | list | stop <release or window name> | send <release> \"<line>\" | progress <release> [--wait N] [--root PATH] | resume <release or window name> | fork <release> E<n> \"<D ids>\" --from <lead> [--model M] [--cwd PATH] | watch start|stop|status" >&2
+  echo "usage: runner.sh start <release> [--model M] [--new] [--from <lead>] [--cwd PATH] | list | stop <release or window name> | send <release> \"<line>\" | resume <release or window name> | fork <release> E<n> \"<D ids>\" --from <lead> [--model M] [--cwd PATH] | watch start|stop|status" >&2
   exit 2
 }
 
@@ -423,46 +420,6 @@ cmd_send() {
   echo "typed into $target: $line"
 }
 
-# progress <release> [--wait N] [--root PATH]: the progress block, at once. With a live runner it
-# types "PROGRESS <file>" into the runner window and waits up to N seconds (default 45) for the
-# runner to write the block to that file; the runner answers a PROGRESS line before anything
-# else in its turn. No live runner, or no answer in time: status/progress.py from the files,
-# with one last line saying so.
-cmd_progress() {
-  local release="" wait=45 root="" name target pf i
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --wait) [ $# -ge 2 ] || usage; wait="$2"; shift 2 ;;
-      --root) [ $# -ge 2 ] || usage; root="$2"; shift 2 ;;
-      -*) usage ;;
-      *) [ -z "$release" ] || usage; release="$1"; shift ;;
-    esac
-  done
-  [ -n "$release" ] || usage
-  check_release "$release"
-  local -a status_cmd=(python3 -I "$SKILL_DIR/scripts/status/progress.py" "$release")
-  [ -z "$root" ] || status_cmd+=(--root "$root")
-  name="$(runner_name "$release")"
-  target="$(reg field "$name" tmux)"
-  if [ -n "$(reg field "$name" uuid)" ] && [ "$(reg field "$name" state)" != "stopped" ] && window_alive "$target"; then
-    mkdir -p "$STATE_DIR"
-    pf="$(file_of "$name").progress"
-    rm -f "$pf"
-    tmux send-keys -t "$target" -l "PROGRESS $pf"
-    sleep 0.3
-    tmux send-keys -t "$target" Enter
-    i=0
-    while [ "$i" -lt "$wait" ]; do
-      if [ -s "$pf" ]; then sleep 0.5; cat "$pf"; return 0; fi
-      sleep 1; i=$((i + 1))
-    done
-    "${status_cmd[@]}"
-    echo "- The runner did not answer in ${wait} s; this is from the files."
-    return 0
-  fi
-  "${status_cmd[@]}"
-}
-
 [ $# -ge 1 ] || usage
 sub="$1"; shift
 case "$sub" in
@@ -470,7 +427,6 @@ case "$sub" in
   list) [ $# -eq 0 ] || usage; cmd_list ;;
   stop) cmd_stop "$@" ;;
   send) cmd_send "$@" ;;
-  progress) cmd_progress "$@" ;;
   resume) cmd_resume "$@" ;;
   fork) cmd_fork "$@" ;;
   watch) cmd_watch "$@" ;;

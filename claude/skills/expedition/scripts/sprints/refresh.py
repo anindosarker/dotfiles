@@ -9,10 +9,12 @@ refresh(), then the swimlane data, in this order:
 
 Usage: python3 -I sprints/refresh.py <release> [--owner X] [--root PATH]
 
-Prints what each step prints. Commits nothing: the caller commits the grid together with the
-epic files and queue.md the chain changed (run/go.py does).
+Runs under the .ids.lock lock, so it never interleaves with sprints/mark.py. Prints what each
+step prints. Commits nothing: the caller commits the grid together with the epic files and
+queue.md the chain changed (run/go.py does).
 """
 import argparse
+import fcntl
 import importlib.util
 import sys
 from pathlib import Path
@@ -40,8 +42,11 @@ def main():
     if not C.RELEASE_RE.match(a.release):
         C.die(f"bad release '{a.release}', expected like v0.9.x")
     _, folder = C.find_folder(a.release, a.owner, a.root)
-    C.load("lib/grid").refresh(folder, a.release)
-    C.load("sprints/swimlanes").write(folder, a.release)
+    with open(folder / ".ids.lock", "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        C.load("lib/grid").refresh(folder, a.release, locked=True)
+        C.load("sprints/swimlanes").write(folder, a.release)
+        fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 if __name__ == "__main__":

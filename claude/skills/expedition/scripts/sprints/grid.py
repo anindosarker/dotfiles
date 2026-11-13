@@ -5,7 +5,7 @@
 Usage: python3 -I sprints/grid.py <release> [--owner X] [--root PATH]
 
 The epic files' Sprint column and the queue sync follow a grid change: sprints/refresh.py runs
-the whole chain, and sessions use it rather than this script.
+the whole chain, and sessions use it (or sprints/mark.py for a mark) rather than this script.
 """
 import argparse
 import importlib.util

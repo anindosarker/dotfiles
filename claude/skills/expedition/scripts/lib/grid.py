@@ -24,8 +24,9 @@ epic that has gone (a Starts value, not every decision [Done]), touching only th
 (lib/ownership.py sync_sprint_columns), finished epics' files left alone; then the Decided cards
 of queue.md synced with the tag lines of decisions.md (lib/board.py sync: the tick and the
 #E<n> tag), so a "[Done]" written since the last script run reaches the board. sprints/refresh.py,
-run/go.py (through sprints/refresh.py), plan/new_fix.py and migrate/fixes.py use refresh(); the
-swimlane data (sprints/swimlanes.py) follows it.
+sprints/mark.py, run/go.py (through sprints/refresh.py), plan/new_fix.py and migrate/fixes.py use
+refresh(); the swimlane data (sprints/swimlanes.py) follows it. set_mark() sets one run cell for
+sprints/mark.py, the only writer of the marks.
 """
 import datetime
 import importlib.util
@@ -167,18 +168,44 @@ def sync_epics(folder, comp):
         print(f"{p}: Sprint column synced with the grid")
 
 
-def sync_queue(folder):
-    """The Decided cards of queue.md, from the tag lines of decisions.md; prints the cards."""
+def sync_queue(folder, locked=False):
+    """The Decided cards of queue.md, from the tag lines of decisions.md; prints the cards. Takes
+    the .ids.lock lock unless the caller holds it (locked=True)."""
     own, bd = C.load("lib/ownership"), C.load("lib/board")
-    changed = bd.sync_file(folder / C.QUEUE_MD, bd.decision_tags(own, folder), folder / ".ids.lock")
+    lock = None if locked else folder / ".ids.lock"
+    changed = bd.sync_file(folder / C.QUEUE_MD, bd.decision_tags(own, folder), lock)
     if changed:
         print(f"{folder / C.QUEUE_MD}: synced with decisions.md: {', '.join(f'Q{n}' for n in changed)}")
 
 
-def refresh(folder, release, quiet=False):
+def refresh(folder, release, quiet=False, locked=False):
     """The chain after a grid change: the grid, the epic files' Sprint column, the queue sync.
-    Returns the grid text."""
+    locked=True: the caller holds the .ids.lock lock. Returns the grid text."""
     text, comp = write_grid(folder, release, quiet)
     sync_epics(folder, comp)
-    sync_queue(folder)
+    sync_queue(folder, locked)
     return text
+
+
+MARKS = {"launch": "[ ]", "merge": "[x]", "stop": "[!]"}
+
+
+def set_mark(path, name, mark):
+    """status/sprints.md with the run cell of the row of milestone name set to mark, in the
+    column the row has now. Returns (old cell, new text), or (None, None) when no row names it."""
+    lines = C.read(path).split("\n")
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if not s.startswith("|"):
+            continue
+        cells = [c.strip() for c in s.strip("|").split("|")]
+        if not cells or row_name(cells[0]) != name or cells[0] == "Milestone":
+            continue
+        at = next((k for k, c in enumerate(cells[1:], 1) if c), None)
+        if at is None:
+            return None, None
+        old = cells[at]
+        cells[at] = mark
+        lines[i] = "| " + " | ".join(cells) + " |"
+        return old, "\n".join(lines)
+    return None, None

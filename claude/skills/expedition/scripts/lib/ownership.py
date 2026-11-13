@@ -1020,7 +1020,10 @@ LINK_RE = re.compile(r"\]\(([^)\s]+\.md)\)")
 DELIVERABLES_HEAD = r"^## Deliverables\s*$(.*?)(?=^## |\Z)"
 SCOPE_MAX = 120
 STATUS_RE = re.compile(r"^Status:\s*(.*?)\s*$", re.M)
-STATUS_VALUE_RE = re.compile(r"^(planned|running|done|merged|skipped)\b\s*(?:\(([^)]*)\))?")
+STATUS_VALUE_RE = re.compile(r"^(planned|running|waiting|done|merged|skipped)\b\s*(?:\(([^)]*)\))?")
+# Order of the tracker states for status/progress.py: the most advanced copy of a tracker wins.
+STATUS_RANK = {"planned": 0, "running": 1, "waiting": 2, "done": 3, "merged": 3, "skipped": 3}
+WAITING_RE = re.compile(r"^(lead|owner):\s*(.*?)\s*$")
 TITLE_LINK_RE = re.compile(r"\[(.+?)\]\(")
 PLACEHOLDER_RE = re.compile(r"^(?:\[[^\]]*\]|\([^)]*\))$")
 
@@ -1030,18 +1033,29 @@ def tracker_path(folder, num):
     return folder / TRACKERS_DIR / f"{num}-tracker.md"
 
 
-def tracker_status(folder, num, p=None):
-    """Return (state, sha) from the tracker's Status line, or None."""
-    p = p or tracker_path(folder, num)
-    if not p.is_file():
-        return None
-    m = STATUS_RE.search(read(p))
+def status_value(text):
+    """(state, the text in parentheses, the whole Status value) of a tracker text, or None. The
+    states: planned, running, waiting ("waiting (lead: <what>)" or "waiting (owner: <what>)": built
+    and stopped until the lead or the owner acts), done, merged (<sha>), skipped (D<n>)."""
+    m = STATUS_RE.search(text)
     if not m:
         return None
     v = STATUS_VALUE_RE.match(m.group(1))
     if not v:
         return None
-    return v.group(1), (v.group(2) or "").strip()
+    return v.group(1), (v.group(2) or "").strip(), m.group(1)
+
+
+def tracker_status(folder, num, p=None):
+    """Return (state, sha) from the tracker's Status line, or None. A waiting tracker counts as
+    running for the decision and spec states."""
+    p = p or tracker_path(folder, num)
+    if not p.is_file():
+        return None
+    v = status_value(read(p))
+    if not v:
+        return None
+    return ("running", "") if v[0] == "waiting" else (v[0], v[1])
 
 
 def spec_titles(plan):

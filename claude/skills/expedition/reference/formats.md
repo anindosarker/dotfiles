@@ -224,13 +224,13 @@ Checks:
 - Only what a later task, a resume or the owner would otherwise rediscover.
 ```
 
-- `Status:` is `planned`, `running`, `merged (<commit>)` or `skipped (D<n>)` (a SKIP, `D<n>` the superseding decision).
+- `Status:` is `planned`, `running`, `waiting (lead: <what>)` or `waiting (owner: <what>)`, `merged (<commit>)` or `skipped (D<n>)` (a SKIP, `D<n>` the superseding decision). `waiting` is a milestone that is built and stopped until the lead or the owner acts, `<what>` in a few words (`waiting (lead: comparison table check)`); its grid cell stays `[ ]`, the scripts count it as running for a decision's state, and the progress reply lists it under Blocked. Whoever stops the milestone writes it, in the tracker copy it already writes: the builder or the verifier in the milestone worktree, or the runner ([run.md](run.md), Milestones and sprints).
 - Required: the header lines and one line per task, with the last commit and the workflow run id of the run that covered the task.
 - A fix's tracker cites its queue cards on its first line, for example `# 41: Range field blur (Q3, Q4), tracker`.
 - `Checks:` is followed by one bullet per check: command, commit, result. The integration milestone's suite run on the staging branch gets its own bullet.
 - `## Attention` and `## Notes` are optional. Empty is the normal case. Do not spend tokens on notes.
 - Never: review-round narration, check output, commit lists.
-- Writers: `plan/new_fix.py` creates a fix's tracker with `Status: planned`; `plan/new_spec.py` creates the spec's first milestone's tracker with `Status: planned`; the spec writer creates every further milestone's tracker from the template with `Status: planned` in stage 2, when the milestone block is written. In the run, the builder fills it, the fixer and the verifier update it. One worktree per milestone, so no conflicts.
+- Writers: `plan/new_fix.py` creates a fix's tracker with `Status: planned`; `plan/new_spec.py` creates the spec's first milestone's tracker with `Status: planned`; the spec writer creates every further milestone's tracker from the template with `Status: planned` in stage 2, when the milestone block is written. In the run, the builder fills it, the fixer and the verifier update it, the merger sets `merged` in the main checkout. One worktree per milestone, so no conflicts. The main checkout's copy stays `planned` until the merge; `status/progress.py` reads the most advanced copy across the worktrees.
 - The runner writes handoffs. Both sessions write `decisions.md` and `queue.md` (Shared files).
 
 ## process.md

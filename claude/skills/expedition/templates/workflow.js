@@ -6,6 +6,12 @@
 // The composition at the bottom runs the one MILESTONES entry (this milestone) build to merge. Only the release milestone's
 // script sets RELEASE_MILESTONE and composes check and release over MERGED_MILESTONES (the [x] rows of status/sprints.md).
 // The MILESTONES entry is one milestone: a "### Milestone:" block of an epic (a row of status/sprints.md).
+// Tracker Status: the builder sets running. A milestone that is built and stopped until someone acts is
+// "waiting (lead: <what>)" or "waiting (owner: <what>)" (reference/formats.md, Tracker): the verifier writes it
+// when RUN_MERGE is off, a builder writes it when only the lead or the owner can finish the step, and the runner
+// writes it in the milestone worktree's tracker for a needs-decision (owner) or review-open (lead) result.
+// A blocked result is a stop: the runner runs sprints/mark.py <release> <tracker stem> stop. The merger marks the
+// merge itself (sprints/mark.py ... merge, right after the merge commit in ROOT); the runner repeats it as the fallback.
 // Copy, then edit meta, INTEGRATION, RELEASE_LABEL, RELEASE_PREFIX, RELEASE_EPIC, GATE_JUDGED, MIRROR,
 // the RUN_* switches, SERIAL_GATES, SHIP_PARTIAL, RELEASE_MILESTONE, MERGED_MILESTONES, STOPPED_MILESTONES, MILESTONES, BASE_SHA
 // and SPECIFICS. Keep the rest.
@@ -23,6 +29,9 @@ export const meta = {
 const ROOT = '/abs/path/to/repo' // the main checkout: merge, check and release run here
 const PLANS = '.ai/plans/v<release>/<owner>'
 const PROCESS_FILE = `${PLANS}/process.md`
+const RELEASE = PLANS.split('/')[2] // the release folder name, e.g. v0.9.x
+const MARK = '~/.claude/skills/expedition/scripts/sprints/mark.py' // the only writer of status/sprints.md marks
+const stems = (p) => [].concat(p.tracker).map(t => t.split('/').pop().replace(/-tracker\.md$/, '')) // mark.py names a milestone by its tracker stem
 const INTEGRATION = '<integration branch>'
 const MIRROR = 'dev' // the staging branch: untouched during the sprints, fast-forwarded to INTEGRATION once after the last feature column (process.md P1)
 const RELEASE_LABEL = '<release label>'
@@ -55,7 +64,7 @@ Rules that bind you: read ${PROCESS_FILE} first (the project facts: branches, me
 - Work ONLY in the git worktree ${wt} on branch ${branch} (checked out, clean, dependencies installed, at ${BASE_SHA} = origin/${INTEGRATION}).
 - Commit trailer and PR body line exactly as the harness reminder gives them.
 - Decisions: ${PLANS}/decisions.md (read it first; the plan implements decisions, never re-decides).
-- Questions are not possible. Pick the sensible default; record a judgment call the owner may want to revert as one bullet under "## Attention" in ${list(p.tracker)}. Never stop the run. If your milestone cannot be finished (contradicts an accepted decision, Acceptance unreachable), commit what is coherent, write why under "## Attention" in ${list(p.tracker)}, return blocked=true with blockedReason; the run continues with the other milestones.
+- Questions are not possible. Pick the sensible default; record a judgment call the owner may want to revert as one bullet under "## Attention" in ${list(p.tracker)}. Never stop the run. If your milestone cannot be finished (contradicts an accepted decision, Acceptance unreachable), commit what is coherent, write why under "## Attention" in ${list(p.tracker)}, return blocked=true with blockedReason; the run continues with the other milestones. If it is built but only the lead or the owner can do the last step (a check only they can make, a choice), set the "Status:" line of ${list(p.tracker)} to "waiting (lead: <what>)" or "waiting (owner: <what>)", commit, and return blocked=true with that reason.
 - Your final text is a return value for a script, not a message to a human.`
 
 const BUILD_SCHEMA = { type: 'object', properties: {
@@ -111,7 +120,7 @@ One commit per concern, pushed. Re-record in ${list(p.tracker)} every check you 
 const verifyPrompt = (p) => `You are the verifier for milestone ${p.id} on worktree ${p.wt}, branch ${p.branch}. Read the Checks section of ${list(p.tracker)} first. Do NOT rerun a check recorded there whose commit is HEAD, or whose \`git diff --name-only <recorded commit>..HEAD\` touches only plan files and the changelog. Run only the checks of section 2.2 of ${list(p.plan)} that are missing, from a clean tree, in parallel where independent, and record them. The long checks (pages check, Storybook build, browser tests per base) run here once, every base concurrently, never per task. CI is the second run for tsc, lint, tests and builds; do not repeat those locally when recorded green.
 ${RULES(p)}
 Rerun the epic's "Acceptance:" check (section 1.2) once and record it. No PR exists for a milestone (process.md P1): the main session merges on the recorded checks.
-Append or extend the Checks section in ${list(p.tracker)} with one line per check and who ran it, commit ("docs(plan): milestone ${p.id} checks"), push.
+Append or extend the Checks section in ${list(p.tracker)} with one line per check and who ran it, commit ("docs(plan): milestone ${p.id} checks"), push.${RUN_MERGE ? '' : ` This run stops before the merge: when every check passes, set the "Status:" line of ${list(p.tracker)} to "waiting (lead: <what the lead checks or does before the merge, in a few words>)" in the same commit.`}
 Return allPass, head, checks (check, pass, output excerpt), failures, notes, attention.`
 
 // A blocked result never throws and never stops the other MILESTONES entries: the main session
@@ -146,7 +155,7 @@ Do not edit files. Your final text is a return value for a script. Return pass a
 
 const mergePrompt = (p, v) => `You are the merger for milestone ${p.id}. Verify is green on ${p.branch} (head ${v.head}).
 ${ROOT_RULES}
-Steps, from ${ROOT}: fetch; check out ${INTEGRATION} and fast-forward it to origin; \`git merge --no-ff origin/${p.branch}\` with the subject \`merge: ${p.title} (${p.epic})\`; push; delete ${p.branch} local and remote. Set the "Status:" line of ${list(p.tracker)} to merged with the merge sha, commit those paths only ("docs(plan): milestone ${p.id} merged"), push. Never touch ${MIRROR}: it is fast-forwarded once, after the last feature column (process.md P1). A conflict: abort the merge, return mergeSha "" and the conflicting files in attention.
+Steps, from ${ROOT}: fetch; check out ${INTEGRATION} and fast-forward it to origin; \`git merge --no-ff origin/${p.branch}\` with the subject \`merge: ${p.title} (${p.epic})\`; push; delete ${p.branch} local and remote. Set the "Status:" line of ${list(p.tracker)} to merged with the merge sha, commit those paths only ("docs(plan): milestone ${p.id} merged"), then run ${stems(p).map(s => `\`python3 -I ${MARK} ${RELEASE} ${s} merge\``).join(' and ')} from ${ROOT} (it ticks the grid and commits it; it never pushes), push. Never touch ${MIRROR}: it is fast-forwarded once, after the last feature column (process.md P1). A conflict: abort the merge, return mergeSha "" and the conflicting files in attention.
 Return mergeSha, notes, attention.`
 
 const gatePrompt = (sprint) => `You are the release check for this release: milestones ${sprint.merged.join(', ')} merged into ${INTEGRATION}. Run the check of ${RELEASE_EPIC} on ${INTEGRATION} in ${ROOT}, every base it names, ${SERIAL_GATES ? 'one base after another' : 'bases concurrently on separate ports'}. Captures go to the scratchpad the release epic names, never the repo.

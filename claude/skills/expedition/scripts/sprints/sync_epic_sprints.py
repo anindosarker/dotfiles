@@ -6,7 +6,7 @@ it changed. Commits nothing.
 
 Usage: python3 -I sprints/sync_epic_sprints.py <release> [--owner X] [--root PATH]
 
-sprints/refresh.py runs it after every grid change.
+sprints/refresh.py and sprints/mark.py run it after every grid change.
 """
 import argparse
 import importlib.util
