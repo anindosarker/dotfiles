@@ -139,9 +139,9 @@ def main():
     a = ap.parse_args()
     if not C.RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
-    if not SLUG_RE.match(a.slug):
+    if not SLUG_RE.fullmatch(a.slug):
         die(f"bad slug '{a.slug}', expected lowercase-with-dashes")
-    if not NUM_RE.match(a.spec):
+    if not NUM_RE.fullmatch(a.spec):
         die(f"bad spec number '{a.spec}', expected like 41 or 41.1")
     for label, val in (("title", a.title), ("files", a.files), ("depends", a.depends), ("checks", a.checks)):
         if "|" in val and label != "checks":

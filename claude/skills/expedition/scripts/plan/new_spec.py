@@ -101,9 +101,9 @@ def main():
     if len(a.rest) != 4:
         ap.error("expected <num> <slug> \"<Title>\" \"<scope>\"")
     a.num, a.slug, a.title, a.scope = a.rest
-    if not NUM_RE.match(a.num):
+    if not NUM_RE.fullmatch(a.num):
         die(f"bad spec number '{a.num}', expected like 03 or 04.1")
-    if not SLUG_RE.match(a.slug):
+    if not SLUG_RE.fullmatch(a.slug):
         die(f"bad slug '{a.slug}', expected lowercase-with-dashes")
     if "|" in a.title or "|" in a.scope:
         die("title and scope must not contain '|'")

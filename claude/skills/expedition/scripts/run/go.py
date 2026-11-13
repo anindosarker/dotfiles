@@ -16,8 +16,8 @@ Steps, each skipped when already done, so a rerun after a failure picks up where
 3. grid: sprints/refresh.py (the grid, the epic files' Sprint column, the decisions lanes, the
    queue sync, the swimlane data). Done when every milestone of the epic's specs has a row in status/sprints.md.
 4. epic file: the "Specs:" line and the final table (the epics/table.py fill, the Sprint column
-   from the grid); commits the epic files, status/sprints.md, decisions.md and queue.md when any of
-   them changed.
+   from the grid); commits the epic files (plan/epics/E<n>.md by number, nothing else in that
+   folder), status/sprints.md, decisions.md and queue.md when any of them changed.
 5. close writer: runner.sh stop "<release> specs E<n>". Skipped when runner.sh list shows that
    window stopped; a window runner.sh does not list at all leaves nothing to close.
 6. run: runner.sh start <release> --from <lead> when runner.sh list shows no live runner of the
@@ -202,7 +202,10 @@ class Go:
             own.fill_epic(self.folder, self.n, quiet=True)
         except SystemExit:
             raise StepFailed("epics/table.py failed")
-        return self.commit([self.folder / own.EPICS_DIR, self.folder / own.SPRINTS_MD,
+        # The epic files by number (this epic, the next stub, and every epic whose Sprint column the
+        # grid refresh rewrote), never a sweep of the folder: an unrelated file there stays out.
+        epics = [own.epic_path(self.folder, k) for k in own.epic_numbers(self.folder)]
+        return self.commit([*epics, self.folder / own.SPRINTS_MD,
                             self.folder / "decisions.md", self.folder / own.QUEUE_MD],
                            f"docs(plan): {self.release} E{self.n} go: grid and epic file")
 

@@ -242,7 +242,7 @@ function headerRow(sprints, now, firstLabel) {
   // Sprint totals stay real: they count every lane, not only the lanes the filter leaves.
   const lanes = allLanes();
   const nowBg = (i) => i === now ? " bg-blue/[0.06]" : "";
-  const handle = (key) => `<div data-resize="${key}" class="group absolute inset-y-0 -right-1.5 z-30 flex w-3 cursor-col-resize justify-center"></div>`;
+  const handle = (key) => `<div data-resize="${esc(key)}" class="group absolute inset-y-0 -right-1.5 z-30 flex w-3 cursor-col-resize justify-center"></div>`;
   let html = `<div class="hcell hlabel flex items-end border-b border-r border-surface0 bg-crust px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-subtext0">${firstLabel}${expandAllBtn()}${handle("label")}</div>`;
   sprints.forEach((i, k) => {
     const s = D.sprints[i];

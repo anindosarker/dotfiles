@@ -498,10 +498,21 @@ def targets(folder):
     return out
 
 
-def git_rm(root, path):
-    r = subprocess.run(["git", "-C", str(root), "rm", "-r", "-q", "--", str(path)],
+def tracked(root, path):
+    r = subprocess.run(["git", "-C", str(root), "ls-files", "--", str(path)], capture_output=True, text=True)
+    return r.returncode == 0 and bool(r.stdout.strip())
+
+
+def git_rm(root, path, dry_run=False):
+    """git rm -r the path. A path git tracks that git refuses to remove (local changes) stops the
+    script with one line; only an untracked path falls back to a plain delete."""
+    r = subprocess.run(["git", "-C", str(root), "rm", "-r", "-q", *(["-n"] if dry_run else []), "--", str(path)],
                        capture_output=True, text=True)
     if r.returncode:
+        if tracked(root, path):
+            die(f"{path}: git rm refused, nothing deleted: {(r.stderr or r.stdout).strip().splitlines()[0]}")
+        if dry_run:
+            return
         if path.is_dir():
             shutil.rmtree(path)
         elif path.exists():
@@ -595,14 +606,14 @@ def main():
     if a.dry_run:
         print("dry run; nothing written")
         return
+    gone = [folder / x for x in (FINDINGS, *ATT_DIRS) if (folder / x).exists()]
+    for p in gone:  # refuse before writing anything
+        git_rm(root, p, dry_run=True)
     (folder / QUEUE).write_text(board_text, encoding="utf-8")
     for p, new in changed:
         p.write_text(new, encoding="utf-8")
-    if (folder / FINDINGS).exists():
-        git_rm(root, folder / FINDINGS)
-    for d in ATT_DIRS:
-        if (folder / d).exists():
-            git_rm(root, folder / d)
+    for p in gone:
+        git_rm(root, p)
     print(f"wrote {folder / QUEUE}; removed {' and '.join(old)}; nothing committed")
 
 

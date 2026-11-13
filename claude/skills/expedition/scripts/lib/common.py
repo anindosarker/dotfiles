@@ -101,16 +101,24 @@ def repo_root(flag, release, new=False):
     return top
 
 
+def check_name(value, what):
+    """value when it is one plain path segment (letters, digits, '.', '_', '-'; not '.' or '..'),
+    else die with one line."""
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", value or "") or value in (".", ".."):
+        die(f"bad {what} '{value}': letters, digits, '.', '_' and '-' only, not '.' or '..'")
+    return value
+
+
 def detect_owner(root, flag):
     if flag:
-        return flag
+        return check_name(flag, "owner")
     plans = root / ".ai" / "plans"
     counts = collections.Counter(
         p.name for p in plans.glob("v*.x/*") if p.is_dir()
     )
     if not counts:
         die("no owner found under .ai/plans/v*.x/*/; pass --owner")
-    return counts.most_common(1)[0][0]
+    return check_name(counts.most_common(1)[0][0], "owner")
 
 
 def ignore_renders(folder):
