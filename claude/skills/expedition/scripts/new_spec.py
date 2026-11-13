@@ -21,7 +21,9 @@ Deliverables row gets E<n> in its Epic cell, and plan/epics/E<n>.md gets "Starts
 its Specs: line: the current sprint of status/sprints.md as it is at that moment (the first
 column holding a "[ ]" or "·" cell of another epic's row, else the column after the last column
 holding another epic's row; S1 for an empty grid; fix rows never count). An existing Epic line, epic tag or Starts value is kept and
-reported; a missing epic file is refused. Each file is read right before its write.
+reported; a missing epic file is refused. Each file is read right before its write. Then the
+Decided cards of queue.md are synced with the tag lines (board.sync): each card whose decision
+now carries "[E<n>]" is ticked and gets "#E<n>".
 
 Both modes refuse a superseded decision (heading "(superseded by D<n>)", or named by a later
 "- Supersedes D<n>." bullet): create mode when the title, scope or template cites one, tag mode
@@ -265,6 +267,9 @@ def tag_epic(folder, epic, items):
     print(f"{epic}: {', '.join(f'D{n}' for n in sorted(tagged)) or 'nothing tagged'}")
     if kept:
         print(f"kept: {', '.join(sorted(kept, key=lambda k: int(k.split()[0][1:])))}")
+    bd = own.load_sibling("board")
+    changed = bd.sync_file(folder / own.QUEUE_MD, bd.decision_tags(own, folder), folder / ".ids.lock")
+    print(f"queue.md cards ticked and tagged: {', '.join(f'Q{n}' for n in changed) or 'none'}")
 
 
 def main():

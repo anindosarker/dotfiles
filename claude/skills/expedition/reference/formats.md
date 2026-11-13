@@ -40,46 +40,67 @@ kanban-plugin: basic
 
 ## Open
 
-- [ ] **Q10** Home title is too technical #owner
-- [ ] **Q14** Setter passes a function, spec says a value #run-E10
-	- Keep or revert; `features/stRowPinning.ts:42`.
+- [ ] **Q30** Home title is too technical
+- [ ] **Q31** Sidebar link does not match the theme
+	- `components/sidebar.tsx:88`: the link uses the default colour, not the muted one.
 
 ## Decided
 
-- [x] **Q6** Comparison page sits too high #owner
-	- Decision: D71
+- [ ] **Q21** Change the button color #D85
+- [ ] **Q23** Example intros in the short style #D83
+	- One or two plain sentences per example, no option names.
+- [x] **Q15** Comparison page moves to the end of Getting Started #D71 #E12
+- [x] **Q5** Process file audited #D40
 
 ## Later
 
-- [ ] **Q7** Row pinning drops hand-pinned rows on unselect all #run-E8
+- [ ] **Q7** Row pinning drops hand-pinned rows on unselect all
 	- `features/stRowPinning.ts:42`.
 
 ## Dropped
 
 ## Autofix
 
-- [x] **Q9** Typo in the pinning guide #run-E10
+- [x] **Q9** Typo in the pinning guide
 
 %% kanban:settings
-{"kanban-plugin":"basic","lane-width":300,"date-format":"YYYY-MM-DD","time-format":"HH:mm"}
+{"kanban-plugin":"basic","lane-width":300,"date-format":"YYYY-MM-DD","time-format":"HH:mm","tag-action":"kanban"}
 %%
 ```
 
-- Sessions change the file only through the scripts: `new_item.py` (`Q`, `D --source`, `--move`, `--fact`) and `new_fix.py`. They re-read it inside the lock, find a card by its `**Q<n>**` token and its lane by the `## ` heading above it, and leave every other byte as found, the frontmatter and the `%% kanban:settings` block included.
+- Sessions change the file only through the scripts: `new_item.py` (`Q`, `D --source`, `--move`, `--fact`), `new_fix.py`, and the tag sync in `new_spec.py --epic` and `sprints.py`. They re-read it inside the lock, find a card by its `**Q<n>**` token and its lane by the `## ` heading above it, and leave every other byte as found, the `%% kanban:settings` block included. The extension may drop the frontmatter when it saves its settings; the next script write puts it back.
 - Five lanes, always all present, in this order. The lane is the card's state:
 
   | Lane | Meaning |
   |---|---|
   | Open | Waiting to be discussed |
-  | Decided | Decided; its first fact `Decision: D<n>` names the decision |
+  | Decided | Decided; `#D<n>` names the decision |
   | Later | Parked; reopened by moving it back to Open |
   | Dropped | Will not be done |
   | Autofix | Fixed without a decision |
 
-- A card is one top-level list item: `- [ ] **Q<n>** <title> #<from>`. The title is a plain sentence naming the problem or idea. `<from>` is `owner`, `lead`, `lookup` or `run-E<n>`. The checkbox is `[x]` in Decided, Dropped and Autofix, `[ ]` in Open and Later; the scripts ignore it when reading.
-- Facts are sub-bullets indented with one tab: path:line, measurement, lookup result. Options are never written in the file. A `#word` that is not the from tag is written in backticks, so the extension shows no tag badge.
-- New cards go to the end of Open. A moved card goes, with its facts, to the end of its lane. Decided only through `new_item.py <release> D "<title>" --source Q<n>`, which writes the Decision fact; a card already in Decided keeps the highest decision number.
-- `new_fix.py` moves each card a fix milestone cites to Autofix; the fix is traced through the fix tracker's first line, for example `(Q9)`.
+- A card is one top-level list item: `- [ ] **Q<n>** <title>`, then its tags. The title is a plain sentence naming the problem or idea. Two tags exist, at the end of the title line, space separated, decision before epic:
+
+  | Tag | Meaning |
+  |---|---|
+  | `#D<n>` | The decision that settled the card |
+  | `#E<n>` | The epic that decision is in |
+
+  An open card usually has no tag. No other tag is written, and never a sub-bullet that holds only tags.
+- The checkbox:
+
+  | Lane | Box | Meaning |
+  |---|---|---|
+  | Open, Later | `[ ]` | Not decided |
+  | Decided | `[ ]` | Ready for an epic: the decision has no tag |
+  | Decided | `[x]` with `#E<n>` | In an epic: the decision carries `[E<n>]` |
+  | Decided | `[x]`, no `#E` tag | Closed: the decision carries `[Done]` alone, or is superseded or deferred |
+  | Dropped, Autofix | `[x]` | Closed |
+
+  `decisions.md` is the record. The tick and `#E<n>` of a Decided card mirror the decision's tag line; `new_spec.py --epic`, `sprints.py` and every `new_item.py` call sync them, and `status.py` flags a card that disagrees.
+- Facts are sub-bullets indented with one tab: path:line, measurement, lookup result. Every sub-bullet is a fact. Options are never written in the file. A `#word` that is not a tag is written in backticks, so the extension shows no tag badge.
+- New cards go to the end of Open. A moved card goes, with its facts, to the end of its lane. Decided only through `new_item.py <release> D "<title>" --source Q<n>`, which adds `#D<n>` to the title and leaves the card unticked; a card already in Decided keeps the highest decision number. A card leaving Decided loses its `#D` and `#E` tags.
+- `new_fix.py` moves each card a fix milestone cites to Autofix, ticked and without tags; the fix is traced through the fix tracker's first line, for example `(Q9)`.
 - A lookup agent adds its facts to the card it was given with `new_item.py <release> --fact Q<n> "<text>"`.
 - Citations elsewhere: `(Q3)` in specs and trackers; a decision that came from a card ends with `- Source: Q3`; a fix tracker's first line cites `(Q3, Q4)`.
 - The run reports; it does not solve. Do not research solutions for a run card.

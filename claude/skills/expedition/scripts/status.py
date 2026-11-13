@@ -14,10 +14,11 @@ NN-<slug>-tracker.md or fix-<slug>-tracker.md).
 Decisions (### D<n>) get a derived state table from the spec files that cite them and the
 Status lines of those specs' milestone trackers. Queue cards (queue.md, a kanban board, see
 board.py) are listed with their lane. Queue gaps: an unknown or missing lane (a "**Complete**"
-marker line under a lane heading is tolerated, the checkbox state is ignored), a card without a
-**Q<n>** token, a duplicate id, a card without a from tag, a Decided card without a first
-sub-bullet "Decision: D<n>" or naming a missing decision, a (Q<n>) or "Source: Q<n>" citation
-of a missing card. process.md (## P<n>) must
+marker line under a lane heading is tolerated), a card without a **Q<n>** token, a duplicate id,
+a tag on a title line that is not #D<n> or #E<n>, a leftover "Decision:" sub-bullet, a Decided
+card without #D<n> or with a #D<n> naming a missing decision, a Decided card whose tick or #E<n>
+tag disagrees with the decision's tag line (the next new_item.py, new_spec.py --epic or
+sprints.py run syncs it), a (Q<n>) or "Source: Q<n>" citation of a missing card. process.md (## P<n>) must
 exist with no placeholder left; (P<n>) citations must be defined.
 
 Epics: the tag line under each "### D<n>" heading ("[E<n>]", "[Done]  [E<n>]", or "[Done]"
@@ -296,7 +297,10 @@ def q_cites(text):
     return nums
 
 
-def queue_report(folder, bd, text, docs, extra, dec_nums):
+LEFT_DECISION_RE = re.compile(r"^\s+-\s*Decision:\s*D\d+")
+
+
+def queue_report(folder, bd, text, docs, extra, dec_nums, tags):
     """Print the Queue section: one row per card with its citing specs and lane, then gaps."""
     parsed = bd.parse(text)
     cards = parsed["cards"]
@@ -323,14 +327,25 @@ def queue_report(folder, bd, text, docs, extra, dec_nums):
     for i, line in parsed["stray"]:
         print(f"  {QUEUE_MD}:{i + 1}: card without a **Q<n>** token: {line.strip()[:70]}")
     for c in cards:
-        if not c["from"]:
-            print(f"  Q{c['num']}: no from tag (#owner, #lead, #lookup or #run-E<n>)")
-        if c["lane"] == "Decided":
-            dn = bd.decision(c)
-            if dn is None:
-                print(f"  Q{c['num']}: in Decided without a first sub-bullet 'Decision: D<n>'")
-            elif dn not in dec_nums:
-                print(f"  Q{c['num']}: Decision D{dn} names a missing decision")
+        bad = [f"#{t}" for t in c["tags"] if not bd.CARD_TAG_RE.match(t)]
+        if bad:
+            print(f"  Q{c['num']}: tag {', '.join(bad)} on the title line: only #D<n> and #E<n>")
+        if any(LEFT_DECISION_RE.match(s) for s in c["subs"]):
+            print(f"  Q{c['num']}: leftover 'Decision:' sub-bullet: the decision is the #D<n> tag")
+        if c["lane"] != "Decided":
+            continue
+        if c["d"] is None:
+            print(f"  Q{c['num']}: in Decided without a #D<n> tag")
+        elif c["d"] not in dec_nums:
+            print(f"  Q{c['num']}: #D{c['d']} names a missing decision")
+        else:
+            box, epic = bd.want(c, tags)
+            have = "[x]" if c["box"] == "x" else "[ ]"
+            if (have, c["e"]) != (box, epic):
+                shows = have + (f" #E{c['e']}" if c["e"] else "")
+                says = box + (f" #E{epic}" if epic else "")
+                print(f"  Q{c['num']}: shows {shows}, decisions.md says {says} for D{c['d']}: "
+                      f"the next new_item.py, new_spec.py --epic or sprints.py run syncs it")
     have = {c["num"] for c in cards}
     sources = [folder / "decisions.md", folder / f"{folder.parent.name}-plan.md"]
     sources += sorted((folder / TRACKERS_DIR).glob("*.md")) + sorted((folder / EPICS_DIR).glob("*.md"))
@@ -663,7 +678,8 @@ def main():
     docs, statuses = d["docs"], d["statuses"]
 
     dec_items, dec_states = state_table("Decisions", "D", decisions, docs, statuses, True)
-    open_q = queue_report(folder, bd, q_text, docs, d["extra"], {n for n, _, _ in dec_items})
+    open_q = queue_report(folder, bd, q_text, docs, d["extra"], {n for n, _, _ in dec_items},
+                          bd.decision_tags(own, folder))
 
     new_print(folder, plan, d, own)
 

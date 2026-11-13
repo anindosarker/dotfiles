@@ -2,7 +2,7 @@
 """Allocate the next D or Q id of a release and file the item under it, so two sessions
 on one checkout never pick the same number.
 
-Usage: python3 -I new_item.py <release> D|Q "<title>" [--from <text>] [--source Q<n>]
+Usage: python3 -I new_item.py <release> D|Q "<title>" [--source Q<n>]
        [--bullet "<text>"] [--owner X] [--root PATH]
        python3 -I new_item.py <release> --move Q<n> Open|Later|Dropped|Autofix
        python3 -I new_item.py <release> --fact Q<n> "<text>"
@@ -13,12 +13,16 @@ and leaves every other byte as it was):
 
 - D: under the last "## Round" heading of decisions.md: the heading, the --bullet line if
   given, then "- Source: Q<n>" if --source is given. With --source, card Q<n> moves to the end
-  of Decided with "Decision: D<n>" as its first sub-bullet; a card already in Decided keeps the
-  highest decision number.
-- Q: a card "- [ ] **Q<n>** <title> #<from>" at the end of Open (--from required: owner,
-  lead, lookup or "run E<n>", written #run-E<n>), the --bullet text as its first fact.
+  of Decided, unticked, with "#D<n>" at the end of its title line; a card already in Decided
+  keeps the highest decision number.
+- Q: a tagless card "- [ ] **Q<n>** <title>" at the end of Open, the --bullet text as its
+  first fact.
 - --move: card Q<n> with its sub-bullets to the end of that lane (Decided only through D
-  --source). --fact: one tab-indented fact sub-bullet at the end of card Q<n>.
+  --source; a card leaving Decided loses its #D and #E tags). --fact: one tab-indented fact
+  sub-bullet at the end of card Q<n>.
+
+Every call then syncs the Decided cards with the tag lines of decisions.md (board.sync: the
+tick and the #E<n> tag), so a "[Done]" the lead wrote by hand reaches the board on the next call.
 
 queue.md is created from templates/queue.md when missing. Commits the files it wrote and
 prints the id alone, e.g. Q11.
@@ -110,14 +114,13 @@ def exclude_lock(root):
 
 def main():
     ap = argparse.ArgumentParser(
-        usage='new_item.py <release> D|Q "<title>" [--from <text>] [--source Q<n>] [--bullet "<text>"] | '
+        usage='new_item.py <release> D|Q "<title>" [--source Q<n>] [--bullet "<text>"] | '
               '<release> --move Q<n> Open|Later|Dropped|Autofix | <release> --fact Q<n> "<text>" '
               '[--owner X] [--root PATH]'
     )
     ap.add_argument("release")
     ap.add_argument("kind", nargs="?")
     ap.add_argument("title", nargs="?")
-    ap.add_argument("--from", dest="source_of")
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: found from the cwd)")
     ap.add_argument("--source")
@@ -131,7 +134,7 @@ def main():
     if a.move and a.fact:
         die("--move and --fact are separate calls")
     if card_op:
-        if a.kind or a.title or a.source_of or a.source or a.bullet:
+        if a.kind or a.title or a.source or a.bullet:
             die("--move and --fact take only a Q id and a lane or a text")
         if not SOURCE_RE.match(card_op[0]):
             die(f"bad id '{card_op[0]}', expected like Q3")
@@ -140,20 +143,15 @@ def main():
     else:
         if a.kind not in ("D", "Q"):
             die(f"bad kind '{a.kind}': the kinds are D and Q")
-        if a.kind == "Q" and not (a.source_of or "").strip():
-            die("a Q item needs --from: owner, lead, lookup or run E<n>")
         if a.kind == "Q" and a.source:
             die("--source is for a D item")
-        if a.source_of and a.kind == "D":
-            die("--from is for a Q item")
         if not (a.title or "").strip():
             die("empty title")
         if a.source and not SOURCE_RE.match(a.source):
             die(f"bad source '{a.source}', expected like Q3")
     title = (a.title or "").strip()
     fact = a.fact[1] if a.fact else ""
-    for label, val in (("title", title), ("bullet", a.bullet or ""), ("from", a.source_of or ""),
-                       ("fact", fact)):
+    for label, val in (("title", title), ("bullet", a.bullet or ""), ("fact", fact)):
         if "\n" in val:
             die(f"{label} must be one line")
         if "\u2014" in val:
@@ -173,6 +171,7 @@ def main():
             tpl = Path(__file__).resolve().parent.parent / "templates" / "queue.md"
             queue.write_text(tpl.read_text(encoding="utf-8"), encoding="utf-8")
         board = queue.read_text(encoding="utf-8")
+        new = None
         written = []
 
         if card_op:
@@ -181,19 +180,17 @@ def main():
                 die(f"{card_op[0]} is not in {queue}")
             ident = card_op[0]
             if a.move:
-                queue.write_text(bd.move(board, num, a.move[1]), encoding="utf-8")
+                new = bd.move(board, num, a.move[1])
                 subject = f"{ident} to {a.move[1]}"
             else:
-                queue.write_text(bd.add_fact(board, num, fact), encoding="utf-8")
+                new = bd.add_fact(board, num, fact)
                 subject = f"{ident} fact"
-            written.append(queue)
         elif a.kind == "Q":
             ident = f"Q{max([c['num'] for c in bd.parse(board)['cards']] or [0]) + 1}"
-            block = [bd.card_line(ident[1:], title, a.source_of, "Open")]
+            block = [bd.card_line(ident[1:], title, "Open")]
             if a.bullet:
                 block.append(bd.fact_line(a.bullet))
-            queue.write_text(bd.append_card(board, "Open", block), encoding="utf-8")
-            written.append(queue)
+            new = bd.append_card(board, "Open", block)
             subject = f"{ident} {title}"
         else:
             target = folder / "decisions.md"
@@ -211,14 +208,19 @@ def main():
                               encoding="utf-8")
             written.append(target)
             if card is not None:
-                old = bd.decision(card) if card["lane"] == "Decided" else None
+                old = card["d"] if card["lane"] == "Decided" else None
                 keep = max(old or 0, int(ident[1:]))
-                queue.write_text(bd.move(board, card["num"], "Decided", f"\t- Decision: D{keep}"),
-                                 encoding="utf-8")
-                written.append(queue)
+                new = bd.move(board, card["num"], "Decided", keep)
                 if old and old > int(ident[1:]):
-                    print(f"{a.source} keeps Decision D{old}", file=sys.stderr)
+                    print(f"{a.source} keeps #D{old}", file=sys.stderr)
             subject = f"{ident} {title}"
+
+        synced, changed = bd.sync(board if new is None else new, bd.decision_tags(own, folder))
+        if changed:
+            print(f"synced with decisions.md: {', '.join(f'Q{n}' for n in changed)}", file=sys.stderr)
+        if new is not None or changed:
+            bd.write(queue, synced)
+            written.append(queue)
 
         paths = [str(p) for p in written]
         git(root, "add", "--", *paths)

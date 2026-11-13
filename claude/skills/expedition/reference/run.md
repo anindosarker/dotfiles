@@ -39,7 +39,7 @@ The release's `process.md` (`.ai/plans/<release>/<owner>/process.md`) holds the 
 - On RUN and on every line typed to it: read the epic file of every epic it runs, re-read whatever a note names, append ` [ack HH:MM]` to each note it read, commit (Shared files rules). A note without ack is unread.
 - RUN is idempotent: an epic whose `status/sprints.md` rows are already running or done is not started again; the runner replies with the current state. A RUN for a held epic lifts the hold.
 - Several epics run at once, no slot limit. One worktree per milestone from the pool. Machine load as today: `process.md` P5, `SERIAL_GATES` when loaded.
-- On each merge the runner ticks the row and reruns `sprints.py`, then `swimlanes.py` (the page data under `status/`; nothing under `status/` is edited by hand). When every milestone of an epic has merged it files its queue cards, writes the handoff, tags `[Done]` on the epic's decisions, sends DONE.
+- On each merge the runner ticks the row and reruns `sprints.py`, then `swimlanes.py` (the page data under `status/`; nothing under `status/` is edited by hand). `sprints.py` also syncs the Decided cards of `queue.md` with `decisions.md`; a changed `queue.md` is committed with the grid. When every milestone of an epic has merged it files its queue cards, writes the handoff, tags `[Done]` on the epic's decisions, sends DONE.
 - Shared files (`decisions.md`, `queue.md`, the epic files): the rules in [formats.md](formats.md), Shared files.
 
 ## Each loop fire
@@ -132,7 +132,7 @@ The runner then files a queue card and continues with work that does not depend 
 - Every workflow script's result schema has a `notes` array and an `attention` array. A plain Agent returns the same two lists in its final text.
 - `attention`: what needs the owner. `notes`: what a later task, a resume or the owner would otherwise rediscover. Both are usually empty.
 - Sub-agents write the tracker: the builder fills it and sets `Status: running`, the fixer and the verifier update it. They stage owner items in its `## Attention` section.
-- The runner files queue cards at each milestone boundary and when an epic has merged, with `new_item.py <release> Q "<title>" --from "run E<n>" --bullet "<first fact line>"`. It condenses the trackers' `## Attention` sections and the results, and merges duplicates. One plain line per card, no jargon. Problems found in the code are filed the same way. A fact for an existing card: `new_item.py <release> --fact Q<n> "<text>"`. Never a hand edit of `queue.md`.
+- The runner files queue cards at each milestone boundary and when an epic has merged, with `new_item.py <release> Q "<title>" --bullet "<first fact line>"`. When it matters who found it, a fact line says so, for example `Found by the run's browser check; not reproduced.` It condenses the trackers' `## Attention` sections and the results, and merges duplicates. One plain line per card, no jargon. Problems found in the code are filed the same way. A fact for an existing card: `new_item.py <release> --fact Q<n> "<text>"`. Never a hand edit of `queue.md`.
 - The run reports; it does not solve. Do not research solutions for a queue card. A deviation is reported as keep or revert with the exact strings, never as an implementation question.
 - An accepted decision that no longer fits: a queue card, never a silent change.
 - Nothing needs the owner: nothing filed.

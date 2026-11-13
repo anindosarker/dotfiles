@@ -8,7 +8,8 @@ ownership.md and sprints.md into status/ (a plain move when a path is untracked)
 templates/swimlanes.html to status/index.html. Rewrites links: specs/ to plan/specs/ (and the
 sprints.md link) in <release>-plan.md; specs/, epics/, trackers/, handoffs/,
 ownership.md and sprints.md paths of this release inside the handoffs and the epic files.
-A folder without a kanban-board queue.md then goes through migrate_queue.py before the reruns.
+A folder without a kanban-board queue.md, or with a board in the old card format, then goes
+through migrate_queue.py before the reruns.
 Appends the status/index.html and status/data/ render lines to the repo's .gitignore when
 missing (renders, never committed). Then reruns ownership.py, sprints.py, swimlanes.py and status.py. Commits nothing. Refuses a
 folder that already has plan/specs/; a target folder that exists already (an epic file
@@ -163,7 +164,7 @@ def main():
 
     args = [a.release, "--owner", owner, "--root", str(root)]
     queue = folder / "queue.md"
-    if not queue.is_file() or "kanban-plugin:" not in queue.read_text(encoding="utf-8").split("\n---", 1)[0]:
+    if not queue.is_file() or load_ownership().load_sibling("migrate_queue").refusal(folder, a.release):
         print("== migrate_queue.py")
         r = subprocess.run([sys.executable, "-I", str(HERE / "migrate_queue.py")] + args, cwd=str(root))
         if r.returncode:

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Create a fix milestone in a release: run/trackers/fix-<slug>-tracker.md citing its queue
-cards on its first line, each cited queue.md card moved to the end of the Autofix lane, then
+cards on its first line, each cited queue.md card moved to the end of the Autofix lane (ticked,
+no tags; a card leaving Decided loses its #D and #E tags), then
 status/ownership.md and status/sprints.md regenerated so the fix has a grid row in the current
 sprint column (sprints.py: the first column holding a "[ ]" or "·" cell of an epic row, else the
 column after the last column holding an epic row).
@@ -116,8 +117,7 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_EX)
         for i in ids:
             if i.startswith("Q"):
-                queue.write_text(bd.move(queue.read_text(encoding="utf-8"), int(i[1:]), "Autofix"),
-                                 encoding="utf-8")
+                bd.write(queue, bd.move(queue.read_text(encoding="utf-8"), int(i[1:]), "Autofix"))
         fcntl.flock(lock, fcntl.LOCK_UN)
     print(tracker)
     print(queue)

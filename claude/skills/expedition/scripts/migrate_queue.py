@@ -1,16 +1,28 @@
 #!/usr/bin/env python3
-"""Move a release folder to queue.md as a kanban board (board.py has the format).
+"""Move a release folder to queue.md as a kanban board in the current card format (board.py
+has the format: tags #D<n> and #E<n> only, the tick in Decided mirrors decisions.md).
 
 Usage: python3 -I migrate_queue.py <release> [--dry-run] [--owner X] [--root PATH]
 
-Two inputs, one output:
+Three inputs, one output:
+
+(c) A board in the old card format (a from tag "#owner", "#lead", "#lookup", "#run" or
+"#run-E<n>" on a title line, or a "Decision: D<n>" sub-bullet) is converted in place: from tags
+removed from title lines; each "Decision: D<n>" sub-bullet removed and "#D<n>" appended to its
+card's title (the highest when several; a card outside Decided keeps its #D tag too); Open and
+Later cards "[ ]", Dropped and Autofix "[x]", Decided cards ticked and tagged #E<n> by
+board.sync; card order, facts and lanes unchanged; the frontmatter restored when missing; the
+settings block kept byte for byte, with "tag-action":"kanban" added only when that key is
+absent. A board already in the current format gets the same pass, which changes nothing.
+Prints cards per lane, Decided cards ready / in an epic / done without epic / superseded or
+deferred without a tag, the ready cards with their D ids, and the from tags removed.
 
 (b) A queue.md in the heading format ("### Q<n> <title>", then "- Tags: <value>" and
 "- From: <who>.") is converted in place: ids and titles kept, the Tags value picks the lane
-(empty Open, D<n> Decided with "Decision: D<n>" as the first sub-bullet, Later, Dropped,
-Autofix), From becomes the card's tag (#owner, #lead, #lookup, #run-E<n>), the other bullets
-become tab-indented sub-bullets with their nesting kept, entry order kept inside each lane.
-An entry with any other Tags value goes to Open and is listed as not placed.
+(empty Open, D<n> Decided with "#D<n>" on the title, Later, Dropped, Autofix), From is dropped,
+the other bullets become tab-indented sub-bullets with their nesting kept, entry order kept
+inside each lane, Decided cards synced as in (c). An entry with any other Tags value goes to
+Open and is listed as not placed.
 
 (a) A folder that still has findings.md (### F<n> items) or run/attentions/ (also a flat
 attentions/) with ATTENTION-<YYYY-MM-DD>.md files (## A<n> items) is first turned into the
@@ -18,9 +30,7 @@ heading format below, then converted as in (b):
 
 - Entries: every F item in file order and every A item in file-date then file order,
   numbered Q1.. in that order; the old bullets follow as they are (blank lines inside an
-  item dropped). Attribution is not
-  recoverable from the old files, so it is kept simple: "run" for every A item; for an F item
-  "run" when it sits under a triage round heading or cites a tracker, else "lead".
+  item dropped).
 - Tags value, one word: an A item tagged [D<n>] gets D<n>. An A item tagged [F<n>] is the same
   item as that finding: it maps to that finding's Q id, gets no entry of its own, and its D
   tags and bullets join that entry. An F item whose first bullet is "- Same as F<n>." maps the
@@ -39,10 +49,10 @@ heading format below, then converted as in (b):
   A<digits> token it did not rewrite as "path:line: text", for a person to settle.
 
 Prints the count of cards per lane and any entry it could not place. --dry-run prints the same
-and writes nothing. Commits nothing. Refuses a folder whose queue.md is already a board, and a
-folder that has both queue.md and an old file.
+and writes nothing. Commits nothing. Refuses a folder that has both queue.md and an old file.
 
-refusal(folder, release) is also used by the other scripts to refuse an unmigrated folder.
+refusal(folder, release) is also used by the other scripts to refuse an unmigrated folder: old
+queue files, a queue.md that is not a board, or a board in the old card format.
 """
 import argparse
 import collections
@@ -95,8 +105,13 @@ def refusal(folder, release):
     run = f"run python3 -I {HERE / 'migrate_queue.py'} {release}"
     if old and not queue.is_file():
         return f"{folder} has {' and '.join(old)} and no {QUEUE}: {run}"
-    if queue.is_file() and not load("board").is_board(read(queue)):
-        return f"{queue} is not a kanban board yet: {run}"
+    if queue.is_file():
+        bd = load("board")
+        text = read(queue)
+        if not bd.is_board(text):
+            return f"{queue} is not a kanban board yet: {run}"
+        if bd.is_old(text):
+            return f"{queue} has cards in the old format (from tags or Decision: sub-bullets): {run}"
     return None
 
 
@@ -106,7 +121,7 @@ HQ_FROM_RE = re.compile(r"^\s*-\s*From:\s*(.*?)\s*$")
 BULLET_RE = re.compile(r"^( *)- (.*)$")
 
 
-def convert(text):
+def convert(text, tags):
     """Heading-format queue text to a board: (board text, {lane: count}, [not placed])."""
     bd = load("board")
     entries, cur = [], None
@@ -136,11 +151,9 @@ def convert(text):
         if lane is None:
             lane = "Open"
             unplaced.append(f"Q{e['num']}: Tags '{tag}'")
-        if not e["from"]:
-            unplaced.append(f"Q{e['num']}: no From, card has no from tag")
-        block = [bd.card_line(e["num"], e["title"], e["from"], lane)]
+        block = [bd.card_line(e["num"], e["title"], lane)]
         if lane == "Decided":
-            block.append(f"\t- Decision: {tag}")
+            block[0] = bd.set_tags(block[0], int(tag[1:]))
         for line in e["body"]:
             b = BULLET_RE.match(line)
             if b:
@@ -149,7 +162,80 @@ def convert(text):
                 block.append("\t" + bd.escape_tags(line.strip()))
         lanes.setdefault(lane, []).append(block)
     counts = {lane: len(lanes.get(lane, [])) for lane in bd.LANES}
-    return bd.render(lanes), counts, unplaced
+    return bd.sync(bd.render(lanes), tags)[0], counts, unplaced
+
+
+FROM_STRIP_RE = re.compile(r"[ \t]*(?<![\w`])#(?:owner|lead|lookup|run(?:-E\d+)?)(?![\w-])")
+TAG_ACTION = '"tag-action":"kanban"'
+
+
+def add_tag_action(lines):
+    """Add "tag-action":"kanban" to the settings JSON line when the key is absent; every other
+    byte of the block stays. Returns True when it added the key."""
+    start = next((i for i, l in enumerate(lines) if re.match(r"^%%\s*kanban:settings", l)), None)
+    if start is None:
+        return False
+    for i in range(start, len(lines)):
+        line = lines[i]
+        if '"tag-action"' in line:
+            return False
+        if i > start and line.strip() == "%%":
+            return False
+        k = line.rfind("}")
+        if line.lstrip().startswith("{") and k >= 0:
+            inner = line[:k].rstrip()
+            sep = "" if inner.endswith("{") else ","
+            lines[i] = inner + sep + TAG_ACTION + line[k:]
+            return True
+    return False
+
+
+def recard(text, tags):
+    """A board in the old card format to the current one, in place (mode c).
+    Returns (text, {"from": n, "decision": n, "tag_action": bool})."""
+    bd = load("board")
+    lines = text.split("\n")
+    stats = {"from": 0, "decision": 0, "tag_action": False}
+    for c in reversed(bd.parse(text)["cards"]):
+        head = lines[c["line"]]
+        stats["from"] += len(FROM_STRIP_RE.findall(head))
+        head = FROM_STRIP_RE.sub("", head).rstrip()
+        subs = lines[c["line"] + 1:c["end"]]
+        decs = [int(m.group(1)) for l in subs if (m := bd.DECISION_RE.match(l))]
+        if decs:
+            stats["decision"] += len(decs)
+            subs = [l for l in subs if not bd.DECISION_RE.match(l)]
+        d = max(decs + ([c["d"]] if c["d"] else [])) if decs or c["d"] else None
+        if d:
+            head = bd.set_tags(head, d, c["e"] if c["lane"] == "Decided" else None)
+        if c["lane"] != "Decided":
+            head = bd.set_box(head, bd.box_for(c["lane"]))
+        lines[c["line"]:c["end"]] = [head] + subs
+    stats["tag_action"] = add_tag_action(lines)
+    new, _ = bd.sync(bd.with_front("\n".join(lines)), tags)
+    return new, stats
+
+
+def decided_counts(text, tags):
+    """(ready [(Q, D)], in an epic, done without epic, closed without a tag) of the Decided cards,
+    from decision_tags()."""
+    bd = load("board")
+    ready, epic, done, closed = [], 0, 0, 0
+    for c in bd.parse(text)["cards"]:
+        if c["lane"] != "Decided":
+            continue
+        t = tags.get(c["d"]) if c["d"] else None
+        if t is None:
+            continue
+        if t["epic"]:
+            epic += 1
+        elif t["done"]:
+            done += 1
+        elif t["closed"]:
+            closed += 1
+        else:
+            ready.append((c["num"], c["d"]))
+    return ready, epic, done, closed
 
 
 def die(msg):
@@ -285,9 +371,6 @@ def build(folder):
         first = it["body"][0] if it["body"] else ""
         same = re.match(r"^\s*-\s*Same as F(\d+)\b", first)
         it["merge"] = f"F{same.group(1)}" if same and int(same.group(1)) in f_nums else None
-        triage = "triage" in it["round"].lower()
-        tracker = any(re.search(r"tracker", l) for l in it["body"])
-        it["from"] = "run" if triage or tracker else "lead"
         if any(re.match(r"^\s*-\s*Deferred to\b", l) for l in it["body"]):
             later.add(it["old"])
         order.append(it)
@@ -297,7 +380,6 @@ def build(folder):
         it["merge"] = fs[0] if fs else None
         if fs:
             later.add(fs[0])
-        it["from"] = "run"
         order.append(it)
 
     mapping, entries, by_old = {}, [], {}
@@ -305,7 +387,7 @@ def build(folder):
         if it["merge"]:
             continue
         q = f"Q{len(entries) + 1}"
-        e = {"q": q, "title": it["title"], "from": it["from"], "body": list(it["body"]),
+        e = {"q": q, "title": it["title"], "body": list(it["body"]),
              "d": set(), "fix": [], "later": False, "olds": [it["old"]]}
         entries.append(e)
         mapping[it["old"]] = q
@@ -402,8 +484,7 @@ def bare_tokens(rel, text):
 def queue_text(release, entries):
     out = [f"# {release} queue"]
     for e in entries:
-        out += ["", f"### {e['q']} {e['title']}", f"- Tags: {e['tag']}".rstrip(),
-                f"- From: {e['from']}."]
+        out += ["", f"### {e['q']} {e['title']}", f"- Tags: {e['tag']}".rstrip()]
         out += e["body"]
     return "\n".join(out) + "\n"
 
@@ -455,14 +536,29 @@ def main():
     has_queue = (folder / QUEUE).is_file()
     if has_queue and old:
         die(f"{folder} has both {QUEUE} and {' and '.join(old)}: merge them by hand")
+    tags = load("board").decision_tags(own, folder)
     if has_queue:
         text = read(folder / QUEUE)
-        if load("board").is_board(text):
-            die(f"{folder / QUEUE} is already a kanban board: nothing to migrate")
-        board_text, counts, unplaced = convert(text)
-        report(counts, unplaced)
+        bd = load("board")
+        if bd.is_board(text):
+            board_text, stats = recard(text, tags)
+            parsed = bd.parse(board_text)
+            n = collections.Counter(c["lane"] for c in parsed["cards"])
+            report({lane: n[lane] for lane in bd.LANES} | {k: v for k, v in n.items() if k not in bd.LANES}, [])
+            print(f"From tags removed: {stats['from']}; Decision: sub-bullets turned into #D tags: "
+                  f"{stats['decision']}; tag-action added: {'yes' if stats['tag_action'] else 'no'}")
+        else:
+            board_text, counts, unplaced = convert(text, tags)
+            report(counts, unplaced)
+        ready, epic, done, closed = decided_counts(board_text, tags)
+        print(f"Decided: {len(ready)} ready, {epic} in an epic, {done} done without epic, "
+              f"{closed} superseded or deferred without a tag")
+        print(f"Ready: {', '.join(f'Q{q} (D{d})' for q, d in ready) or 'none'}")
         if a.dry_run:
             print("dry run; nothing written")
+            return
+        if board_text == text:
+            print(f"{folder / QUEUE} already in the current format; nothing changed")
             return
         (folder / QUEUE).write_text(board_text, encoding="utf-8")
         print(f"converted {folder / QUEUE}; nothing committed")
@@ -501,7 +597,7 @@ def main():
     print(f"Bare F or A tokens left ({len(leftovers)} lines):")
     for l in leftovers:
         print(f"  {l}")
-    board_text, lane_counts, unplaced = convert(queue)
+    board_text, lane_counts, unplaced = convert(queue, tags)
     report(lane_counts, unplaced)
     if a.dry_run:
         print("dry run; nothing written")

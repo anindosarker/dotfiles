@@ -23,6 +23,9 @@ every fix milestone. An epic's milestones start at its start sprint (the current
 go); dependent ones open the next column. Row text is the epic label, the spec number and the
 milestone name, "E1 01 Filtering" ("fix <name>" for a fix milestone); rows sorted by epic,
 spec number, then status/ownership.md order. The lead reruns it on go, the runner on merge.
+
+It then syncs the Decided cards of queue.md with the tag lines of decisions.md (board.sync: the
+tick and the #E<n> tag), so a "[Done]" written since the last script run reaches the board.
 """
 import argparse
 import datetime
@@ -195,6 +198,10 @@ def write(folder, release, quiet=False):
     path.write_text(text, encoding="utf-8")
     if not quiet:
         print(path)
+    bd = own.load_sibling("board")
+    changed = bd.sync_file(folder / own.QUEUE_MD, bd.decision_tags(own, folder), folder / ".ids.lock")
+    if changed:
+        print(f"{folder / own.QUEUE_MD}: synced with decisions.md: {', '.join(f'Q{n}' for n in changed)}")
     return text
 
 
