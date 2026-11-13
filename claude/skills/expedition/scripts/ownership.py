@@ -48,7 +48,8 @@ of the epic citing none of its decisions; Milestone is the spec's milestone name
 are provisional (the current sprint as the epic's start); a milestone with a grid row takes the
 grid's column. Rows ordered by sprint, spec number, decision number. Then it prints the facts:
 the sprints the epic spans, its critical path, every pair of the epic's specs owning the same
-file, a Files path that does not exist in the repo, and a row file no milestone of its spec
+file, each Files path that does not exist yet ("new or missing": a new file and a typo look
+the same), and a row file no milestone of its spec
 owns. No verdict. Commits nothing. Exit 1 only for an error below or an unreadable table.
 
 Backfill: ownership.py <release> --backfill-starts [--dry-run] writes "Starts: S<n>" into the
@@ -1178,7 +1179,7 @@ def fill_epic(folder, n, given=None, quiet=False):
         print("shared: none")
     missing, unowned = table_facts(folder, rows, comp)
     for r, f in missing:
-        print(f"missing path: {row_label(r)}: `{f}` does not exist in the repo")
+        print(f"new or missing: {row_label(r)}: `{f}`")
     for r, f in unowned:
         print(f"not owned: {row_label(r)}: `{f}` is owned by no milestone of spec {r['spec']}")
     return specs, rows, comp
@@ -1274,10 +1275,7 @@ def epic_gaps(folder, comp):
             if s not in have_s:
                 out.append(f"{rel}: spec {s} of E{n} has no row")
         finished = n in done
-        missing, unowned = table_facts(folder, rows, comp)
-        if not finished:
-            for r, f in missing:
-                out.append(f"{rel}: {row_label(r)}: `{f}` does not exist in the repo")
+        _, unowned = table_facts(folder, rows, comp)
         for r, f in unowned:
             out.append(f"{rel}: {row_label(r)}: `{f}` is owned by no milestone of spec {r['spec']}")
         if n in with_rows:

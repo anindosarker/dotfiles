@@ -41,8 +41,7 @@ without "[ack HH:MM]" (only when the file has a ## Notes section); an epic file 
 grid rows and no "Starts:" value, or a Starts value that is not S<number>; while an epic runs,
 the next epic file missing. The epic files' "## Ownership" tables (ownership.epic_gaps): an epic
 with grid rows whose file has no table, an unreadable table, a decision of the Decisions line
-with no row, a spec of the epic with no row, a Files path that does not exist in the repo (not
-for a finished epic: every decision [Done] or every grid row [x] or [!]), a row file no milestone of its spec owns, a Sprint
+with no row, a spec of the epic with no row, a row file no milestone of its spec owns, a Sprint
 cell that disagrees with the grid. Epics without an epic file are not flagged.
 
 Gaps reported for the layout: a plan section other than Goals and Deliverables; a
