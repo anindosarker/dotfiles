@@ -28,7 +28,7 @@
     .card.planned { @apply border-surface2 text-text; background: color-mix(in srgb, var(--ctp-surface0) 60%, var(--ctp-mantle)); }
     .card.sel { @apply ring-2 ring-mauve ring-offset-1 ring-offset-base; }
     .card.crit-on { @apply shadow-[inset_3px_0_0_var(--ctp-red)]; }
-    .card.dim, .mrow.dim { @apply opacity-20; }
+    .card.dim, .mrow.dim > * { @apply opacity-20; }
     .card.hidden { display: none; }
     .compact .card { @apply px-2 py-1; font-size: 0.6875em; }
     .compact .card .num { display: none; }
