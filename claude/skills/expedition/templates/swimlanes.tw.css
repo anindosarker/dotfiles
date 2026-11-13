@@ -24,14 +24,18 @@
     .seg button[aria-pressed="true"] { @apply bg-base text-text shadow-sm; }
     .card { @apply relative z-10 cursor-pointer rounded-md border px-2.5 py-1.5 leading-snug transition-[opacity,box-shadow,transform] duration-150 hover:-translate-y-px hover:shadow-md; font-size: 0.75em; }
     .card.done { @apply border-green/40 text-text; background: color-mix(in srgb, var(--ctp-green) 12%, var(--ctp-mantle)); }
-    .card.running { @apply border-yellow/60 text-text; background: color-mix(in srgb, var(--ctp-yellow) 18%, var(--ctp-mantle)); }
+    .card.running { @apply border-blue/60 text-text; background: color-mix(in srgb, var(--ctp-blue) 18%, var(--ctp-mantle)); }
     .card.planned { @apply border-surface2 text-text; background: color-mix(in srgb, var(--ctp-surface0) 60%, var(--ctp-mantle)); }
     .card.sel { @apply ring-2 ring-mauve ring-offset-1 ring-offset-base; }
     .card.crit-on { @apply shadow-[inset_3px_0_0_var(--ctp-red)]; }
     .card.dim, .mrow.dim > * { @apply opacity-20; }
     .card.hidden { display: none; }
     .compact .card { @apply px-2 py-1; font-size: 0.6875em; }
-    .compact .card .num { display: none; }
+    /* Board scrolls on both axes inside the viewport so the sprint header row can stick to its top. */
+    #wrap { overflow: auto; max-height: calc(100vh - 6rem); }
+    .hcell { position: sticky; top: 0; z-index: 20; background: var(--ctp-crust); }
+    .hcell.now { background: color-mix(in srgb, var(--ctp-blue) 8%, var(--ctp-crust)); }
+    .hcell.hlabel { left: 0; z-index: 30; }
     .slider { @apply w-full cursor-pointer accent-mauve; }
   }
   /* Tooltips: data-tip on any control. */
