@@ -31,7 +31,7 @@ Every item has an ID: the `**Q<n>**` or `**D<n>**` token of its card, a heading 
 
 ## queue.md
 
-One file per release, in the release folder root, template [../templates/queue.md](../templates/queue.md): a kanban board in the obsidian-kanban Markdown format, which the owner may view and drag in the VS Code extension Unified Kanban. It holds every item raised in the release, filed in the turn it is raised (the only exception: an item raised and ruled in the same owner message goes straight to a decision). The Open lane is the queue; the other lanes are the history.
+One file per release, in the release folder root, template [../templates/queue.md](../templates/queue.md): a kanban board in the obsidian-kanban Markdown format, which the owner may view and drag in the VS Code extension Unified Kanban. It holds every item raised in the release, filed in the turn it is raised, with no exception. The Open lane is the queue; the other lanes are the history.
 
 ```md
 ---
