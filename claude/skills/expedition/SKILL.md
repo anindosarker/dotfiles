@@ -3,9 +3,14 @@ name: expedition
 description: Runs long, multi-part work as a release of four stages (discuss, plan, run, triage) in a versioned plan folder, in epics of decisions run by a separate runner session, with a decisions file, one queue file for every item not yet decided, spec files with milestones, tasks and an Acceptance line, and follow-up specs. Use when the user runs /expedition. Not for small or single-session tasks.
 argument-hint: "<discuss|plan|run|triage> [release, e.g. v0.5.x]"
 disable-model-invocation: true
+allowed-tools: Bash(python3 -I ${CLAUDE_SKILL_DIR}/scripts/plan/process.py *)
 ---
 
 # Expedition
+
+!`python3 -I ${CLAUDE_SKILL_DIR}/scripts/plan/process.py $ARGUMENTS`
+
+The P rules printed above bind this session. After a handoff, a compaction or a RUN line, re-read the file with `python3 -I ${CLAUDE_SKILL_DIR}/scripts/plan/process.py <release>` before any other step.
 
 A release is one plan folder, `.ai/plans/v0.<n>.x/<owner>/`, and one version: `plan/` (specs, epics), `queue.md` (every item raised, a kanban board), `run/` (trackers, handoffs), `status/` (generated, never edited by hand; `index.html` and `data/` are `sprints/swimlanes.py` renders, git-ignored, never committed). `<owner>` is the folder name earlier releases use. A release has specs, one file each (`plan/specs/NN-<slug>.md`): a spec is one planned unit of work. A spec has milestones: a schedulable chunk with one branch, one worktree, one tracker, one merge; the rows of `status/sprints.md`. A milestone has tasks: ordered steps, each with its checks. An epic (`E<n>`) is the decisions planned and run together, named by the owner; it may span sprints. A sprint (`S<n>`) is the milestones that run together, computed by `lib/ownership.py`; the columns of `status/sprints.md`. Each stage below writes fixed files and ends at a fixed point.
 
