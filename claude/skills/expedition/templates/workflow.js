@@ -6,10 +6,11 @@
 // The composition at the bottom runs the one MILESTONES entry (this milestone) build to merge. Only the release milestone's
 // script sets RELEASE_MILESTONE and composes check and release over MERGED_MILESTONES (the [x] rows of status/sprints.md).
 // The MILESTONES entry is one milestone: a "### Milestone:" block of an epic (a row of status/sprints.md).
-// Tracker Status: the builder sets running. A milestone that is built and stopped until someone acts is
-// "waiting (lead: <what>)" or "waiting (owner: <what>)" (reference/formats.md, Tracker): the verifier writes it
-// when RUN_MERGE is off, a builder writes it when only the lead or the owner can finish the step, and the runner
-// writes it in the milestone worktree's tracker for a needs-decision (owner) or review-open (lead) result.
+// Tracker Status, the five of reference/formats.md, Milestone status: the builder sets running. A milestone that
+// is built and stopped until someone acts is "waiting (lead: <what>)" or "waiting (owner: <what>)": the verifier
+// writes it when RUN_MERGE is off, a builder writes it when only the lead or the owner can finish the step, and the
+// runner writes it in the milestone worktree's tracker for a needs-decision (owner) or review-open (lead) result.
+// The runner runs sprints/mark.py <release> <tracker stem> wait whenever a result leaves the tracker waiting.
 // A blocked result is a stop: the runner runs sprints/mark.py <release> <tracker stem> stop. The merger marks the
 // merge itself (sprints/mark.py ... merge, right after the merge commit in ROOT); the runner repeats it as the fallback.
 // Copy, then edit meta, INTEGRATION, RELEASE_LABEL, RELEASE_PREFIX, RELEASE_EPIC, GATE_JUDGED, MIRROR,
@@ -168,7 +169,7 @@ Do not edit files. Your final text is a return value for a script. Return pass a
 
 const mergePrompt = (p, v) => `You are the merger for milestone ${p.id}. Verify is green on ${p.branch} (head ${v.head}).
 ${ROOT_RULES}
-Steps, from ${ROOT}: fetch; check out ${INTEGRATION} and fast-forward it to origin; \`git merge --no-ff origin/${p.branch}\` with the subject \`merge: ${p.title} (${p.epic})\`; push; delete ${p.branch} local and remote. Set the "Status:" line of ${list(p.tracker)} to merged with the merge sha, commit those paths only ("docs(plan): milestone ${p.id} merged"), then run ${stems(p).map(s => `\`python3 -I ${MARK} ${RELEASE} ${s} merge\``).join(' and ')} from ${ROOT} (it ticks the grid and commits it; it never pushes), push. Never touch ${MIRROR}: it is fast-forwarded once, after the last feature column (process.md P1). A conflict: abort the merge, return mergeSha "" and the conflicting files in attention.
+Steps, from ${ROOT}: fetch; check out ${INTEGRATION} and fast-forward it to origin; \`git merge --no-ff origin/${p.branch}\` with the subject \`merge: ${p.title} (${p.epic})\`; push; delete ${p.branch} local and remote. Set the "Status:" line of ${list(p.tracker)} to "done (<merge sha>)", commit those paths only ("docs(plan): milestone ${p.id} merged"), then run ${stems(p).map(s => `\`python3 -I ${MARK} ${RELEASE} ${s} merge\``).join(' and ')} from ${ROOT} (it ticks the grid and commits it; it never pushes), push. Never touch ${MIRROR}: it is fast-forwarded once, after the last feature column (process.md P1). A conflict: abort the merge, return mergeSha "" and the conflicting files in attention.
 Return mergeSha, notes, attention.`
 
 const gatePrompt = (sprint) => `You are the release check for this release: milestones ${sprint.merged.join(', ')} merged into ${INTEGRATION}. Run the check of ${RELEASE_EPIC} on ${INTEGRATION} in ${ROOT}, every base it names, ${SERIAL_GATES ? 'one base after another' : 'bases concurrently on separate ports'}. Captures go to the scratchpad the release epic names, never the repo.

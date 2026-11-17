@@ -15,11 +15,11 @@ A milestone's column is the longest chain ending at it plus one, over every epic
 before its epic's start sprint: the "Starts: S<n>" line of plan/epics/E<n>.md (epics/tag.py
 writes it on go), nor before the milestone's own "- Starts: S<n>" line. The floor
 propagates along the edges; an epic file without a Starts value means no floor. A milestone
-whose status/sprints.md row is running ("[ ]") or finished ("[x]", "[!]") keeps that column, and
-a finished one never collides on a shared file. The epic table (epics/table.py E<n> <spec
+whose status/sprints.md row is running or waiting ("[ ]", "[~]") or finished ("[x]", "[!]") keeps
+that column, and a finished one never collides on a shared file. The epic table (epics/table.py E<n> <spec
 numbers>) uses the current sprint as a provisional floor for an epic with no Starts value yet,
 writing no Starts line. The current sprint is the first column of status/sprints.md holding a
-"[ ]" or "·" cell of an epic row; when there is none, the column after the last column holding
+"[ ]", "[~]" or "·" cell of an epic row; when there is none, the column after the last column holding
 an epic row (S1 for an empty grid). For an epic's own start its own rows are ignored.
 
 Critical path per epic, computed on the fly (never stored): over that epic's milestones only (a
@@ -204,8 +204,8 @@ def schedule(milestones, floor=None, fixed=None):
     """Return (columns, graph, errors, warnings) for milestones with resolved deps.
 
     floor: {name: lowest column} (the epic's start sprint); the column is never below it.
-    fixed: {name: (column, finished)} of the started milestones (a "[ ]", "[x]" or "[!]" grid
-    cell): they keep that column; two milestones sharing a file never collide when one of them
+    fixed: {name: (column, finished)} of the started milestones (a "[ ]", "[~]", "[x]" or "[!]"
+    grid cell): they keep that column; two milestones sharing a file never collide when one of them
     is finished ("[x]" or "[!]").
 
     milestones: list of dicts name, spec, order, deps, files.
@@ -358,7 +358,7 @@ def grid(folder):
 
 
 def current_sprint(folder, exclude=None):
-    """The first column holding a "[ ]" or "·" cell of an epic row, else the column after the
+    """The first column holding a "[ ]", "[~]" or "·" cell of an epic row, else the column after the
     last column holding an epic row (1-based, 1 for an empty grid). The rows of epic exclude (a
     number) are ignored."""
     n, rows = grid(folder)
@@ -368,7 +368,7 @@ def current_sprint(folder, exclude=None):
         if m and int(m.group(1)) != exclude:
             epic.append(cells)
     for i in range(n):
-        if any(c[i] in ("[ ]", "·") for c in epic):
+        if any(c[i] in ("[ ]", "[~]", "·") for c in epic):
             return i + 1
     used = [i + 1 for c in epic for i, x in enumerate(c) if x]
     return max(used) + 1 if used else 1
@@ -376,15 +376,15 @@ def current_sprint(folder, exclude=None):
 
 def started_columns(folder, milestones):
     """{milestone name: (grid column, finished)} of each milestone whose status/sprints.md row
-    is running ("[ ]") or finished ("[x]" or "[!]")."""
+    is running or waiting ("[ ]", "[~]") or finished ("[x]" or "[!]")."""
     names = {m["name"] for m in milestones}
     out = {}
     for label, cells in grid(folder)[1]:
         m = re.match(r"^E\d+\s+\d{2}(?:\.\d+)?\s+(.*)$", label)
         name = m.group(1) if m else label
-        at = next((i + 1 for i, c in enumerate(cells) if c in ("[ ]", "[x]", "[!]")), None)
+        at = next((i + 1 for i, c in enumerate(cells) if c in ("[ ]", "[~]", "[x]", "[!]")), None)
         if name in names and at:
-            out[name] = (at, cells[at - 1] != "[ ]")
+            out[name] = (at, cells[at - 1] in ("[x]", "[!]"))
     return out
 
 
@@ -986,9 +986,11 @@ LINK_RE = re.compile(r"\]\(([^)\s]+\.md)\)")
 DELIVERABLES_HEAD = r"^## Deliverables\s*$(.*?)(?=^## |\Z)"
 SCOPE_MAX = 120
 STATUS_RE = re.compile(r"^Status:\s*(.*?)\s*$", re.M)
-STATUS_VALUE_RE = re.compile(r"^(planned|running|waiting|done|merged|skipped)\b\s*(?:\(([^)]*)\))?")
+STATUS_VALUE_RE = re.compile(r"^(planned|running|waiting|stopped|done|merged|skipped)\b\s*(?:\(([^)]*)\))?")
+# Words of trackers written before the five statuses, read as their new word; nothing writes them.
+OLD_STATUS = {"merged": "done", "skipped": "stopped"}
 # Order of the tracker states for status/progress.py: the most advanced copy of a tracker wins.
-STATUS_RANK = {"planned": 0, "running": 1, "waiting": 2, "done": 3, "merged": 3, "skipped": 3}
+STATUS_RANK = {"planned": 0, "running": 1, "waiting": 2, "done": 3, "stopped": 3}
 WAITING_RE = re.compile(r"^(lead|owner):\s*(.*?)\s*$")
 TITLE_LINK_RE = re.compile(r"\[(.+?)\]\(")
 PLACEHOLDER_RE = re.compile(r"^(?:\[[^\]]*\]|\([^)]*\))$")
@@ -1001,15 +1003,16 @@ def tracker_path(folder, num):
 
 def status_value(text):
     """(state, the text in parentheses, the whole Status value) of a tracker text, or None. The
-    states: planned, running, waiting ("waiting (lead: <what>)" or "waiting (owner: <what>)": built
-    and stopped until the lead or the owner acts), done, merged (<sha>), skipped (D<n>)."""
+    states are the five of reference/formats.md, Milestone status: planned, running, waiting
+    (lead: <what>) or waiting (owner: <what>), stopped (D<n> or a reason), done (<sha>). The old words merged and
+    skipped come back as done and stopped."""
     m = STATUS_RE.search(text)
     if not m:
         return None
     v = STATUS_VALUE_RE.match(m.group(1))
     if not v:
         return None
-    return v.group(1), (v.group(2) or "").strip(), m.group(1)
+    return OLD_STATUS.get(v.group(1), v.group(1)), (v.group(2) or "").strip(), m.group(1)
 
 
 def tracker_status(folder, num, p=None):
@@ -1090,9 +1093,9 @@ def aggregate(states):
     """One spec state from its milestone tracker states, as tracker_status returns them."""
     if not states or any(s is None for s in states):
         return None
-    kinds = {"done" if s[0] in ("merged", "done") else s[0] for s in states}
+    kinds = {s[0] for s in states}
     if kinds == {"done"}:
-        return "merged", ", ".join(s[1] for s in states if s[1])
+        return "done", ", ".join(s[1] for s in states if s[1])
     if kinds & {"running", "done"}:
         return "running", ""
     return "planned", ""

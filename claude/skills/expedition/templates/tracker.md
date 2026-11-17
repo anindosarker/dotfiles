@@ -1,6 +1,6 @@
 # [num]: [title], tracker
 
-Status: [planned | running | waiting (lead: <what>) | waiting (owner: <what>) | merged (<commit>)]
+Status: [planned | running | waiting (lead: <what>) | waiting (owner: <what>) | stopped (<D<n> or reason>) | done (<commit>)]
 Branch `[branch]`, worktree [name]
 Checks:
 - Check: [name], `[command]` at [commit]: [pass | fail]

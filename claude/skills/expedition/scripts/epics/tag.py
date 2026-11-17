@@ -9,8 +9,8 @@ under its title line; each decision those specs cite (and each named D id) gets 
 on its card in decisions.md and moves to In progress (lib/decisions.py, under the .ids.lock
 lock, then the Done rule sync), and the spec's Deliverables row gets E<n> in
 its Epic cell, and plan/epics/E<n>.md gets "Starts: S<n>" under its Specs: line: the current
-sprint of status/sprints.md as it is at that moment (the first column holding a "[ ]" or "·"
-cell of another epic's row, else the column after the last column holding another epic's row;
+sprint of status/sprints.md as it is at that moment (the first column holding a "[ ]", "[~]" or
+"·" cell of another epic's row, else the column after the last column holding another epic's row;
 S1 for an empty grid). An existing Epic line, epic tag or Starts value is kept and reported; a
 missing epic file is refused. Each file is read right before its write. Then the Decided cards
 of queue.md are synced with the lanes (lib/board.py sync): each card whose decision is now In

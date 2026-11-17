@@ -7,8 +7,8 @@ Usage: python3 -I sprints/backfill_starts.py <release> [--dry-run] [--owner X] [
 The value is the lowest column among the epic's finished rows ("[x]", "[!]"), else the current
 sprint (that epic's own rows ignored). It commits nothing and prints the value per epic and
 every row whose column changes at the next sprints/refresh.py run, with its old and new column.
-Finished rows never move: the grid keeps their cells; a running row carries its "[ ]" to its new
-column. --dry-run writes nothing. Then run sprints/check.py and sprints/refresh.py.
+Finished rows never move: the grid keeps their cells; a running or waiting row carries its "[ ]"
+or "[~]" to its new column. --dry-run writes nothing. Then run sprints/check.py and sprints/refresh.py.
 """
 import argparse
 import collections

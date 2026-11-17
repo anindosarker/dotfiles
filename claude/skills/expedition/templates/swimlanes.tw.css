@@ -26,6 +26,14 @@
     .card.done { @apply border-green/40 text-text; background: color-mix(in srgb, var(--ctp-green) 12%, var(--ctp-mantle)); }
     .card.running { @apply border-blue/60 text-text; background: color-mix(in srgb, var(--ctp-blue) 18%, var(--ctp-mantle)); }
     .card.planned { @apply border-surface2 text-text; background: color-mix(in srgb, var(--ctp-surface0) 60%, var(--ctp-mantle)); }
+    .card.waiting { @apply border-yellow/60 text-text; background: color-mix(in srgb, var(--ctp-yellow) 16%, var(--ctp-mantle)); }
+    .card.stopped { @apply border-red/60 text-text; background: color-mix(in srgb, var(--ctp-red) 14%, var(--ctp-mantle)); }
+    .card .reason { @apply mt-0.5 flex min-w-0 items-start gap-1 text-[0.9em] text-subtext1; }
+    .card .reason svg { @apply mt-px; }
+    .card .reason > span { @apply line-clamp-2 min-w-0; }
+    .compact .card .reason > span { @apply truncate; }
+    .card.waiting .reason svg { @apply text-yellow; }
+    .card.stopped .reason svg { @apply text-red; }
     .card.sel { @apply ring-2 ring-mauve ring-offset-1 ring-offset-base; }
     .card.crit-on { @apply shadow-[inset_3px_0_0_var(--ctp-red)]; }
     .card.dim, .mrow.dim > * { @apply opacity-20; }

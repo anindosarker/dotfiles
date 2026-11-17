@@ -8,6 +8,12 @@ Reads status/sprints.md (grid), the ownership facts (lib/ownership.py compute, i
 milestone's dependencies and files, each epic's critical path computed on the fly) and
 <release>-plan.md (Deliverables). Each epic's path milestones are marked critical; the data
 holds criticalPaths {"E6": [names]} and criticalPath, their union, for older pages.
+Each milestone's status is one of the five of reference/formats.md, Milestone status, from its
+grid cell alone. A waiting or stopped milestone also gets a short reason for its card: what
+status/progress.py shows for it without "waits on the " ("owner: <what>"), or for a stopped one
+its first ## Attention bullet, else the detail of its tracker's Status line, from the same
+tracker copies status/progress.py reads (the milestone's own worktree included); empty when none
+is found.
 Refreshes status/index.html from templates/swimlanes.html when the template is newer or the
 page is missing. Both are renders, ignored by git (plan/new_cycle.py and migrate/layout.py add
 the .gitignore lines), never committed. Writes nothing else. sprints/refresh.py runs it last, after
@@ -47,8 +53,34 @@ def load_ownership():
     return C.load("lib/ownership")
 
 
+STATUS = {"[ ]": "running", "[~]": "waiting", "[!]": "stopped", "[x]": "done"}
+
+
 def status_of(marker):
-    return "done" if marker == "[x]" else "running" if marker == "[ ]" else "planned"
+    return STATUS.get(marker, "planned")
+
+
+def reasons(folder, release, own, rows):
+    """{milestone name: short reason} of the waiting and stopped rows [(name, cell)], read as
+    status/progress.py reads the trackers."""
+    want = [(n, c) for n, c in rows if status_of(c) in ("waiting", "stopped")]
+    if not want:
+        return {}
+    pg = C.load("status/progress")
+    root = next((p.parent for p in folder.parents if p.name == ".ai"), None)
+    blocks = own.new_collect(folder, folder / f"{release}-plan.md")["blocks"]
+    trackers = {b["name"]: b["tracker"] for bl in blocks.values() for b in bl}
+    wts = pg.worktrees(root) if root else []
+    out = {}
+    for name, cell in want:
+        path = trackers.get(name)
+        status = pg.tracker_state(own, path.relative_to(root), wts) if path and root else None
+        kind, reason, _ = pg.effective(cell, status)
+        text = pg.reason_of(own, kind, reason, path)
+        if not text and status and status[0] == "stopped":
+            text = status[1]
+        out[name] = "" if text in (None, "waits") else text.removeprefix("waits on the ")
+    return out
 
 
 def build(folder, release, own):
@@ -105,6 +137,9 @@ def build(folder, release, own):
             "critical": name in paths.get(epic, []),
             "specAbs": str(folder / spec["spec"]) if spec.get("spec") else None,
         })
+    why = reasons(folder, release, own, [(ms["name"], ms["marker"]) for ms in milestones])
+    for ms in milestones:
+        ms["reason"] = why.get(ms["name"], "")
     epics = []
     for ms in milestones:
         if ms["epic"] not in epics:

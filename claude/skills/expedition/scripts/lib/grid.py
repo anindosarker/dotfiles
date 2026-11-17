@@ -5,11 +5,12 @@ compute, in memory): milestones (rows) and sprints (columns). Library, no CLI.
 Columns are the ownership arithmetic: the longest chain ending at a milestone plus one, never
 before its epic's "Starts: S<n>" line in plan/epics/E<n>.md. The file holds "# <release> sprints",
 an "Updated:" line and the grid "| Milestone | S1 | ... |" only: "·" in a milestone's own column,
-blank elsewhere. Cells are "·", "[ ]", "[x]" or "[!]".
+blank elsewhere. Cells are "·", "[ ]", "[~]", "[x]" or "[!]" (reference/formats.md, Milestone
+status).
 
 When status/sprints.md exists, a row that still exists keeps every cell as it is once it is
-finished ("[x]" or "[!]"). Every other row is placed again; a running row carries its "[ ]"
-to its new column. A row whose milestone no longer exists is dropped, unless it carries a run
+finished ("[x]" or "[!]"). Every other row is placed again; a running or waiting row carries its
+"[ ]" or "[~]" to its new column. A row whose milestone no longer exists is dropped, unless it carries a run
 mark: then it is kept with a warning.
 
 Rows: every milestone of a spec that carries a "- Epic: E<n>" line (epics/tag.py). An epic's
@@ -47,8 +48,9 @@ def _common():
 
 
 C = _common()
-RUN_MARKS = ("[ ]", "[x]", "[!]")
+RUN_MARKS = ("[ ]", "[~]", "[x]", "[!]")
 FINISHED = ("[x]", "[!]")
+STARTED = ("[ ]", "[~]")
 PLANNED = "·"
 ROW_PREFIX_RE = re.compile(r"^E\d+\s+\d{2}(?:\.\d+)?\s+(.*)$")
 
@@ -81,7 +83,7 @@ def finished(cells):
 
 
 def mark_of(cells):
-    """The run mark a row carries ("[ ]" or "·"), "·" when it has none."""
+    """The run mark a row carries, "·" when it has none."""
     return next((c for c in cells if c in RUN_MARKS), PLANNED)
 
 
@@ -198,7 +200,7 @@ def refresh(folder, release, quiet=False, locked=False):
     return text
 
 
-MARKS = {"launch": "[ ]", "merge": "[x]", "stop": "[!]"}
+MARKS = {"launch": "[ ]", "wait": "[~]", "merge": "[x]", "stop": "[!]"}
 
 
 def set_mark(path, name, mark):

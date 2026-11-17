@@ -15,7 +15,7 @@ Usage: python3 -I plan/new_fix.py <release> <slug> "<Title>" <spec> --files a,b 
   line and the block; run/trackers/NN.M-<slug>-tracker.md; its Deliverables row with E<n>; in
   plan/epics/E<n>.md the spec on the "Specs:" line and an Ownership row with an empty Decision
   cell. The spec it follows is never reopened. Its epic: the epic of <spec> while that epic has
-  an unfinished row ("[ ]", "·" or "[!]"), else the one running epic; --epic picks one when
+  an unfinished row ("[ ]", "[~]", "·" or "[!]"), else the one running epic; --epic picks one when
   several run, and is required then.
 The block: "- Files owned:" the --files, "- Depends on:" every other milestone owning one of
 those files plus --depends (so the fix lands after them), "- Review: none", "- Starts: S<n>"
@@ -58,7 +58,7 @@ SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 NUM_RE = re.compile(r"^\d{2}(?:\.\d+)?$")
 CITES_RE = re.compile(r"^[QD]\d+(\s*,\s*[QD]\d+)*$")
 EPIC_RE = re.compile(r"^E(\d+)$")
-UNFINISHED = ("[ ]", "·", "[!]")
+UNFINISHED = ("[ ]", "[~]", "·", "[!]")
 die, slugify, load = C.die, C.slugify, C.load
 
 

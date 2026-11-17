@@ -12,18 +12,21 @@ line, then "Nothing running." and the unticked Decided cards of queue.md as
 "Ready for an epic: **Q<n>**, ...".
 
 Sources, for each milestone whose grid cell is not "[x]":
-- the grid cell of status/sprints.md ("[ ]" running, "·" not started, "[!]" stopped);
-- the tracker's Status line, from the most advanced copy (planned < running < waiting < merged,
-  done or skipped) among the main checkout (the first entry of git worktree list) and the
+- the grid cell of status/sprints.md ("[ ]" running, "[~]" waiting, "·" not started, "[!]"
+  stopped);
+- the tracker's Status line, from the most advanced copy (planned < running < waiting < done or
+  stopped; the old merged and skipped read as done and stopped) among the main checkout (the first entry of git worktree list) and the
   worktree whose checked-out branch is the one the copy's own "Branch" line names, the milestone's
   own worktree. A worktree on another branch holds an inherited snapshot, not the milestone's
   state, and is left out; when no copy names a branch checked out anywhere, every worktree's copy
-  counts. The main checkout's copy stays "planned" until the merge writes "merged (<sha>)" there.
-Results: a tracker merged (or done) counts as done whatever the cell says; "skipped" counts as
-stopped; a "waiting (lead: <what>)" or "waiting (owner: <what>)" milestone is listed under Blocked
-as "<spec> <title>: waits on the lead: <what>" (or the owner), never under Running; a "[!]" cell
-gives the first ## Attention bullet of the tracker as the reason, as before; a running tracker
-under a "·" cell counts as running. Each case where the grid and the tracker disagree prints a
+  counts. The main checkout's copy stays "planned" until the merge writes "done (<sha>)" there.
+Results: a done tracker counts as done whatever the cell says; a stopped one counts as stopped; a
+"waiting (lead: <what>)" or "waiting (owner: <what>)" milestone is listed under Blocked as
+"<spec> <title>: waits on the lead: <what>" (or the owner), never under Running; a "[~]" cell is
+listed the same way, with the tracker's waiting text when it has one; a "[!]" cell gives the
+first ## Attention bullet of the tracker as the reason, as before; a running tracker under a "·"
+cell counts as running. sprints/swimlanes.py uses worktrees, tracker_state, effective and
+reason_of for the reason on a waiting or stopped card. Each case where the grid and the tracker disagree prints a
 warning. No network, no runner, no tmux: files and one git call.
 """
 import argparse
@@ -48,7 +51,7 @@ def _common():
 C = _common()
 GRID_ROW_RE = re.compile(r"^E(\d+)\s+(\d{2}(?:\.\d+)?)\s+(.*)$")
 BRANCH_RE = re.compile(r"^Branch\s+`([^`]+)`", re.M)
-CELL_WORDS = {"[ ]": "running", "·": "not started", "[!]": "stopped", "[x]": "merged", "": "empty"}
+CELL_WORDS = {"[ ]": "running", "[~]": "waiting", "·": "not started", "[!]": "stopped", "[x]": "done", "": "empty"}
 num_key = C.spec_key
 
 
@@ -90,23 +93,35 @@ def effective(cell, status):
     """(kind, reason, warning) of one milestone: kind done, running, waiting, stopped or planned."""
     word = CELL_WORDS.get(cell, cell)
     if status is None:
-        kind = {"[ ]": "running", "[!]": "stopped", "[x]": "done"}.get(cell, "planned")
-        return kind, None, None
+        kind = {"[ ]": "running", "[~]": "waiting", "[!]": "stopped", "[x]": "done"}.get(cell, "planned")
+        return kind, "waits" if kind == "waiting" else None, None
     state, inner, value = status
     disagree = f"grid says {word}, tracker says {value}"
-    if state in ("merged", "done"):
+    if state == "done":
         return "done", None, disagree if cell != "[x]" else None
-    if state == "skipped":
+    if state == "stopped":
         return "stopped", None, disagree if cell != "[!]" else None
     if cell == "[!]":
         return "stopped", None, disagree if state == "waiting" else None
     if state == "waiting":
         m = own_waiting(inner)
         reason = f"waits on the {m[0]}: {m[1]}" if m else f"waits: {inner}" if inner else "waits"
-        return "waiting", reason, disagree
+        return "waiting", reason, disagree if cell != "[~]" else None
+    if cell == "[~]":
+        return "waiting", "waits", disagree if state == "running" else None
     if state == "running":
         return "running", None, disagree if cell != "[ ]" else None
     return ("running" if cell == "[ ]" else "planned"), None, None
+
+
+def reason_of(own, kind, reason, path):
+    """The reason the progress reply shows for a waiting or stopped milestone: the waiting text,
+    or the first ## Attention bullet of a stopped one; None otherwise."""
+    if kind == "waiting":
+        return reason
+    if kind == "stopped":
+        return own.attention_reason(path)
+    return None
 
 
 def own_waiting(inner):
@@ -151,12 +166,7 @@ def print_progress(root, folder, plan, own, bd, q_text):
         return titles.get(num) or rows[0]["name"]
 
     def why(rows):
-        for r in rows:
-            if r["kind"] == "waiting":
-                return r["reason"]
-            if r["kind"] == "stopped" and (a := own.attention_reason(r["path"])):
-                return a
-        return None
+        return next((t for r in rows if (t := reason_of(own, r["kind"], r["reason"], r["path"]))), None)
 
     blocks = []
     for e in sorted(epics):

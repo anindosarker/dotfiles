@@ -18,7 +18,7 @@ The lane is the state, from the Done rule (rule_lanes):
 2. Rows in the Ownership table of an epic file that has gone (a "Starts: S<n>" value) with a
    Spec cell: its own specs are the row specs that cite it "(D<n>)" in a heading line (the title
    line, a "### Milestone:" heading or any "#" heading); none, then every row spec. Done when
-   every milestone tracker of every own spec is merged or skipped, else In progress.
+   every milestone tracker of every own spec is done or stopped, else In progress.
 3. No such row: Done when it is closed by hand (a ticked card in Done: decisions/close.py writes
    it for a decision with nothing to run, migrate/decisions.py for an old "[Done]" tag line) or
    when any spec citing it has merged; In progress when it carries "#E<n>"; else To do.
@@ -59,7 +59,8 @@ MARK_RE = re.compile(r"\s*\(superseded by D(\d+)\)")
 SUPERSEDES_RE = re.compile(r"^\s*-\s*Supersedes D(\d+)\b")
 DEFERRED_RE = re.compile(r"^\s*-\s*Deferred to\b")
 D_CITE_RE = re.compile(r"\((D\d+[^)]*)\)")
-MERGED = ("merged", "done", "skipped")
+# Tracker states that end a milestone; lib/ownership.py reads the old merged and skipped as these.
+MERGED = ("done", "stopped")
 
 
 def bd():
@@ -194,7 +195,7 @@ def started_rows(folder):
 
 
 def spec_merged(folder, num, path):
-    """True when every milestone tracker of the spec is merged or skipped."""
+    """True when every milestone tracker of the spec is done or stopped."""
     o = own()
     m = re.match(r"^\d{2}(?:\.\d+)?-(.+)\.md$", path.name)
     slug = m.group(1) if m else ""

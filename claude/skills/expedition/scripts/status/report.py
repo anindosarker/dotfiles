@@ -30,7 +30,7 @@ in E<n> (no row of the epic in status/sprints.md carries a run mark), running (o
 (every decision of the epic in Done). The stage line reports discuss and run together ("Stage: discuss, run
 (E2, E3)"); a card in Open counts as discuss, never as a stage of its own.
 Also under Epics: the decisions still editable in place (no citing spec has a status/sprints.md row
-with "[ ]" or "[x]", not superseded); a supersede marked on one side only; an unbuilt spec
+with "[ ]", "[~]" or "[x]", not superseded); a supersede marked on one side only; an unbuilt spec
 citing a superseded decision; for each epic not done, its plan/epics/E<n>.md missing or Notes bullets
 without "[ack HH:MM]" (only when the file has a ## Notes section); an epic file whose epic has
 grid rows and no "Starts:" value, or a Starts value that is not S<number>; while an epic runs,
@@ -43,13 +43,13 @@ Gaps reported for the layout: a plan section other than Goals and Deliverables; 
 Deliverables Scope cell over 120 characters; a spec with no "### Milestone:" block, a block without Files owned, a Task line without
 Checks, no Acceptance line; milestones sprints/check.py would refuse (collision, cycle);
 status/sprints.md missing, without a "| Milestone" grid, with text under the grid, with a cell
-not one of [x], [ ], ·, [!] or blank, or with rows that differ from the milestones of the specs
+not one of [x], [ ], [~], ·, [!] or blank, or with rows that differ from the milestones of the specs
 with an Epic line. Ownership also prints each tagged epic's critical path,
 computed on the fly. A folder without plan/ is refused (migrate/layout.py), a folder still on
 the old queue files too (migrate/queue.py), a decisions.md in the heading format too
 (migrate/decisions.py), a folder that still has status/ownership.md too
 (migrate/epics.py), a folder that still has run/trackers/fix-*-tracker.md too (migrate/fixes.py).
-A tracker Status of merged counts as done. A tracker no milestone owns counts as citing the
+A tracker Status of done (or the old merged) counts as done. A tracker no milestone owns counts as citing the
 queue cards named on its first line.
 """
 import argparse
@@ -83,7 +83,7 @@ Q_SOURCE_RE = re.compile(r"Source:\s*(Q\d+(?:\s*(?:,|and)\s*Q\d+)*)")
 HEADING_RE = re.compile(r"^#{1,6}\s+(.*)$")
 GATES_LINE_RE = re.compile(r"^\s*-\s*Checks:")
 PLAN_SECTIONS = ("Goals", "Deliverables")
-SPRINT_MARKS = ("[x]", "[ ]", "·", "[!]", "")
+SPRINT_MARKS = ("[x]", "[ ]", "[~]", "·", "[!]", "")
 
 
 num_key = C.spec_key
@@ -332,7 +332,7 @@ def new_print(folder, plan, d, own):
             for r in data:
                 for c in r[1:]:
                     if c not in SPRINT_MARKS:
-                        print(f"  status/sprints.md row {r[0]}: cell {c!r} not one of [x], [ ], ·, [!], blank")
+                        print(f"  status/sprints.md row {r[0]}: cell {c!r} not one of [x], [ ], [~], ·, [!], blank")
             sp = C.load("lib/grid")
             grid = [sp.row_name(r[0]) for r in data if r and r[0]]
             ticked = sum(1 for r in data if "[x]" in r[1:])
@@ -383,19 +383,19 @@ def epic_marks(path):
         m = re.match(r"^E(\d+)\s", r[0]) if r else None
         if m:
             out[int(m.group(1))] = out.get(int(m.group(1)), False) or any(
-                c in ("[ ]", "[x]", "[!]") for c in r[1:])
+                c in ("[ ]", "[~]", "[x]", "[!]") for c in r[1:])
     return out
 
 
 def built_specs(path):
-    """Spec numbers with a status/sprints.md row ("E<n> NN name") holding "[ ]" or "[x]"."""
+    """Spec numbers with a status/sprints.md row ("E<n> NN name") holding "[ ]", "[~]" or "[x]"."""
     if not path.is_file():
         return set()
     head, data = C.table_rows(read(path), "Milestone")
     out = set()
     for r in data if head else []:
         m = re.match(r"^E\d+\s+(\d{2}(?:\.\d+)?)\s", r[0]) if r else None
-        if m and any(c in ("[ ]", "[x]") for c in r[1:]):
+        if m and any(c in ("[ ]", "[~]", "[x]") for c in r[1:]):
             out.add(m.group(1))
     return out
 
