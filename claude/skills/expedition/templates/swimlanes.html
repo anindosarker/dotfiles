@@ -502,7 +502,7 @@ document.addEventListener("click", (e) => {
   closePopovers();
   const t = e.target.closest("[data-view],[data-status],[data-id],[data-pick],[data-lane],[data-go],[data-close],[data-all]");
   if (!t) return;
-  if (t.dataset.view || t.dataset.status) { $("#wrap").scrollTo(0, 0); if (t.dataset.view) state.view = t.dataset.view; else state.status = t.dataset.status; }
+  if (t.dataset.view || t.dataset.status) { if (t.dataset.view) state.view = t.dataset.view; else state.status = t.dataset.status; render(); toLatest(); return; }
   else if (t.hasAttribute("data-close")) state.sel = null;
   else if (t.dataset.go) state.sel = t.dataset.go;
   else if (t.dataset.id || t.dataset.pick) { const id = t.dataset.id || t.dataset.pick; state.sel = state.sel === id ? null : id; }
@@ -588,6 +588,8 @@ addEventListener("resize", scheduleArrows);
 // The reload button and the 30 second timer share this path. Unchanged data is not drawn again;
 // changed data keeps the view, the filter, the lanes and the selection (all in state) and the scroll position.
 let dataText = null;
+// The newest work sits at the bottom right: open there on first load and after a view or filter change.
+const toLatest = () => requestAnimationFrame(() => { const w = $("#wrap"); w.scrollTo(w.scrollWidth, w.scrollHeight); });
 function loadScript(bust) {
   const s = document.createElement("script");
   s.src = "data/sprints.data.js" + (bust ? `?t=${Date.now()}` : "");
@@ -595,9 +597,11 @@ function loadScript(bust) {
     s.remove();
     const text = JSON.stringify(window.SPRINT_DATA);
     if (text === dataText) return;
+    const first = dataText === null;
     dataText = text;
     const wrap = $("#wrap"), at = [wrap.scrollLeft, wrap.scrollTop, scrollX, scrollY];
     load(window.SPRINT_DATA);
+    if (first) return toLatest();
     wrap.scrollTo(at[0], at[1]);
     scrollTo(at[2], at[3]);
   };
