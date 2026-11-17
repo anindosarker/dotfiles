@@ -30,7 +30,7 @@ in E<n> (no row of the epic in status/sprints.md carries a run mark), running (o
 (every decision of the epic in Done). The stage line reports discuss and run together ("Stage: discuss, run
 (E2, E3)"); a card in Open counts as discuss, never as a stage of its own.
 Also under Epics: the decisions still editable in place (no citing spec has a status/sprints.md row
-with "[ ]", "[~]" or "[x]", not superseded); a supersede marked on one side only; an unbuilt spec
+with "[ ]", "[~]" or "[x]", not superseded; a held milestone that was never launched does not count); a supersede marked on one side only; an unbuilt spec
 citing a superseded decision; for each epic not done, its plan/epics/E<n>.md missing or Notes bullets
 without "[ack HH:MM]" (only when the file has a ## Notes section); an epic file whose epic has
 grid rows and no "Starts:" value, or a Starts value that is not S<number>; while an epic runs,
@@ -387,15 +387,16 @@ def epic_marks(path):
     return out
 
 
-def built_specs(path):
-    """Spec numbers with a status/sprints.md row ("E<n> NN name") holding "[ ]", "[~]" or "[x]"."""
+def built_specs(path, held=()):
+    """Spec numbers with a status/sprints.md row ("E<n> NN name") holding "[ ]", "[~]" or "[x]";
+    a "[~]" row of a milestone in held (lib/ownership.py held_unlaunched) does not count."""
     if not path.is_file():
         return set()
     head, data = C.table_rows(read(path), "Milestone")
     out = set()
     for r in data if head else []:
-        m = re.match(r"^E\d+\s+(\d{2}(?:\.\d+)?)\s", r[0]) if r else None
-        if m and any(c in ("[ ]", "[~]", "[x]") for c in r[1:]):
+        m = re.match(r"^E\d+\s+(\d{2}(?:\.\d+)?)\s+(.*)$", r[0]) if r else None
+        if m and m.group(2) not in held and any(c in ("[ ]", "[~]", "[x]") for c in r[1:]):
             out.add(m.group(1))
     return out
 
@@ -508,7 +509,7 @@ def main():
         if bullets.get(old) != new:
             print(f"  D{old} title says superseded by D{new}, but D{new} lacks '- Supersedes D{old}.'")
     cited = {num: own.spec_cites(p) for num, p in docs}
-    built = built_specs(folder / SPRINTS_MD)
+    built = built_specs(folder / SPRINTS_MD, own.held_unlaunched(folder))
     for num, c in cited.items():
         bad = sorted(c & set(gone)) if num not in built else []
         if bad:

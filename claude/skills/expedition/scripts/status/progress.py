@@ -19,7 +19,8 @@ Sources, for each milestone whose grid cell is not "[x]":
   worktree whose checked-out branch is the one the copy's own "Branch" line names, the milestone's
   own worktree. A worktree on another branch holds an inherited snapshot, not the milestone's
   state, and is left out; when no copy names a branch checked out anywhere, every worktree's copy
-  counts. The main checkout's copy stays "planned" until the merge writes "done (<sha>)" there.
+  counts. The main checkout's copy stays "planned" until the merge writes "done (<sha>)" there, apart
+from a lead hold on a milestone not yet launched, which the runner writes there.
 Results: a done tracker counts as done whatever the cell says; a stopped one counts as stopped; a
 "waiting (lead: <what>)" or "waiting (owner: <what>)" milestone is listed under Blocked as
 "<spec> <title>: waits on the lead: <what>" (or the owner), never under Running; a "[~]" cell is

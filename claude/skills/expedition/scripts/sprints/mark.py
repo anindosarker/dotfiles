@@ -2,7 +2,7 @@
 """The only writer of the run marks in status/sprints.md: set one milestone's cell, then run the
 refresh chain and commit, as one command per event.
 
-Usage: python3 -I sprints/mark.py <release> <milestone> launch|wait|merge|stop [--owner X] [--root PATH]
+Usage: python3 -I sprints/mark.py <release> <milestone> launch|wait|resume|merge|stop [--owner X] [--root PATH]
 
 <milestone> is the milestone's tracker file name without "-tracker.md", for example
 47-comparison-page for run/trackers/47-comparison-page-tracker.md (a path or the full file name
@@ -12,7 +12,11 @@ entry and in every prompt.
 launch sets the milestone's cell to "[ ]", wait to "[~]", merge to "[x]", stop to "[!]", in the
 column its row has now (reference/formats.md, Milestone status). launch on a "[~]" cell resumes
 the milestone. wait takes no reason: the reason stays in the tracker's Status line. wait is
-refused unless the cell is "[ ]" or "[~]": only a launched, unfinished milestone waits. Then,
+refused unless the cell is "·", "[ ]" or "[~]": a held planned milestone waits too. resume is
+refused unless the cell is "[~]"; it sets "[ ]" when the milestone was launched before and "·"
+when it never was. Launched before means a commit "docs(plan): <release> <milestone> launch" of
+this script is in the history of status/sprints.md (lib/ownership.py launched_keys); when git
+cannot tell, "[ ]". Then,
 under the .ids.lock lock: the grid is regenerated with a new "Updated:" line, the Sprint column
 of every unfinished epic's table, the lanes of decisions.md and the Decided cards of queue.md
 follow it (lib/grid.py refresh), the swimlane data is written (sprints/swimlanes.py), and the
@@ -58,10 +62,10 @@ def milestone_of(own, folder, release, key):
 
 def main():
     ap = argparse.ArgumentParser(
-        usage="sprints/mark.py <release> <milestone> launch|wait|merge|stop [--owner X] [--root PATH]")
+        usage="sprints/mark.py <release> <milestone> launch|wait|resume|merge|stop [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("milestone")
-    ap.add_argument("action", choices=sorted(C.load("lib/grid").MARKS))
+    ap.add_argument("action", choices=C.load("lib/grid").ACTIONS)
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: found from the cwd)")
     a = ap.parse_args()
@@ -74,7 +78,7 @@ def main():
     if hit is None:
         C.die(f"no milestone has the tracker {C.TRACKERS_DIR}/{key}-tracker.md")
     num, name, _ = hit
-    mark = g.MARKS[a.action]
+    mark = g.resume_mark(folder, key) if a.action == "resume" else g.MARKS[a.action]
     grid = folder / C.SPRINTS_MD
     with open(C.lock_file(folder), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -84,8 +88,10 @@ def main():
         if old == mark:
             print(f"{key}: already {mark}, nothing changed")
             return
-        if a.action == "wait" and old not in g.STARTED:
-            C.die(f"{key}: cell is {old}, not launched and unfinished: nothing to wait")
+        if a.action == "wait" and old not in g.WAITABLE:
+            C.die(f"{key}: cell is {old}, finished: nothing to wait")
+        if a.action == "resume" and old != "[~]":
+            C.die(f"{key}: cell is {old}, not waiting: nothing to resume")
         grid.write_text(text, encoding="utf-8")
         with contextlib.redirect_stdout(io.StringIO()):
             g.refresh(folder, a.release, quiet=True, locked=True)

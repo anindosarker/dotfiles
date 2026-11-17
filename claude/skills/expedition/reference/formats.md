@@ -226,8 +226,9 @@ A milestone has one of five statuses. The grid cell, the tracker `Status:` line 
 | stopped | `[!]` | `stopped (D<n>)` or `stopped (<reason in a few words>)` | red | ended without merge (blocked or skipped) |
 | done | `[x]` | `done (<commit>)` | green | merged |
 
-- `sprints/mark.py` sets the cell: `launch` `[ ]`, `wait` `[~]`, `merge` `[x]`, `stop` `[!]`. `launch` on a `[~]` cell resumes the milestone. The reason stays in the tracker: the `Status:` brackets and `## Attention`.
-- A `[~]` row counts as started and unfinished, like `[ ]`: it keeps its column and its epic is not finished. Only `[x]` meets a dependency, so the dependents of a waiting milestone are not launched and not stopped.
+- `sprints/mark.py` sets the cell: `launch` `[ ]`, `wait` `[~]` (from `·` only for a lead hold), `merge` `[x]`, `stop` `[!]`. `launch` on a `[~]` cell resumes the milestone. The reason stays in the tracker: the `Status:` brackets and `## Attention`.
+- `resume` ends a hold: on a `[~]` cell it sets `[ ]` when the milestone was launched before and `·` when it never was. Launched before means a commit `docs(plan): <release> <milestone> launch` of `mark.py` is in the history of `status/sprints.md`; the tracker cannot tell, since the main checkout's copy may lack the `Branch` line until the merge.
+- A `[~]` row counts as started and unfinished, like `[ ]`: it keeps its column and its epic is not finished. A `[~]` row never launched moves like a `·` row and does not make its spec built. Only `[x]` meets a dependency, so the dependents of a waiting milestone are not launched and not stopped.
 - Trackers written before this set say `merged (<commit>)` or `skipped (D<n>)`. The scripts read them as done and stopped; nothing writes them. `migrate/statuses.py <release>` converts a folder.
 
 ## Tracker
@@ -255,13 +256,13 @@ Checks:
 - Only what a later task, a resume or the owner would otherwise rediscover.
 ```
 
-- `Status:` is one of the five of Milestone status, its detail in brackets. `stopped (D<n>)` is a SKIP, `D<n>` the superseding decision. `waiting` is a milestone that is built and stopped until the lead or the owner acts, `<what>` in a few words (`waiting (lead: comparison table check)`); the scripts count it as running for a decision's state, and the progress reply lists it under Blocked. Whoever stops the milestone writes it, in the tracker copy it already writes: the builder or the verifier in the milestone worktree, or the runner ([run.md](run.md), Milestones and sprints).
+- `Status:` is one of the five of Milestone status, its detail in brackets. `stopped (D<n>)` is a SKIP, `D<n>` the superseding decision. `waiting` is a milestone that is built and stopped until the lead or the owner acts, `<what>` in a few words (`waiting (lead: comparison table check)`); the scripts count it as running for a decision's state, and the progress reply lists it under Blocked. Whoever stops the milestone writes it, in the tracker copy it already writes: the builder or the verifier in the milestone worktree, or the runner; the runner writes a hold on a milestone that has not started in the main checkout's copy ([run.md](run.md), Milestones and sprints).
 - Required: the header lines and one line per task, with the last commit and the workflow run id of the run that covered the task.
 - A fix's tracker cites its queue cards on its first line, for example `# 41: Range field blur (Q3, Q4), tracker`.
 - `Checks:` is followed by one bullet per check: command, commit, result. The integration milestone's suite run on the staging branch gets its own bullet.
 - `## Attention` and `## Notes` are optional. Empty is the normal case. Do not spend tokens on notes.
 - Never: review-round narration, check output, commit lists.
-- Writers: `plan/new_fix.py` creates a fix's tracker with `Status: planned`; `plan/new_spec.py` creates the spec's first milestone's tracker with `Status: planned`; the spec writer creates every further milestone's tracker from the template with `Status: planned` in stage 2, when the milestone block is written. In the run, the builder fills it, the fixer and the verifier update it, the merger sets `done (<commit>)` in the main checkout. One worktree per milestone, so no conflicts. The main checkout's copy stays `planned` until the merge; `status/progress.py` reads the most advanced copy across the worktrees.
+- Writers: `plan/new_fix.py` creates a fix's tracker with `Status: planned`; `plan/new_spec.py` creates the spec's first milestone's tracker with `Status: planned`; the spec writer creates every further milestone's tracker from the template with `Status: planned` in stage 2, when the milestone block is written. In the run, the builder fills it, the fixer and the verifier update it, the merger sets `done (<commit>)` in the main checkout. One worktree per milestone, so no conflicts. The main checkout's copy stays `planned` until the merge, apart from a hold before launch; `status/progress.py` reads the most advanced copy across the worktrees.
 - The runner writes handoffs. Both sessions write `decisions.md` and `queue.md` (Shared files).
 
 ## process.md

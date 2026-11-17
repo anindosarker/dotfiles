@@ -16,7 +16,8 @@ before its epic's start sprint: the "Starts: S<n>" line of plan/epics/E<n>.md (e
 writes it on go), nor before the milestone's own "- Starts: S<n>" line. The floor
 propagates along the edges; an epic file without a Starts value means no floor. A milestone
 whose status/sprints.md row is running or waiting ("[ ]", "[~]") or finished ("[x]", "[!]") keeps
-that column, and a finished one never collides on a shared file. The epic table (epics/table.py E<n> <spec
+that column, and a finished one never collides on a shared file. A waiting row that was never
+launched (held_unlaunched: a hold put on a planned milestone) moves like a "·" row. The epic table (epics/table.py E<n> <spec
 numbers>) uses the current sprint as a provisional floor for an epic with no Starts value yet,
 writing no Starts line. The current sprint is the first column of status/sprints.md holding a
 "[ ]", "[~]" or "·" cell of an epic row; when there is none, the column after the last column holding
@@ -38,6 +39,7 @@ status/progress.py.
 import collections
 import importlib.util
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -376,8 +378,9 @@ def current_sprint(folder, exclude=None):
 
 def started_columns(folder, milestones):
     """{milestone name: (grid column, finished)} of each milestone whose status/sprints.md row
-    is running or waiting ("[ ]", "[~]") or finished ("[x]" or "[!]")."""
-    names = {m["name"] for m in milestones}
+    is running or waiting ("[ ]", "[~]") or finished ("[x]" or "[!]"), except a waiting row that
+    was never launched (held_unlaunched)."""
+    names = {m["name"] for m in milestones} - held_unlaunched(folder)
     out = {}
     for label, cells in grid(folder)[1]:
         m = re.match(r"^E\d+\s+\d{2}(?:\.\d+)?\s+(.*)$", label)
@@ -385,6 +388,51 @@ def started_columns(folder, milestones):
         at = next((i + 1 for i, c in enumerate(cells) if c in ("[ ]", "[~]", "[x]", "[!]")), None)
         if name in names and at:
             out[name] = (at, cells[at - 1] in ("[x]", "[!]"))
+    return out
+
+
+LAUNCH_SUBJECT_RE = re.compile(r"^docs\(plan\): \S+ (\S+) launch$")
+
+
+def launched_keys(folder):
+    """The tracker keys (the tracker file name without "-tracker.md") of every milestone ever
+    launched: those named by a "docs(plan): <release> <key> launch" commit of sprints/mark.py in
+    the history of status/sprints.md. None when git cannot tell."""
+    r = subprocess.run(["git", "-C", str(folder), "log", "--format=%s", "--", SPRINTS_MD],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        return None
+    return {m.group(1) for line in r.stdout.splitlines() if (m := LAUNCH_SUBJECT_RE.match(line))}
+
+
+def held_unlaunched(folder):
+    """Names of the milestones whose status/sprints.md cell is "[~]" and that were never launched
+    (launched_keys): a hold put on a planned milestone. They count as "·" where a started row
+    differs: the column they keep, a row whose milestone is gone, the specs status/report.py
+    counts as built. A milestone's key is its tracker name (milestone_tracker); for a row whose
+    milestone is gone from its spec, every name milestone_tracker could have given it. Empty when
+    git cannot tell."""
+    rows = []
+    for label, cells in grid(folder)[1]:
+        m = re.match(r"^E\d+\s+(\d{2}(?:\.\d+)?)\s+(.*)$", label)
+        if m and "[~]" in cells:
+            rows.append((m.group(1), m.group(2)))
+    keys = launched_keys(folder) if rows else None
+    if keys is None:
+        return set()
+    specs = dict(spec_files(folder))
+    out = set()
+    for num, name in rows:
+        p = specs.get(num)
+        m = re.match(r"^\d{2}(?:\.\d+)?-(.+)\.md$", p.name) if p else None
+        slug = m.group(1) if m else ""
+        idx = next((i for i, b in enumerate(parse_spec(p) if p else []) if b["name"] == name), None)
+        if idx is None:
+            cands = [f"{num}-{C.slugify(name)}", f"{num}-{slug}", num]
+        else:
+            cands = [milestone_tracker(folder, num, slug, idx, name).name.removesuffix("-tracker.md")]
+        if not any(c in keys for c in cands):
+            out.add(name)
     return out
 
 

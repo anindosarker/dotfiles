@@ -11,7 +11,8 @@ status).
 When status/sprints.md exists, a row that still exists keeps every cell as it is once it is
 finished ("[x]" or "[!]"). Every other row is placed again; a running or waiting row carries its
 "[ ]" or "[~]" to its new column. A row whose milestone no longer exists is dropped, unless it carries a run
-mark: then it is kept with a warning.
+mark: then it is kept with a warning. A "[~]" of a milestone never launched (lib/ownership.py
+held_unlaunched) is no run mark here.
 
 Rows: every milestone of a spec that carries a "- Epic: E<n>" line (epics/tag.py). An epic's
 milestones start at its start sprint (the current sprint at its go), a milestone added after go
@@ -28,7 +29,7 @@ the board; then the Decided cards of queue.md synced with those lanes (lib/board
 tick and the #E<n> tag). sprints/refresh.py,
 sprints/mark.py, run/go.py (through sprints/refresh.py), plan/new_fix.py and migrate/fixes.py use
 refresh(); the swimlane data (sprints/swimlanes.py) follows it. set_mark() sets one run cell for
-sprints/mark.py, the only writer of the marks.
+sprints/mark.py, the only writer of the marks; resume_mark() is the cell a resume sets.
 """
 import datetime
 import importlib.util
@@ -87,8 +88,9 @@ def mark_of(cells):
     return next((c for c in cells if c in RUN_MARKS), PLANNED)
 
 
-def build(release, milestones, col, existing, num_key, label=None):
-    """Return (text, warnings) for status/sprints.md. label maps a milestone name to its epic number."""
+def build(release, milestones, col, existing, num_key, label=None, held=()):
+    """Return (text, warnings) for status/sprints.md. label maps a milestone name to its epic number;
+    held names the "[~]" rows never launched."""
     n_old, rows_old = existing
     label = label or {}
     old = dict(rows_old)
@@ -105,7 +107,7 @@ def build(release, milestones, col, existing, num_key, label=None):
             place[name] = (col[name], mark_of(cells or []))
     kept = []
     for name, cells in rows_old:
-        if name not in col and marked(cells):
+        if name not in col and name not in held and marked(cells):
             kept.append(name)
             place[name] = list(cells)
             warnings.append(f"row '{name}' is no milestone or in no epic but carries a mark: kept")
@@ -156,7 +158,8 @@ def write_grid(folder, release, quiet=False):
     n_old, rows_old, _ = read_grid(path)
     label = epic_rows(folder, own, milestones)
     milestones = [m for m in milestones if m["name"] in label]
-    text, warnings = build(release, milestones, col, (n_old, rows_old), C.num_key, label)
+    text, warnings = build(release, milestones, col, (n_old, rows_old), C.num_key, label,
+                           own.held_unlaunched(folder))
     for w in warnings:
         print(f"warning: {w}", file=sys.stderr)
     path.write_text(text, encoding="utf-8")
@@ -201,6 +204,16 @@ def refresh(folder, release, quiet=False, locked=False):
 
 
 MARKS = {"launch": "[ ]", "wait": "[~]", "merge": "[x]", "stop": "[!]"}
+ACTIONS = sorted(MARKS) + ["resume"]
+WAITABLE = STARTED + (PLANNED,)
+
+
+def resume_mark(folder, key):
+    """The cell a resume sets on the "[~]" cell of the milestone with tracker key key: "[ ]" when
+    it was launched before (a sprints/mark.py launch commit names it, lib/ownership.py
+    launched_keys), "·" when it never was. "[ ]" when git cannot tell."""
+    keys = C.load("lib/ownership").launched_keys(folder)
+    return "[ ]" if keys is None or key in keys else PLANNED
 
 
 def set_mark(path, name, mark):
