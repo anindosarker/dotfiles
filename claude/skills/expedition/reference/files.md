@@ -6,7 +6,7 @@
 .ai/plans/v0.<n>.x/<owner>/
 ├── <release>-plan.md       ← authored: ## Goals, ## Deliverables
 ├── decisions.md            ← accepted decisions, a kanban board: D<n> cards in three lanes (To do, In progress, Done), lane by the Done rule
-├── queue.md                ← every item raised in the release, a kanban board: Q<n> cards in five lanes (Open, Decided, Later, Dropped, Autofix)
+├── queue.md                ← every card filed in the release, a kanban board: Q<n> cards in five lanes (Open, Decided, Later, Dropped, Autofix)
 ├── process.md              ← this project's facts for the release, about ten P<n> rules, two to five explicit bullets each (branches, milestone branch and worktree, merge, release, checks on the shared machine, agent sandbox, public surface, commits, shared files, plans); copied from the previous release by plan/new_cycle.py, audited and rewritten rule by rule with the owner before the run (SKILL.md Process notes)
 ├── plan/specs/NN-<slug>.md ← authored: one spec; follow-up specs NN.M-<slug>.md; section 2.1 holds one ### Milestone: <name> block per milestone
 ├── plan/epics/E<n>.md     ← one per epic, started by epics/new.py: Decisions, Specs and Starts lines, the Ownership table, Notes only when the specs cannot hold something, acked by the runner

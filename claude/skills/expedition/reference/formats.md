@@ -4,6 +4,7 @@
 - Shared rule
 - Shared files
 - queue.md
+- Settled list
 - decisions.md
 - Epic file
 - status/sprints.md
@@ -32,7 +33,7 @@ Every item has an ID: the `**Q<n>**` or `**D<n>**` token of its card, a heading 
 
 ## queue.md
 
-One file per release, in the release folder root, template [../templates/queue.md](../templates/queue.md): a kanban board in the obsidian-kanban Markdown format, which the owner may view and drag in the VS Code extension Unified Kanban. It holds every item raised in the release, filed in the turn it is raised, with no exception. The Open lane is the queue; the other lanes are the history.
+One file per release, in the release folder root, template [../templates/queue.md](../templates/queue.md): a kanban board in the obsidian-kanban Markdown format, which the owner may view and drag in the VS Code extension Unified Kanban. It holds every card filed in the release: every owner remark, and every other item that passes the bar at filing, filed in the turn it is raised. The Open lane is the queue; the other lanes are the history.
 
 ```md
 ---
@@ -88,6 +89,7 @@ kanban-plugin: basic
   | `#E<n>` | The epic that decision is in |
 
   An open card usually has no tag. No other tag is written, and never a sub-bullet that holds only tags.
+- **Bar at filing.** A card's first fact line says what goes wrong for a user of the library or a reader of the docs if the card is ignored. A raiser (the lead, a lookup, the runner, a builder, a verifier) that cannot say it files no card: it writes the point in its tracker's `## Notes`, or leaves it out when it has no tracker. The owner's remarks are exempt: every one is filed.
 - The checkbox:
 
   | Lane | Box | Meaning |
@@ -105,7 +107,23 @@ kanban-plugin: basic
 - A lookup agent adds its facts to the card it was given with `queue/item.py <release> --fact Q<n> "<text>"`.
 - Citations elsewhere: `(Q3)` in specs and trackers; a decision that came from a card ends with `- Source: Q3`; a fix's tracker cites `(Q3, Q4)` on its first line.
 - The run reports; it does not solve. Do not research solutions for a run card.
-- Not a queue card: spec text that lags shipped code, a tracker gap, a process lesson, a tooling fact with one right answer. Those go to the tracker Notes, a decision or the spec file directly (`process.md` holds project facts only); the owner sees choices only.
+- Not a queue card: a point that fails the bar at filing, spec text that lags shipped code, a tracker gap, a process lesson, a tooling fact with one right answer. Those go to the tracker Notes, a decision or the spec file directly (`process.md` holds project facts only); the owner sees choices only.
+
+## Settled list
+
+What the lead settled or closed without the owner (SKILL.md, Weight test, Screen and Lead-side close), one plain line per item: its id, what it is in words anyone gets, what was done. No paths or commit ids.
+
+```
+Settled without you:
+- D133 Filter chips keep their order after a reset: kept as built.
+- Q118 Select all with pinned rows drops virtualization: fix sent to the runner.
+- Q120 Same as Q84: dropped.
+Name one to reopen it.
+```
+
+- Posted before the first real item of a round, and with every report of run cards that settled something. Each item is listed once.
+- One line per item, never a grouped sentence ("seven kept as built (D133 to D139)").
+- The owner naming a line reopens it as a normal item: a dropped card goes back with `queue/item.py <release> --move Q<n> Open`; a settled decision is discussed as a re-decided decision (SKILL.md, Changing a decision).
 
 ## decisions.md
 

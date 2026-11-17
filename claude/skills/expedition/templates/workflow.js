@@ -75,7 +75,7 @@ ${DATA_RULE}
 - Work ONLY in the git worktree ${wt} on branch ${branch} (checked out, clean, dependencies installed, at ${BASE_SHA} = origin/${INTEGRATION}).
 - Commit trailer and PR body line exactly as the harness reminder gives them.
 - Decisions: ${PLANS}/decisions.md (read it first; the plan implements decisions, never re-decides).
-- Questions are not possible. Pick the sensible default; record a judgment call the owner may want to revert as one bullet under "## Attention" in ${list(p.tracker)}. Never stop the run. If your milestone cannot be finished (contradicts an accepted decision, Acceptance unreachable), commit what is coherent, write why under "## Attention" in ${list(p.tracker)}, return blocked=true with blockedReason; the run continues with the other milestones. If it is built but only the lead or the owner can do the last step (a check only they can make, a choice), set the "Status:" line of ${list(p.tracker)} to "waiting (lead: <what>)" or "waiting (owner: <what>)", commit, and return blocked=true with that reason.
+- Questions are not possible. Pick the sensible default; record a judgment call the owner may want to revert as one bullet under "## Attention" in ${list(p.tracker)}, its first sentence saying what goes wrong for a user of the library or a reader of the docs if it is ignored; a point that cannot say that goes under "## Notes" instead. Never stop the run. If your milestone cannot be finished (contradicts an accepted decision, Acceptance unreachable), commit what is coherent, write why under "## Attention" in ${list(p.tracker)}, return blocked=true with blockedReason; the run continues with the other milestones. If it is built but only the lead or the owner can do the last step (a check only they can make, a choice), set the "Status:" line of ${list(p.tracker)} to "waiting (lead: <what>)" or "waiting (owner: <what>)", commit, and return blocked=true with that reason.
 - Your final text is a return value for a script, not a message to a human.`
 
 const BUILD_SCHEMA = { type: 'object', properties: {
@@ -152,7 +152,7 @@ Rules that bind you: read ${PROCESS_FILE} first (the project facts: branches, me
 - Work in the main checkout ${ROOT}. Run \`git -C ${ROOT} status\` first; leave unrelated changes as they are. Commit plan files only with named paths (\`git commit -- <paths>\`), never \`git add -A\` or \`git commit -a\`.
 - Commit trailer and PR body line exactly as the harness reminder gives them.
 - Decisions: ${PLANS}/decisions.md (read it first; never re-decide).
-- Questions are not possible. Record a judgment call the owner may want to revert as one line in attention. Never stop the run.
+- Questions are not possible. Record a judgment call the owner may want to revert as one line in attention, its first sentence saying what goes wrong for a user of the library or a reader of the docs if it is ignored; a point that cannot say that is not an attention line. Never stop the run.
 ${DATA_RULE}
 - Your final text is a return value for a script, not a message to a human.`
 
