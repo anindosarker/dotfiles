@@ -2,11 +2,16 @@
 # Roll over: open the next Claude Code session in a new window of the current tmux session,
 # detached (focus stays where it is), told to read the handoff.
 #
-# Usage: rollover.sh --cwd <dir> --name "<next name>" --handoff <abs path> [--model <model>] [--prompt-prefix "<text>"] [--print]
+# Usage: rollover.sh --cwd <dir> [--name "<next name>"] --handoff <abs path> [--model <model>] [--prompt-prefix "<text>"] [--print]
 #
 # The window is named <next name>, opens in <dir> and runs
 #   claude -n "<next name>" [--model <alias>] "<prefix>Read <handoff> and continue. Reply with one line: what you picked up and what is next."
 # Prints the window target (session:index). Not inside tmux: one line, exit 3.
+# The next name, without --name: this session's own name with its version bumped. The session's
+# name is the last "custom-title" record of its transcript (set by /rename or claude -n). A
+# trailing V3 or v3 goes up by one (also -v3, Runner6v2), so does a trailing " 3"; no version: " v2"
+# is appended. --name is for a name the owner gives: used exactly as given. No --name and no
+# title in the transcript: exit 4. The last output line is always "name: <next name>".
 # The model is the one this session runs on: read from the last assistant line of its transcript
 # (~/.claude/projects/*/$CLAUDE_CODE_SESSION_ID.jsonl). --model overrides it; none found: no flag.
 # The permission mode is carried over the same way (the last "permissionMode" of the transcript):
@@ -24,7 +29,7 @@ tmux() {
 }
 
 usage() {
-  echo 'usage: rollover.sh --cwd <dir> --name "<next name>" --handoff <abs path> [--model <model>] [--prompt-prefix "<text>"] [--print]' >&2
+  echo 'usage: rollover.sh --cwd <dir> [--name "<next name>"] --handoff <abs path> [--model <model>] [--prompt-prefix "<text>"] [--print]' >&2
   exit 2
 }
 
@@ -40,10 +45,43 @@ while [ $# -gt 0 ]; do
     *) usage ;;
   esac
 done
-[ -n "$cwd" ] && [ -n "$name" ] && [ -n "$handoff" ] || usage
+[ -n "$cwd" ] && [ -n "$handoff" ] || usage
 [ -d "$cwd" ] || { echo "error: --cwd not a folder: $cwd" >&2; exit 1; }
 [ -f "$handoff" ] || { echo "error: --handoff not a file: $handoff" >&2; exit 1; }
 cwd="$(cd "$cwd" && pwd)"
+
+# The next name: this session's title from its transcript, version bumped.
+next_name() {
+  local sid="${CLAUDE_CODE_SESSION_ID:-}" root="${EXPEDITION_PROJECTS:-$HOME/.claude/projects}" f
+  [ -n "$sid" ] || return 0
+  f="$(ls "$root"/*/"$sid".jsonl 2>/dev/null | head -1)"
+  [ -n "$f" ] || return 0
+  python3 -I - "$f" <<'PY' 2>/dev/null || true
+import json, re, sys
+title = ""
+for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
+    if '"custom-title"' not in line:
+        continue
+    try:
+        t = json.loads(line).get("customTitle", "")
+    except Exception:
+        continue
+    if t.strip():
+        title = t.strip()
+if title:
+    m = re.search(r"([vV])(\d+)$", title) or re.search(r"(?<=\S)( )(\d+)$", title)
+    if m:
+        title = title[: m.start(2)] + str(int(m.group(2)) + 1)
+    else:
+        title += " v2"
+print(title)
+PY
+}
+[ -n "$name" ] || name="$(next_name)"
+if [ -z "$name" ]; then
+  echo "error: this session has no title in its transcript; pass --name" >&2
+  exit 4
+fi
 
 # The model of this session, from its transcript.
 session_model() {
@@ -87,6 +125,7 @@ esac
 if [ -n "$print" ]; then
   cmd+=("${prefix}Read $handoff and continue.")
   echo "cd $(printf '%q' "$cwd") &&$(printf ' %q' "${cmd[@]}")"
+  echo "name: $name"
   exit 0
 fi
 
@@ -100,3 +139,4 @@ line="cd $(printf '%q' "$cwd") && exec$(printf ' %q' "${cmd[@]}")"
 
 session="$(tmux display-message -p ${TMUX_PANE:+-t "$TMUX_PANE"} '#{session_name}')"
 tmux new-window -d -P -F '#{session_name}:#{window_index}' -t "$session:" -n "$name" -c "$cwd" "$line"
+echo "name: $name"
