@@ -16,9 +16,23 @@
 # state file and retried on the next poll, never marked delivered. Note text loses every control
 # and non-printable character, whitespace is collapsed, and it is cut at 500 characters ("...").
 #
+# Dead loop: every NUDGE_RESUME_EVERY seconds (default 60) it runs run/check.py --tsv for the
+# release of each runner entry that is not stopped, in that entry's folder. A runner gets the line
+# "ultracode resume" typed into its pane (the same line as runner.sh resume, so the turn may use
+# the Workflow tool) when it owns a row that is silent, finished or no run, and its own transcript
+# (<projects>/*/<uuid>.jsonl) has not changed for the stale threshold (NUDGE_STALE_MINUTES,
+# default 20): its loop wakeup died, as it does on a usage limit. A row whose owner is no live
+# runner (no run id, a stopped or unregistered session) counts for the release's runner when it
+# has exactly one. At most one typed line per runner per threshold period (state
+# resume-watch.json), repeated each period while such a row remains; never into the lead, never
+# into a fork, never while the runner's transcript is fresh. Each typed line is logged. A check.py
+# failure is logged and skipped; the watcher goes on.
+#
 # Usage: nudge-watch.sh          run the loop (runner.sh start and runner.sh watch start detach it)
 # Env overrides (tests): NUDGE_STORE, NUDGE_STATE, NUDGE_LOG, NUDGE_REGISTRY (else
-# EXPEDITION_REGISTRY), NUDGE_INTERVAL, EXPEDITION_STATE_DIR.
+# EXPEDITION_REGISTRY), NUDGE_INTERVAL, NUDGE_RESUME_EVERY, NUDGE_STALE_MINUTES,
+# NUDGE_RESUME_STATE, EXPEDITION_STATE_DIR, EXPEDITION_PROJECTS (default ~/.claude/projects),
+# EXPEDITION_TMUX_SOCKET (tmux -L <socket>).
 # State keeps the seen count, the offered (id, turn) pairs and the held notes, so a restart
 # replays nothing; a first run initialises from the current store without sending. Exits when
 # the registry has no "lead" or the lead window is gone (logged); a registry it cannot parse
@@ -32,6 +46,16 @@ LOG="${NUDGE_LOG:-$STATE_DIR/nudge-watch.log}"
 REGISTRY="${NUDGE_REGISTRY:-${EXPEDITION_REGISTRY:-$HOME/.claude/expedition-runners.json}}"
 PIDFILE="$STATE_DIR/nudge-watch.pid"
 INTERVAL="${NUDGE_INTERVAL:-5}"
+RESUME_EVERY="${NUDGE_RESUME_EVERY:-60}"
+STALE_MINUTES="${NUDGE_STALE_MINUTES:-20}"
+RESUME_STATE="${NUDGE_RESUME_STATE:-$STATE_DIR/resume-watch.json}"
+CHECK="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/check.py"
+export EXPEDITION_REGISTRY="$REGISTRY"
+
+# Every tmux call goes to the default server, or to "tmux -L $EXPEDITION_TMUX_SOCKET" in tests.
+tmux() {
+  if [ -n "${EXPEDITION_TMUX_SOCKET:-}" ]; then command tmux -L "$EXPEDITION_TMUX_SOCKET" "$@"; else command tmux "$@"; fi
+}
 
 mkdir -p "$STATE_DIR" "$(dirname "$STATE")" "$(dirname "$LOG")"
 
@@ -172,6 +196,91 @@ p.write_text(json.dumps(d) + "\n")
 PY
 }
 
+# resume_targets: one line "<name>\t<pane>\t<window>\t<rows>" per runner to wake (see the header);
+# nothing on any failure, which goes to the log.
+resume_targets() {
+  python3 -I - "$REGISTRY" "$CHECK" "$RESUME_STATE" "$STALE_MINUTES" "${EXPEDITION_PROJECTS:-$HOME/.claude/projects}" <<'PY' 2>>"$LOG" || true
+import glob, json, os, subprocess, sys, time
+from pathlib import Path
+registry, check, state, stale, projects = sys.argv[1], sys.argv[2], Path(sys.argv[3]), float(sys.argv[4]) * 60, sys.argv[5]
+now = time.time()
+
+def log(msg):
+    print(time.strftime("%Y-%m-%dT%H:%M:%S") + " resume check: " + msg, file=sys.stderr)
+
+try:
+    reg = json.loads(Path(registry).read_text())
+    assert isinstance(reg, dict)
+except Exception:
+    sys.exit(0)
+runners = {n: e for n, e in reg.items() if n != "lead" and isinstance(e, dict) and e.get("kind", "runner") != "fork"
+           and e.get("state") != "stopped" and e.get("uuid") and e.get("release")}
+try:
+    typed = json.loads(state.read_text())
+    typed = typed if isinstance(typed, dict) else {}
+except Exception:
+    typed = {}
+due = {}
+for release, cwd in sorted({(e["release"], e.get("cwd") or "") for e in runners.values()}):
+    try:
+        out = subprocess.run(["python3", "-I", check, release, "--tsv", "--stale", str(stale / 60)],
+                             cwd=cwd if os.path.isdir(cwd) else None, capture_output=True, text=True, timeout=120)
+    except Exception as exc:
+        log(f"{release}: check.py did not run ({exc})")
+        continue
+    if out.returncode != 0:
+        log(f"{release}: check.py exit {out.returncode}: {(out.stderr.strip().splitlines() or [''])[-1]}")
+        continue
+    mine = [n for n, e in runners.items() if e["release"] == release]
+    for line in out.stdout.splitlines():
+        f = line.split("\t")
+        if len(f) < 6 or f[1] not in ("silent", "finished", "no run"):
+            continue
+        owner = f[3] if f[3] in mine else (mine[0] if len(mine) == 1 else None)
+        if owner and f"{f[0]} {f[1]}" not in due.get(owner, []):
+            due.setdefault(owner, []).append(f"{f[0]} {f[1]}")
+for name, rows in sorted(due.items()):
+    e = runners[name]
+    seen = [os.path.getmtime(p) for p in glob.glob(os.path.join(projects, "*", e["uuid"] + ".jsonl"))]
+    if seen and now - max(seen) < stale:
+        continue  # the runner is active
+    if now - float(typed.get(name, 0) or 0) < stale:
+        continue  # typed once this period already
+    print("\t".join([name, e.get("pane") or "", e.get("tmux") or "", ", ".join(rows)]))
+PY
+}
+
+# resume_typed <name>: record the time of a typed resume, for the once-per-period rule.
+resume_typed() {
+  python3 -I - "$RESUME_STATE" "$1" <<'PY' || true
+import json, sys, time
+from pathlib import Path
+p = Path(sys.argv[1])
+try:
+    d = json.loads(p.read_text())
+    d = d if isinstance(d, dict) else {}
+except Exception:
+    d = {}
+d[sys.argv[2]] = time.time()
+p.write_text(json.dumps(d) + "\n")
+PY
+}
+
+# resume_check: type "ultracode resume" into each runner resume_targets names, when its pane runs
+# claude (never a shell).
+resume_check() {
+  local name rpane rtmux rows pane
+  while IFS=$'\t' read -r name rpane rtmux rows; do
+    [ -n "$name" ] || continue
+    pane="$(lead_pane "$rpane" "$rtmux")"
+    if [ -n "$pane" ] && pane_typable "$pane"; then
+      type_line "$pane" "ultracode resume"
+      resume_typed "$name"
+      log "resume typed into $name ($pane): $rows"
+    fi
+  done < <(resume_targets)
+}
+
 info="$(lead_info)" || info=""
 if [ -z "$info" ]; then
   log "exit: registry $REGISTRY has no lead"
@@ -180,6 +289,7 @@ fi
 log "start pid $$ lead $(cut -d"|" -f1,2 <<< "$info" | tr "|" " ") store $STORE"
 
 unreadable=0
+last_resume=0
 while true; do
   # The lead can move (a new lead session records itself): re-read it each poll.
   rc=0
@@ -205,5 +315,9 @@ while true; do
       log "held (lead pane ${pane:-unknown} is not a claude session): $line"
     fi
   done < <(poll "$lead_session")
+  if [ $(( $(date +%s) - last_resume )) -ge "$RESUME_EVERY" ]; then
+    last_resume="$(date +%s)"
+    resume_check || log "resume check failed"
+  fi
   sleep "$INTERVAL"
 done

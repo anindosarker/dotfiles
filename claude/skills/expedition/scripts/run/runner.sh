@@ -18,6 +18,12 @@
 #                                                fork whose window died is resumed, not forked again
 #        runner.sh stop "<window name>"          close a fork window ("<release> specs E<n>")
 #        runner.sh watch start|stop|status        the nudge watcher (scripts/run/nudge-watch.sh)
+#        runner.sh adopt <release> [--uuid UUID] [--pane PANE] [--replaces <name>]
+#                                                register a claude session that is already running
+#                                                (default: the calling session, $CLAUDE_CODE_SESSION_ID
+#                                                in $TMUX_PANE) as the next "<release> runner<n>",
+#                                                with its own uuid; --replaces marks the entry it
+#                                                takes over stopped. Never copy a registry entry by hand
 #
 # Folder: start and fork open a new window in --cwd, else in the folder the script is called
 # from. A resumed runner or fork reopens in the folder stored in its registry entry. list, stop,
@@ -37,7 +43,10 @@
 #
 # Registry: ~/.claude/expedition-runners.json, one entry per runner name
 # (name, uuid, tmux target, pane, cwd, release, started, state); every write takes a lock and
-# replaces the file by rename. Env overrides (tests): EXPEDITION_REGISTRY, EXPEDITION_STATE_DIR. Status files:
+# replaces the file by rename. A put that would give a session uuid to a second entry that is not
+# stopped is refused (exit 4): one session is one entry. Env overrides (tests): EXPEDITION_REGISTRY,
+# EXPEDITION_STATE_DIR, EXPEDITION_PROJECTS (session transcripts, default ~/.claude/projects),
+# EXPEDITION_CLAUDE (the claude command), EXPEDITION_TMUX_SOCKET (tmux -L <socket>). Status files:
 # ~/.claude/expedition-runners/<name>.status, written by the hooks in
 # templates/runner-settings.json ("idle" on Stop, "busy" on UserPromptSubmit); the hooks find
 # the name in EXPEDITION_RUNNER, exported here before exec.
@@ -52,11 +61,25 @@ SETTINGS="$SKILL_DIR/templates/runner-settings.json"
 BRIEF_TEMPLATE="$SKILL_DIR/templates/runner-brief.md"
 WATCHER="$SKILL_DIR/scripts/run/nudge-watch.sh"
 WATCH_PID="$STATE_DIR/nudge-watch.pid"
+PROJECTS="${EXPEDITION_PROJECTS:-$HOME/.claude/projects}"
+CLAUDE_BIN="${EXPEDITION_CLAUDE:-claude}"
+
+# Every tmux call goes to the default server, or to "tmux -L $EXPEDITION_TMUX_SOCKET" in tests.
+tmux() {
+  if [ -n "${EXPEDITION_TMUX_SOCKET:-}" ]; then command tmux -L "$EXPEDITION_TMUX_SOCKET" "$@"; else command tmux "$@"; fi
+}
+
+# transcript_exists <uuid>: a session transcript <projects>/<project folder>/<uuid>.jsonl exists,
+# so "claude --resume <uuid>" can resume it.
+transcript_exists() {
+  [[ "$1" =~ ^[0-9a-f-]+$ ]] || return 1
+  compgen -G "$PROJECTS/*/$1.jsonl" >/dev/null
+}
 
 die() { echo "error: $*" >&2; exit 1; }
 
 usage() {
-  echo "usage: runner.sh start <release> [--model M] [--new] [--from <lead>] [--cwd PATH] | list | stop <release or window name> | send <release> \"<line>\" | resume <release or window name> | fork <release> E<n> \"<D ids>\" --from <lead> [--model M] [--cwd PATH] | watch start|stop|status" >&2
+  echo "usage: runner.sh start <release> [--model M] [--new] [--from <lead>] [--cwd PATH] | list | stop <release or window name> | send <release> \"<line>\" | resume <release or window name> | fork <release> E<n> \"<D ids>\" --from <lead> [--model M] [--cwd PATH] | adopt <release> [--uuid UUID] [--pane PANE] [--replaces <name>] | watch start|stop|status" >&2
   exit 2
 }
 
@@ -83,7 +106,7 @@ def write(change):
             f.write(json.dumps(data, indent=2) + "\n")
         os.replace(tmp, path)
 
-data = read() if op in ("get", "field", "all") else {}
+data = read() if op in ("get", "field", "all", "uuid") else {}
 if op == "get":
     e = data.get(sys.argv[3])
     print(json.dumps(e) if e else "")
@@ -92,18 +115,28 @@ elif op == "field":
     print(e.get(sys.argv[4], ""))
 elif op == "put":
     def change(d):
+        new = json.loads(sys.argv[4])
+        uuid = new.get("uuid")
+        clash = [n for n, o in d.items() if uuid and n not in (sys.argv[3], "lead") and isinstance(o, dict)
+                 and o.get("uuid") == uuid and o.get("state") != "stopped"]
+        if clash:
+            print(f"error: session {uuid} is already the registry entry '{clash[0]}'; one session is one entry", file=sys.stderr)
+            sys.exit(4)
         e = d.get(sys.argv[3], {})
-        e.update(json.loads(sys.argv[4]))
+        e.update(new)
         d[sys.argv[3]] = e
     write(change)
 elif op == "set":
     write(lambda d: d.__setitem__(sys.argv[3], json.loads(sys.argv[4])))
+elif op == "uuid":
+    print(next((n for n, e in data.items() if n != "lead" and isinstance(e, dict)
+                and e.get("uuid") == sys.argv[3] and e.get("state") != "stopped"), ""))
 elif op == "all":
     for name, e in data.items():
         if name == "lead":
             continue
-        print("\t".join([name, e.get("state", ""), e.get("uuid", "") or "-", e.get("tmux", ""),
-                         e.get("release", ""), e.get("started", ""), e.get("cwd", ""),
+        print("\t".join([name, e.get("state", ""), e.get("uuid", "") or "-", e.get("tmux", "") or "-",
+                         e.get("release", "") or "-", e.get("started", "") or "-", e.get("cwd", "") or "-",
                          e.get("kind", "runner")]))
 PY
 }
@@ -296,7 +329,7 @@ cmd_start() {
   sed -e "s|{{release}}|$release|g" -e "s|{{name}}|$name|g" -e "s|{{brief}}|$brief|g" "$BRIEF_TEMPLATE" > "$brief"
 
   local prompt="ultracode. You are $name, the expedition runner for $release. Follow the appended brief. Reply with one line: ready."
-  local -a cmd=(claude -n "$name" --dangerously-skip-permissions --model "$model"
+  local -a cmd=("$CLAUDE_BIN" -n "$name" --dangerously-skip-permissions --model "$model"
                 --settings "$SETTINGS" --append-system-prompt-file "$brief")
   if [ "$resume" = 1 ]; then
     cmd+=(--resume "$uuid")
@@ -350,6 +383,8 @@ cmd_list() {
     fi
     printf '%s\t%s\t%s\t%s\t%s\tstarted %s\n' "$name" "$state" "$status" "$target" "$uuid" "$started"
   done <<< "$rows"
+  # One session on several entries that are not stopped: resume would revive the wrong session.
+  awk -F'\t' '$2 != "stopped" && $3 != "-" { if ($3 in seen) printf "warning: %s and %s share session %s; fix the entry that is not that session (runner.sh adopt registers a session with its own uuid)\n", seen[$3], $1, $3; else seen[$3] = $1 }' <<< "$rows" >&2
 }
 
 cmd_stop() {
@@ -417,10 +452,10 @@ cmd_fork() {
   fi
   local -a cmd
   if [ "$resume" = 1 ]; then
-    cmd=(claude --resume "$uuid" -n "$name" --dangerously-skip-permissions --model "$model"
+    cmd=("$CLAUDE_BIN" --resume "$uuid" -n "$name" --dangerously-skip-permissions --model "$model"
          --settings "$SETTINGS" "$prompt")
   else
-    cmd=(claude --resume "$parent" --fork-session --session-id "$uuid" -n "$name"
+    cmd=("$CLAUDE_BIN" --resume "$parent" --fork-session --session-id "$uuid" -n "$name"
          --dangerously-skip-permissions --model "$model" --settings "$SETTINGS" "$prompt")
   fi
   local line
@@ -442,7 +477,10 @@ cmd_fork() {
 
 # resume <release | "<window name>">: a live window gets the word "resume" typed in (the runner
 # with the ultracode prefix, a fork without); a dead runner is started again (start resumes it);
-# a dead fork prints its claude --resume line. Never stop a window on a usage limit.
+# a dead fork whose session transcript exists is resumed the same way, in a new window of the
+# lead's tmux session with its name ("claude --resume <uuid>"); otherwise (entry stopped, no
+# transcript, not inside tmux) its claude --resume line is printed with the reason. Never stop a
+# window on a usage limit.
 cmd_resume() {
   [ $# -eq 1 ] || usage
   local name target uuid state line
@@ -458,9 +496,72 @@ cmd_resume() {
     [ "$state" != "stopped" ] || reg put "$name" '{"state": "running"}'
     cmd_start "$1"
   else
-    echo "$name window is gone. Resume it in a terminal of its own:"
-    echo "cd $(printf '%q' "$(reg field "$name" cwd)") && claude -n $(printf '%q' "$name") --dangerously-skip-permissions --settings $(printf '%q' "$SETTINGS") --resume $uuid"
+    local cwd why="" pane
+    cwd="$(reg field "$name" cwd)"
+    local -a cmd=("$CLAUDE_BIN" --resume "$uuid" -n "$name" --dangerously-skip-permissions
+                  --model "${EXPEDITION_FORK_MODEL:-fable}" --settings "$SETTINGS" "resume")
+    if [ "$state" = stopped ]; then why="the entry is stopped"
+    elif ! transcript_exists "$uuid"; then why="no transcript $uuid.jsonl under $PROJECTS"
+    elif [ -z "${TMUX:-}" ]; then why="not inside tmux"
+    elif [ ! -d "$cwd" ]; then why="its folder $cwd is gone"
+    fi
+    if [ -n "$why" ]; then
+      echo "$name window is gone and is not reopened ($why). Resume it in a terminal of its own:"
+      echo "cd $(printf '%q' "$cwd") && exec$(printf ' %q' "${cmd[@]}")"
+      return 0
+    fi
+    read -r target pane < <(tmux new-window -d -P -F '#{session_name}:#{window_id} #{pane_id}' -t "$(tmux display-message -p '#{session_name}'):" -n "$name" -c "$cwd" "cd $(printf '%q' "$cwd") && exec$(printf ' %q' "${cmd[@]}")")
+    reg put "$name" "$(python3 -I -c 'import json,sys; print(json.dumps({"tmux": sys.argv[1], "pane": sys.argv[2], "state": "running"}))' "$target" "$pane")"
+    echo "$name resumed in $target (session $uuid)"
   fi
+}
+
+# adopt <release> [--uuid UUID] [--pane PANE] [--replaces <name>]: a claude session that runs
+# already (a runner opened by hand from a handoff, a session that takes the runner role over) gets
+# its own entry "<release> runner<n>", the next unused number, with its own session uuid, its pane
+# and window and the pane's folder; the window is renamed to that name and the brief file written.
+# Defaults: the calling session ($CLAUDE_CODE_SESSION_ID, $TMUX_PANE). --replaces marks the entry
+# it takes over stopped (its window is left alone). Refuses a uuid with no transcript, and a uuid
+# another entry that is not stopped holds. The session keeps the settings it started with, so its
+# busy or idle status file is written only when it was started with templates/runner-settings.json.
+cmd_adopt() {
+  local release="" uuid="${CLAUDE_CODE_SESSION_ID:-}" pane="${TMUX_PANE:-}" replaces=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --uuid) [ $# -ge 2 ] || usage; uuid="$2"; shift 2 ;;
+      --pane) [ $# -ge 2 ] || usage; pane="$2"; shift 2 ;;
+      --replaces) [ $# -ge 2 ] || usage; replaces="$2"; shift 2 ;;
+      -*) usage ;;
+      *) [ -z "$release" ] || usage; release="$1"; shift ;;
+    esac
+  done
+  [ -n "$release" ] || usage
+  check_release "$release"
+  [ -n "$uuid" ] || die "no session id: run adopt inside the session, or pass --uuid"
+  transcript_exists "$uuid" || die "no transcript $uuid.jsonl under $PROJECTS: not a session id"
+  local held
+  held="$(reg uuid "$uuid")"
+  if [ -n "$held" ]; then
+    echo "session $uuid is already the registry entry '$held'"
+    return 0
+  fi
+  [ -z "$replaces" ] || [ -n "$(reg field "$replaces" uuid)" ] || die "no registry entry for $replaces"
+  local name target="" cwd
+  name="$(next_runner_name "$release")"
+  cwd="$(pwd)"
+  if [ -n "$pane" ] && tmux display-message -p -t "$pane" '#{pane_id}' >/dev/null 2>&1; then
+    target="$(tmux display-message -p -t "$pane" '#{session_name}:#{window_id}')"
+    pane="$(tmux display-message -p -t "$pane" '#{pane_id}')"
+    cwd="$(tmux display-message -p -t "$pane" '#{pane_current_path}')"
+    tmux rename-window -t "$target" "$name"
+  else
+    pane=""
+  fi
+  mkdir -p "$STATE_DIR"
+  sed -e "s|{{release}}|$release|g" -e "s|{{name}}|$name|g" -e "s|{{brief}}|$(file_of "$name").brief.md|g" "$BRIEF_TEMPLATE" > "$(file_of "$name").brief.md"
+  reg put "$name" "$(python3 -I -c 'import json,sys,datetime; print(json.dumps({"name": sys.argv[1], "uuid": sys.argv[2], "tmux": sys.argv[3], "pane": sys.argv[4], "cwd": sys.argv[5], "release": sys.argv[6], "started": datetime.datetime.now().isoformat(timespec="seconds"), "state": "running"}))' "$name" "$uuid" "$target" "$pane" "$cwd" "$release")"
+  [ -z "$replaces" ] || reg put "$replaces" '{"state": "stopped"}'
+  echo "$name registered: session $uuid in ${target:-no tmux window}${replaces:+, $replaces marked stopped}"
 }
 
 cmd_send() {
@@ -497,6 +598,7 @@ case "$sub" in
   send) cmd_send "$@" ;;
   resume) cmd_resume "$@" ;;
   fork) cmd_fork "$@" ;;
+  adopt) cmd_adopt "$@" ;;
   watch) cmd_watch "$@" ;;
   *) usage ;;
 esac

@@ -275,7 +275,7 @@ Checks:
 ```
 
 - `Status:` is one of the five of Milestone status, its detail in brackets. `stopped (D<n>)` is a SKIP, `D<n>` the superseding decision. `waiting` is a milestone that is built and stopped until the lead or the owner acts, `<what>` in a few words (`waiting (lead: comparison table check)`); the scripts count it as running for a decision's state, and the progress reply lists it under Blocked. Whoever stops the milestone writes it, in the tracker copy it already writes: the builder or the verifier in the milestone worktree, or the runner; the runner writes a hold on a milestone that has not started in the main checkout's copy ([run.md](run.md), Milestones and sprints).
-- Required: the header lines and one line per task, with the last commit and the workflow run id of the run that covered the task.
+- Required: the header lines and one line per task, with the last commit and the workflow run id of the run that covered the task. While the milestone runs, its run id is in `status/data/runs.json`, written at launch by `run/runs.py` (git-ignored, in the main checkout, the newest id wins), not in the tracker.
 - A fix's tracker cites its queue cards on its first line, for example `# 41: Range field blur (Q3, Q4), tracker`.
 - `Checks:` is followed by one bullet per check: command, commit, result. The integration milestone's suite run on the staging branch gets its own bullet.
 - `## Attention` and `## Notes` are optional. Empty is the normal case. Do not spend tokens on notes.
