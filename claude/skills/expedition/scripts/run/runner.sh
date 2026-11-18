@@ -31,7 +31,11 @@
 #
 # Lead: start, send and fork run inside tmux record the calling window as registry key "lead"
 # ({"tmux": "<session>:<window id>", "pane": "<pane id>", "session": $CLAUDE_CODE_SESSION_ID,
-# "name": --from or the "from <name>" of the sent line}). start also starts the nudge watcher
+# "name": --from, the "from <name>" of the sent line, or the name of a "LEAD <name>" line}), unless
+# called from a runner window (EXPEDITION_RUNNER set): a runner never takes the lead entry.
+#
+# Roll over: start --new called from a runner window opens the next runner with a first prompt
+# that names the newest handoff of the release and the wake check, and the lead as reply target. start also starts the nudge watcher
 # (pid file ~/.claude/expedition-runners/nudge-watch.pid), which types "NUDGE <source>: <text>"
 # into the lead pane for each You Should Know note shown to a runner, a fork or an unknown
 # session; stop stops it once no runner or fork window is live.
@@ -215,6 +219,7 @@ next_runner_name() {
 # name keeps the recorded one.
 record_lead() {
   [ -n "${TMUX:-}" ] || return 0
+  [ -z "${EXPEDITION_RUNNER:-}" ] || return 0
   local target pane name="${1:-}"
   target="$(tmux display-message -p -t "${TMUX_PANE:-}" '#{session_name}:#{window_id}')"
   pane="$(tmux display-message -p -t "${TMUX_PANE:-}" '#{pane_id}')"
@@ -329,6 +334,13 @@ cmd_start() {
   sed -e "s|{{release}}|$release|g" -e "s|{{name}}|$name|g" -e "s|{{brief}}|$brief|g" "$BRIEF_TEMPLATE" > "$brief"
 
   local prompt="ultracode. You are $name, the expedition runner for $release. Follow the appended brief. Reply with one line: ready."
+  if [ -n "${EXPEDITION_RUNNER:-}" ]; then
+    # Roll over from a runner window: the new runner takes the run over.
+    local handoff lead
+    handoff="$(compgen -G "$cwd/.ai/plans/$release/*/run/handoffs/handoff-*.md" | awk -F/ '{ print $NF "\t" $0 }' | sort | tail -n 1 | cut -f2- || true)"
+    lead="$(reg field lead name)"
+    prompt="ultracode. You are $name, the expedition runner for $release, taking the run over from ${EXPEDITION_RUNNER//-/ }. Follow the appended brief. First read the newest handoff (${handoff:-run/handoffs/ of the release folder}), then run the wake check (run.md, Each loop fire, step 3), then continue every epic that has a running row in status/sprints.md.${lead:+ Reply target: $lead.}"
+  fi
   local -a cmd=("$CLAUDE_BIN" -n "$name" --dangerously-skip-permissions --model "$model"
                 --settings "$SETTINGS" --append-system-prompt-file "$brief")
   if [ "$resume" = 1 ]; then
@@ -569,8 +581,10 @@ cmd_send() {
   if [ "${1:-}" = --from ]; then [ $# -ge 2 ] || usage; from="$2"; shift 2; fi
   [ $# -eq 2 ] || usage
   local name line="ultracode $2" target i
-  # The lead name: --from, else the "from <name>" that ends a RUN or HELLO line.
+  # The lead name: --from, else the "from <name>" that ends a RUN or HELLO line, else the name
+  # of a "LEAD <name>" line.
   [ -n "$from" ] || from="$(sed -nE 's/.* from ([^ ]+)$/\1/p' <<< "$2")"
+  [ -n "$from" ] || from="$(sed -nE 's/^LEAD (.+)$/\1/p' <<< "$2")"
   record_lead "$from"
   if [[ "$1" =~ ^v[0-9]+\.[0-9]+\.x$ ]]; then name="$(runner_name "$1")"; else name="$1"; fi
   [ -n "$(reg field "$name" uuid)" ] || die "no registry entry for $name"

@@ -9,6 +9,7 @@
 - Workflow per milestone
 - Facts and choices
 - Results, trackers and the queue
+- Roll over
 - Handoff and end of run
 
 ## Starting the run
@@ -32,12 +33,13 @@ The release's `process.md` (`.ai/plans/<release>/<owner>/process.md`) holds the 
   - Lead to runner, typed the same way: `HOLD <target>` and `RESUME <target>`. The target is an epic (`E14`), a spec number (`56`) or one milestone (its tracker file name without `-tracker.md`, `56-story-texts-a-to-c`). The milestone is the unit: a hold on an epic or a spec is a hold on each of its unfinished milestones (not `[x]`, not `[!]`). What the runner does: Milestones and sprints.
   - Lead to runner, typed: `SKIP <spec number>`: stop the Workflow of each running milestone of that spec, mark each unmerged row `[!]` (`sprints/mark.py <release> <milestone> stop`), tracker `Status: stopped (D<new>)` (the D id from the epic file's SKIP note), branch left in place for salvage; reply `NOTE <spec>: skipped`.
   - Lead to runner, typed: `NOTE E<n>: <note>`, a Notes line of that epic file. `RULES: <files>, <why>`: a rule file changed; re-read the files named, reply `ACK RULES`.
+  - Lead to runner, typed: `LEAD <lead session name>`, from a new lead after a roll over (Roll over). The runner replies `ACK LEAD` to that name.
   - Runner to lead, by `SendMessage` to the name after `from`: `DONE E<n> <merge sha> queue <Q ids or none>`, when every milestone of the epic has merged
   - Runner to lead, the same way: `BLOCKED E<n> <tracker path>`, when a bounce loop or a gate cannot be resolved
   - Spec writer to lead, by `SendMessage`: `SPECS E<n> <spec numbers>`, from the forked session `run/runner.sh fork` opened
   - Watcher to lead, typed into the lead window by `scripts/run/nudge-watch.sh`: `NUDGE <runner or fork name, or unknown>: <text>`, a You Should Know note shown to an unattended session. The lead treats it as owner feedback (SKILL.md, Owner input). The runner never sees nudges.
   - Either direction: `NOTE <id>: <one line>`, only when the meaning of an id the other session may hold changes (a duplicate closed as another id, `NOTE D7: superseded by D15` from whoever supersedes, an item moved into a fix through `plan/new_fix.py`). Never status, apart from the wake check's `NOTE <milestone>: resumed` (Each loop fire).
-- Reply target: the name after `from` in the latest RUN or HELLO line; DONE and BLOCKED go there from then on.
+- Reply target: the name after `from` in the latest RUN or HELLO line, or the name in the latest LEAD line; every line to the lead goes there from then on. A runner opened by a roll over starts with the lead name its first prompt gives.
 - On every RUN line, before launching anything: re-read the release's `process.md`, this file and the brief, then the epic's specs and its epic file.
 - On RUN and on every line typed to it: read the epic file of every epic it runs, re-read whatever a note names, append ` [ack HH:MM]` to each note it read, commit (Shared files rules). A note without ack is unread.
 - RUN is idempotent: an epic whose `status/sprints.md` rows are already running or done is not started again; the runner replies with the current state. A RUN for a held epic lifts the hold on all of it, like `RESUME E<n>`.
@@ -52,12 +54,12 @@ The loop prompt must be safe to fire at any time. Each fire reads this file, abo
 
 1. A turn is already working: do nothing.
 2. Find the release: the argument, else the release this session runs, else the `Next:` line of the newest handoff (`.ai/plans/v*.x/<owner>/run/handoffs/handoff-*.md`, newest by the date in the file name).
-3. Wake check. On a typed `resume`, on any message saying the usage limit has reset, and on any wake after a gap longer than the loop interval, this step comes before every other step below: `python3 -I <skill>/scripts/run/check.py <release>`. It prints one line per `[ ]` row: the milestone, its run id, the session that owns the run and one state word. Then per row:
+3. Wake check. As a new runner's first step, on a typed `resume`, on any message saying the usage limit has reset, and on any wake after a gap longer than the loop interval, this step comes before every other step below: `python3 -I <skill>/scripts/run/check.py <release>`. It prints one line per `[ ]` row: the milestone, its run id, the session that owns the run and one state word. Then per row:
    - `alive` or `paused`: leave it. A paused run continues by itself after the reset.
    - `silent`: stop it with `TaskStop`, then call Workflow with `resumeFromRunId` set to the same run id; finished agents come back from cache. Stop first: while the hung run is not stopped, Workflow answers `Workflow wf_... is still running (task ...). Stop it first with TaskStop`. A run that already ended (`ended killed`) needs no `TaskStop`. A run that `resumeFromRunId` refuses (one from before the session restarted) counts as `no run`.
    - `finished`: read its result and do the boundary step it missed (the mark, the merge fallback, a `wait`).
    - `no run`, or a run whose owner is a session that is gone (`(stopped)` or `(not in registry)`): when one of your running Workflows covers the milestone, record its id with `run/runs.py`; else launch a fresh Workflow on the existing branch, the builder continuing from the tracker, and record the new id.
-   - A row owned by another live runner: leave it to that runner.
+   - A row owned by another live runner: leave it to that runner. A row owned by the runner this one takes over from (its first prompt names it) counts as `(stopped)`.
 
    Then re-arm the loop wakeup. Then one line to the lead per row restarted or relaunched, `NOTE <milestone>: resumed`; nothing when every row was alive. A loop that died on a limit is woken by `scripts/run/nudge-watch.sh`: it types `ultracode resume` into a runner that owns a `silent`, `finished` or `no run` row and has been quiet for 20 minutes.
 4. Run `status/report.py <release>`, read `status/sprints.md` and the trackers of its `[ ]` rows.
@@ -68,7 +70,7 @@ Environment blockers are the run manager's to fix, never to wait on: a stopped D
    - Read `status/sprints.md` and the trackers only. No `git status`, `diff` or `log` in worktrees; no pull unless a merge is due this tick.
    - A tick with work (a mark, a merge, a launch) reports one line per action.
    - A tick that marks or merges nothing ends with exactly one line: `tick <HH:MM>: <milestone> <stage>, ..., <milestone> waiting on <dep>. Next <HH:MM>.` No table, no per-milestone bullets, no restating what was read.
-   - Messages to the lead are DONE, BLOCKED, NOTE, ACK RULES, and the reply to a HELLO only. Never a status line.
+   - Messages to the lead are DONE, BLOCKED, NOTE, ACK RULES, ACK LEAD, and the reply to a HELLO only. Never a status line.
 
 Waiting on CI or a release run is never a foreground wait and never blocks the next milestone. Arm a background watcher: a shell loop over `gh pr checks <N> --json name,state` (or `gh run watch <id> --exit-status`) every 60 s that exits on any `FAILURE`, `ERROR` or `CANCELLED` and when nothing is `IN_PROGRESS`, `PENDING` or `QUEUED`. `SKIPPED` entries from a `labeled` event run are normal. Its completion notification wakes the loop; the fallback wakeup stays at 30 min. A milestone merges on local checks that pass; CI on the staging branch, after the one fast-forward, is the backstop, read in the integration milestone (`process.md` P1, P4).
 
@@ -153,6 +155,17 @@ The runner then files a queue card and continues with work that does not depend 
 - An accepted decision that no longer fits: a queue card, never a silent change.
 - Nothing needs the owner: nothing filed.
 - Formats: [formats.md](formats.md).
+
+## Roll over
+
+- Lead, on `roll over`: write the lead's handoff with the `write-handoff` skill in roll over mode, with `--prompt-prefix "/expedition <release> "`. Its Next steps start with: name yourself to every live runner. The new lead does that with `run/runner.sh send "<release> runner<n>" "LEAD <its name>"` for each runner `run/runner.sh list` shows live, by its full window name, because `send <release>` reaches only the newest live runner. Each send also records the new lead's window as the registry `lead` entry, which the nudge watcher follows.
+- Lead, on `roll over <runner name>`: `run/runner.sh send "<runner name>" "roll over"` types the word into that runner's window.
+- Runner, on `roll over` (typed by the owner or the lead), in this order:
+  1. Rewrite the run's handoff (Handoff and end of run).
+  2. Stop each of its running Workflows with `TaskStop` once the current agent step has committed what is coherent; a milestone in its merge step finishes the merge first. Rows keep `[ ]` and no `wait` mark is set: this is not a hold.
+  3. `run/runner.sh start <release> --new` opens the next runner. Called from a runner window, it leaves the registry `lead` entry alone, and the new runner's first prompt names the newest handoff, the wake check and the lead.
+  4. Send `NOTE runner: rolled over to <new name>` to the lead, then run `run/runner.sh stop "<its own full name>"`, which marks its entry stopped and closes its window. It launches and marks nothing after step 3.
+- The new runner's wake check relaunches each row the old runner owned on its existing branch. It learns which epics run from the handoff and the grid, so the RUN lines the lead already sent stay valid.
 
 ## Handoff and end of run
 

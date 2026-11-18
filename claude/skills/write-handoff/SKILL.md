@@ -1,7 +1,7 @@
 ---
 name: write-handoff
-description: Writes a handoff doc summarising the current conversation so a fresh agent can continue the work. Use when the user runs /write-handoff or asks for a handoff note for the next session.
-argument-hint: "[optional: next session focus]"
+description: Writes a handoff doc summarising the current conversation so a fresh agent can continue the work, and gives the command that starts the next session. Use when the user runs /write-handoff, asks for a handoff note for the next session, or says "roll over" (the session then opens the next session itself in a new tmux window).
+argument-hint: "[optional: next session focus] [roll over]"
 ---
 
 # Write handoff
@@ -30,4 +30,16 @@ argument-hint: "[optional: next session focus]"
 - **Next steps**: ordered, concrete, first step first.
 - **References**: paths and URLs to plans, specs, issues, PRs.
 
-Drop empty sections. Reply with the file path only.
+Drop empty sections.
+
+## Next session
+
+- Next name: this session's name with its version bumped. A trailing version token (`V3`, `v3`, `-v3`, or ` 3` after a word) goes up by one and keeps its style. No version token: append ` v2`.
+- Examples: `Parallel workflow V3` to `Parallel workflow V4`; `v0.9.x lead` to `v0.9.x lead v2`; `v0.9.x lead 2` to `v0.9.x lead 3`; `docs-v9` to `docs-v10`; `Swimlanes page` to `Swimlanes page v2`.
+- This session's name comes from the ListAgents tool where the session has it ("This session is <name>"). No name found: use a short name taken from the Goal and say so in one clause.
+- Start command: `cd "<absolute cwd of this session>" && claude -n "<next name>" "Read <absolute handoff path> and continue."`. The `cd` matters: a session started in another folder loads other project instructions and memory. Inside the double quotes, escape `"`, `$`, `` ` `` and `\` with a backslash. Add `--model <alias>` only when this session knows its own model alias. No permission flags.
+
+## Reply
+
+- Plain: the file path, then the start command on its own line in a code block.
+- Roll over (the request or the arguments say "roll over"): after writing the file, run `${CLAUDE_SKILL_DIR}/scripts/rollover.sh --cwd <dir> --name "<next name>" --handoff <abs path> [--model <alias>] [--prompt-prefix "<text>"]`. It opens the next session in a new, detached window of the current tmux session. `--prompt-prefix` is for a calling skill that puts a slash command or a first instruction before the read. Reply with the file path, then `Rolled over to <next name>`, nothing else. The script exits 3 outside tmux: then give the plain reply.
