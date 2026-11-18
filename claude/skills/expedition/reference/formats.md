@@ -318,7 +318,7 @@ Written with the `write-handoff` skill.
   ```
   - Stage: <the Stage line of status/report.py, e.g. discuss, run (S2)>
   - Next: `/expedition <stage> <release>`, <where to start, e.g. Q1 or spec 04.1>
-  - Runner: window `<release> runner<n>` in tmux session <name>, or none; registry `~/.claude/expedition-runners.json`
+  - Runner: window `<runner name>` in tmux session <name>, or none; registry `~/.claude/expedition-runners.json`
 - Writer: session `<name>` `<uuid from $CLAUDE_CODE_SESSION_ID>`, so the next session can ask it or grep its transcript (`/recall`).
   ```
 

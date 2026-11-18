@@ -129,7 +129,8 @@ class Go:
         for line in self.runner_sh("list").stdout.splitlines():
             cells = line.split("\t")
             if len(cells) >= 3:
-                rows.append({"name": cells[0], "state": cells[1], "status": cells[2]})
+                rows.append({"name": cells[0], "state": cells[1], "status": cells[2],
+                             "release": cells[6] if len(cells) > 7 else "", "kind": cells[7] if len(cells) > 7 else ""})
         return rows
 
     # state
@@ -228,7 +229,8 @@ class Go:
             return False
         pat = re.compile(rf"^(?:{re.escape(self.release)} runner\d+|runner-{re.escape(self.release)})$")
         live = [r for r in self.runner_list()
-                if pat.match(r["name"]) and r["state"] != "stopped" and not r["status"].startswith("dead")]
+                if (pat.match(r["name"]) or (r["release"] == self.release and r["kind"] == "runner"))
+                and r["state"] != "stopped" and not r["status"].startswith("dead")]
         if not live:
             self.runner_sh("start", self.release, "--from", self.lead)
         rel = self.folder.relative_to(self.root).as_posix()

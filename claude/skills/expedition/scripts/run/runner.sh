@@ -4,8 +4,8 @@
 # typed into its window by "send", and replies "DONE ..." or "BLOCKED ..." by SendMessage
 # (reference/run.md).
 #
-# Usage: runner.sh start <release> [--model M] [--new] [--from <lead>] [--cwd PATH]   reuse the live runner, resume a dead one, or open the next number; --new opens another runner beside the live one
-#        runner.sh list                          registry entries with busy or idle
+# Usage: runner.sh start <release> [--model M] [--new [--name NAME]] [--from <lead>] [--cwd PATH]   reuse the live runner, resume a dead one, or open the next number; --new opens another runner beside the live one, named NAME when given
+#        runner.sh list                          registry entries with busy or idle, release and kind
 #        runner.sh stop <release>                close the window, mark the entry stopped
 #        runner.sh send [--from <lead>] <release> "<line>"   type "ultracode <line>" into the runner window
 #                                                and submit it (typed prompts opt the turn in to
@@ -35,7 +35,8 @@
 # called from a runner window (EXPEDITION_RUNNER set): a runner never takes the lead entry.
 #
 # Roll over: start --new called from a runner window opens the next runner with a first prompt
-# that names the newest handoff of the release and the wake check, and the lead as reply target. start also starts the nudge watcher
+# that names the newest handoff of the release and the wake check, and the lead as reply target.
+# Without --model it runs on the calling runner's model (the last model of its transcript). start also starts the nudge watcher
 # (pid file ~/.claude/expedition-runners/nudge-watch.pid), which types "NUDGE <source>: <text>"
 # into the lead pane for each You Should Know note shown to a runner, a fork or an unknown
 # session; stop stops it once no runner or fork window is live.
@@ -54,7 +55,7 @@
 # ~/.claude/expedition-runners/<name>.status, written by the hooks in
 # templates/runner-settings.json ("idle" on Stop, "busy" on UserPromptSubmit); the hooks find
 # the name in EXPEDITION_RUNNER, exported here before exec.
-# Model: --model, else $EXPEDITION_RUNNER_MODEL, else fable. Fork model: --model, else
+# Model: --model, else (roll over) the calling runner's model, else $EXPEDITION_RUNNER_MODEL, else fable. Fork model: --model, else
 # $EXPEDITION_FORK_MODEL, else fable. Forks are registry entries of kind "fork", no status file.
 set -euo pipefail
 
@@ -83,7 +84,7 @@ transcript_exists() {
 die() { echo "error: $*" >&2; exit 1; }
 
 usage() {
-  echo "usage: runner.sh start <release> [--model M] [--new] [--from <lead>] [--cwd PATH] | list | stop <release or window name> | send <release> \"<line>\" | resume <release or window name> | fork <release> E<n> \"<D ids>\" --from <lead> [--model M] [--cwd PATH] | adopt <release> [--uuid UUID] [--pane PANE] [--replaces <name>] | watch start|stop|status" >&2
+  echo "usage: runner.sh start <release> [--model M] [--new [--name NAME]] [--from <lead>] [--cwd PATH] | list | stop <release or window name> | send <release> \"<line>\" | resume <release or window name> | fork <release> E<n> \"<D ids>\" --from <lead> [--model M] [--cwd PATH] | adopt <release> [--uuid UUID] [--pane PANE] [--replaces <name>] | watch start|stop|status" >&2
   exit 2
 }
 
@@ -110,7 +111,7 @@ def write(change):
             f.write(json.dumps(data, indent=2) + "\n")
         os.replace(tmp, path)
 
-data = read() if op in ("get", "field", "all", "uuid") else {}
+data = read() if op in ("get", "field", "all", "uuid", "newest") else {}
 if op == "get":
     e = data.get(sys.argv[3])
     print(json.dumps(e) if e else "")
@@ -135,6 +136,19 @@ elif op == "set":
 elif op == "uuid":
     print(next((n for n, e in data.items() if n != "lead" and isinstance(e, dict)
                 and e.get("uuid") == sys.argv[3] and e.get("state") != "stopped"), ""))
+elif op == "newest":
+    # The newest runner entry of a release that is not stopped: latest "started", then the
+    # highest "<release> runner<n>" number, so a registry of default names answers as before.
+    import re
+    rel = sys.argv[3]
+    pat = re.compile(re.escape(rel) + r" runner(\d+)$")
+    def key(n):
+        m = pat.match(n)
+        return (data[n].get("started") or "", int(m.group(1)) if m else 0, n)
+    live = [n for n, e in data.items() if n != "lead" and isinstance(e, dict) and e.get("uuid")
+            and e.get("state") != "stopped" and e.get("kind", "runner") == "runner"
+            and (e.get("release") == rel or pat.match(n))]
+    print(max(live, key=key) if live else "")
 elif op == "all":
     for name, e in data.items():
         if name == "lead":
@@ -192,21 +206,18 @@ type_into() {
   TYPED_PANE="$pane"
 }
 
-# Runner names: "<release> runner<n>". runner_name <release> returns the newest runner that is
-# live or resumable (a live entry under the older key "runner-<release>" counts and keeps its
+# Runner names: "<release> runner<n>" by default, or the name given to start --new --name.
+# runner_name <release> returns the newest runner entry of the release that is live or resumable
+# (reg newest; a live entry under the older key "runner-<release>" counts first and keeps its
 # name); nothing live: the next unused number. A number is never reused within a release.
 # next_runner_name <release> always returns the next unused number (start --new).
 runner_name() {
-  local old="runner-$1" best="" n
+  local old="runner-$1" best
   if [ -n "$(reg field "$old" uuid)" ] && [ "$(reg field "$old" state)" != stopped ]; then
     echo "$old"; return
   fi
-  for n in $(seq 50 -1 1); do
-    if [ -n "$(reg field "$1 runner$n" uuid)" ] && [ "$(reg field "$1 runner$n" state)" != stopped ]; then
-      echo "$1 runner$n"; return
-    fi
-  done
-  next_runner_name "$1"
+  best="$(reg newest "$1")"
+  if [ -n "$best" ]; then echo "$best"; else next_runner_name "$1"; fi
 }
 
 next_runner_name() {
@@ -275,6 +286,30 @@ cmd_watch() {
   esac
 }
 
+# session_model: the model of the calling session, from the last assistant line of its transcript
+# (<projects>/*/$CLAUDE_CODE_SESSION_ID.jsonl, message.model, skipping "<synthetic>"); empty when
+# not found. Same logic as write-handoff/scripts/rollover.sh.
+session_model() {
+  local sid="${CLAUDE_CODE_SESSION_ID:-}" f
+  [ -n "$sid" ] || return 0
+  f="$(ls "$PROJECTS"/*/"$sid".jsonl 2>/dev/null | head -1)"
+  [ -n "$f" ] || return 0
+  python3 -I - "$f" <<'PY' 2>/dev/null || true
+import json, sys
+model = ""
+for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
+    if '"type":"assistant"' not in line:
+        continue
+    try:
+        m = json.loads(line).get("message", {}).get("model", "")
+    except Exception:
+        continue
+    if m and not m.startswith("<"):
+        model = m
+print(model)
+PY
+}
+
 # Status and brief files: the name with spaces replaced by "-".
 file_of() { echo "$STATE_DIR/${1// /-}"; }
 
@@ -293,10 +328,11 @@ new_cwd() {
 }
 
 cmd_start() {
-  local release="" model="${EXPEDITION_RUNNER_MODEL:-fable}" new=0 from="" cwd_flag=""
+  local release="" model="" new=0 from="" cwd_flag="" given=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --model) [ $# -ge 2 ] || usage; model="$2"; shift 2 ;;
+      --name) [ $# -ge 2 ] || usage; given="$2"; shift 2 ;;
       --from) [ $# -ge 2 ] || usage; from="$2"; shift 2 ;;
       --cwd) [ $# -ge 2 ] || usage; cwd_flag="$2"; shift 2 ;;
       --new) new=1; shift ;;
@@ -307,7 +343,19 @@ cmd_start() {
   [ -n "$release" ] || usage
   check_release "$release"
   local name
-  if [ "$new" = 1 ]; then name="$(next_runner_name "$release")"; else name="$(runner_name "$release")"; fi
+  if [ -n "$given" ]; then
+    # A name of the owner's, used exactly as given.
+    [ "$new" = 1 ] || die "--name needs --new"
+    [[ "$given" != *[/\\\|\&$'\t\n']* ]] && [ "$given" != lead ] && ! [[ "$given" =~ ^v[0-9]+\.[0-9]+\.x$ ]] \
+      || die "bad runner name '$given'"
+    [ -z "$(reg field "$given" uuid)" ] || [ "$(reg field "$given" state)" = stopped ] \
+      || die "'$given' is already a registry entry that is not stopped"
+    name="$given"
+  elif [ "$new" = 1 ]; then name="$(next_runner_name "$release")"; else name="$(runner_name "$release")"; fi
+  # Model: --model; a roll over (--new from a runner window) keeps the calling runner's model;
+  # else $EXPEDITION_RUNNER_MODEL, else fable.
+  [ -n "$model" ] || [ "$new" != 1 ] || [ -z "${EXPEDITION_RUNNER:-}" ] || model="$(session_model)"
+  [ -n "$model" ] || model="${EXPEDITION_RUNNER_MODEL:-fable}"
   local cwd
   cwd="$(new_cwd "$cwd_flag")"
   mkdir -p "$STATE_DIR"
@@ -365,7 +413,7 @@ cmd_start() {
   local pane
   read -r target pane < <(tmux new-window -d -P -F '#{session_name}:#{window_id} #{pane_id}' -t "$session:" -n "$name" -c "$cwd" "$line")
   printf 'busy' > "$(file_of "$name").status"
-  reg put "$name" "$(python3 -I -c 'import json,sys,datetime; print(json.dumps({"name": sys.argv[1], "uuid": sys.argv[2], "tmux": sys.argv[3], "pane": sys.argv[6], "cwd": sys.argv[4], "release": sys.argv[5], "started": datetime.datetime.now().isoformat(timespec="seconds"), "state": "running"}))' "$name" "$uuid" "$target" "$cwd" "$release" "$pane")"
+  reg put "$name" "$(python3 -I -c 'import json,sys,datetime; print(json.dumps({"name": sys.argv[1], "kind": "runner", "uuid": sys.argv[2], "tmux": sys.argv[3], "pane": sys.argv[6], "cwd": sys.argv[4], "release": sys.argv[5], "started": datetime.datetime.now().isoformat(timespec="seconds"), "state": "running"}))' "$name" "$uuid" "$target" "$cwd" "$release" "$pane")"
   if [ "$resume" = 1 ]; then
     echo "$name resumed in $target (session $uuid)"
   else
@@ -393,7 +441,7 @@ cmd_list() {
         status="dead (start resumes it)"
       fi
     fi
-    printf '%s\t%s\t%s\t%s\t%s\tstarted %s\n' "$name" "$state" "$status" "$target" "$uuid" "$started"
+    printf '%s\t%s\t%s\t%s\t%s\tstarted %s\t%s\t%s\n' "$name" "$state" "$status" "$target" "$uuid" "$started" "$release" "$kind"
   done <<< "$rows"
   # One session on several entries that are not stopped: resume would revive the wrong session.
   awk -F'\t' '$2 != "stopped" && $3 != "-" { if ($3 in seen) printf "warning: %s and %s share session %s; fix the entry that is not that session (runner.sh adopt registers a session with its own uuid)\n", seen[$3], $1, $3; else seen[$3] = $1 }' <<< "$rows" >&2
