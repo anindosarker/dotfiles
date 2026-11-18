@@ -9,6 +9,10 @@
 # Prints the window target (session:index). Not inside tmux: one line, exit 3.
 # The model is the one this session runs on: read from the last assistant line of its transcript
 # (~/.claude/projects/*/$CLAUDE_CODE_SESSION_ID.jsonl). --model overrides it; none found: no flag.
+# The permission mode is carried over the same way (the last "permissionMode" of the transcript):
+# bypassPermissions gives --dangerously-skip-permissions, acceptEdits, auto and dontAsk give
+# --permission-mode <mode>, anything else no flag. Sessions in different permission modes have
+# their messages to each other held for approval, so the next session keeps this one's mode.
 # --print: open nothing, print the start command to paste (works outside tmux).
 # Test overrides: EXPEDITION_CLAUDE (the claude command), EXPEDITION_TMUX_SOCKET (tmux -L <socket>).
 set -euo pipefail
@@ -64,8 +68,22 @@ PY
 }
 [ -n "$model" ] || model="$(session_model)"
 
+# The permission mode of this session, from its transcript.
+session_mode() {
+  local sid="${CLAUDE_CODE_SESSION_ID:-}" root="${EXPEDITION_PROJECTS:-$HOME/.claude/projects}" f
+  [ -n "$sid" ] || return 0
+  f="$(ls "$root"/*/"$sid".jsonl 2>/dev/null | head -1)"
+  [ -n "$f" ] || return 0
+  grep -o '"permissionMode":"[A-Za-z]*"' "$f" 2>/dev/null | tail -1 | sed 's/.*:"\(.*\)"/\1/' || true
+}
+mode="$(session_mode)"
+
 cmd=("$CLAUDE_BIN" -n "$name")
 [ -z "$model" ] || cmd+=(--model "$model")
+case "$mode" in
+  bypassPermissions) cmd+=(--dangerously-skip-permissions) ;;
+  acceptEdits|auto|dontAsk) cmd+=(--permission-mode "$mode") ;;
+esac
 if [ -n "$print" ]; then
   cmd+=("${prefix}Read $handoff and continue.")
   echo "cd $(printf '%q' "$cwd") &&$(printf ' %q' "${cmd[@]}")"
