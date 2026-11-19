@@ -39,7 +39,7 @@ The release's `process.md` (`.ai/plans/<release>/<owner>/process.md`) holds the 
   - Spec writer to lead, by `SendMessage`: `SPECS E<n> <spec numbers>`, from the forked session `run/runner.sh fork` opened
   - Watcher to lead, typed into the lead window by `scripts/run/nudge-watch.sh`: `NUDGE <runner or fork name, or unknown>: <text>`, a You Should Know note shown to an unattended session. The lead treats it as owner feedback (SKILL.md, Owner input). The runner never sees nudges.
   - Either direction: `NOTE <id>: <one line>`, only when the meaning of an id the other session may hold changes (a duplicate closed as another id, `NOTE D7: superseded by D15` from whoever supersedes, an item moved into a fix through `plan/new_fix.py`). Never status, apart from the wake check's `NOTE <milestone>: resumed` (Each loop fire).
-- Reply target: the name after `from` in the latest RUN or HELLO line, or the name in the latest LEAD line; every line to the lead goes there from then on. A runner opened by a roll over starts with the lead name its first prompt gives.
+- Reply target: the name after `from` in the latest RUN or HELLO line, or the name in the latest LEAD line; every line to the lead goes there from then on.
 - On every RUN line, before launching anything: re-read the release's `process.md`, this file and the brief, then the epic's specs and its epic file.
 - On RUN and on every line typed to it: read the epic file of every epic it runs, re-read whatever a note names, append ` [ack HH:MM]` to each note it read, commit (Shared files rules). A note without ack is unread.
 - RUN is idempotent: an epic whose `status/sprints.md` rows are already running or done is not started again; the runner replies with the current state. A RUN for a held epic lifts the hold on all of it, like `RESUME E<n>`.
@@ -158,14 +158,15 @@ The runner then files a queue card and continues with work that does not depend 
 
 ## Roll over
 
-- Lead, on `roll over`: write the lead's handoff with the `write-handoff` skill in roll over mode, with `--prompt-prefix "/expedition <release> "` and the name the owner gives for the new session, if any. Its Next steps start with: name yourself to every live runner. The new lead does that with `run/runner.sh send "<runner name>" "LEAD <its name>"` for each runner `run/runner.sh list` shows live, by its full window name, because `send <release>` reaches only the newest live runner. Each send also records the new lead's window as the registry `lead` entry, which the nudge watcher follows.
-- Lead, on `roll over <runner name>`: `run/runner.sh send "<runner name>" "roll over"` types the word into that runner's window; `roll over <runner name> as <new name>` types `roll over as <new name>`.
-- Runner, on `roll over` (typed by the owner or the lead; `roll over as <name>`, or a name the owner gives in the same message, names the new runner), in this order:
-  1. Rewrite the run's handoff (Handoff and end of run).
-  2. Stop each of its running Workflows with `TaskStop` once the current agent step has committed what is coherent; a milestone in its merge step finishes the merge first. Rows keep `[ ]` and no `wait` mark is set: this is not a hold.
-  3. `run/runner.sh start <release> --new` opens the next runner, with `--name "<name>"` when a name was given. Called from a runner window, it leaves the registry `lead` entry alone, runs the new runner on this runner's model, and the new runner's first prompt names the newest handoff, the wake check and the lead.
-  4. Send `NOTE runner: rolled over to <new name>` to the lead, then run `run/runner.sh stop "<its own full name>"`, which marks its entry stopped and closes its window. It launches and marks nothing after step 3.
-- The new runner's wake check relaunches each row the old runner owned on its existing branch. It learns which epics run from the handoff and the grid, so the RUN lines the lead already sent stay valid.
+- `roll over` in any session of the run: use the `roll-over` skill. It clears the session in its own window, renames it and starts it again from the handoff. Workflows the session launched keep running and report to the same window. The skill knows nothing about leads or runners: everything below goes into the handoff.
+- A lead's handoff. `## Starter prompt`: `/expedition <stage> <release> Read <handoff path> and continue.` Next steps start with: send `LEAD <your session name>` to every live runner, with `run/runner.sh send "<runner name>" "LEAD <name>"` for each runner `run/runner.sh list` shows live, because the lead's name changed and the runners address the lead by name. Each send also records the lead's window as the registry `lead` entry, which the nudge watcher follows.
+- A runner's handoff is the run's handoff, rewritten (Handoff and end of run). `## Starter prompt`: `/expedition run <release> ultracode Read <handoff path> and continue.` It lists every Workflow still running: milestone, run id, task id. Next steps start with, in this order:
+  1. `run/runner.sh adopt <release> --replaces "<the runner's name before the roll over>"`: the cleared session has a new session id and gets its own entry in the runner list.
+  2. `NOTE runner: rolled over, now <new name>` to the lead.
+  3. The wake check (Each loop fire). The Workflows the handoff lists are this runner's own, whatever owner `run/check.py` prints for them: one that is `alive` is left to finish.
+- A runner rolls over under the name its new list entry will get: `--name "<release> runner<n>"`, `<n>` the next unused number in `run/runner.sh list`. Session, window and list entry then carry one name.
+- A runner never stops a Workflow to roll over. After the clear a stopped run cannot be resumed with `resumeFromRunId`, only launched again.
+- Lead, on `roll over <runner name>`: `run/runner.sh send "<runner name>" "roll over"` types the word into that runner's window.
 
 ## Handoff and end of run
 
