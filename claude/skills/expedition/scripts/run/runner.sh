@@ -594,6 +594,17 @@ cmd_adopt() {
   local held
   held="$(reg uuid "$uuid")"
   if [ -n "$held" ]; then
+    # The session moved to another window (a restart with claude --resume): the entry follows it.
+    if [ -n "$pane" ] && tmux display-message -p -t "$pane" '#{pane_id}' >/dev/null 2>&1; then
+      local now_target now_pane
+      now_target="$(tmux display-message -p -t "$pane" '#{session_name}:#{window_id}')"
+      now_pane="$(tmux display-message -p -t "$pane" '#{pane_id}')"
+      if [ "$now_target" != "$(reg field "$held" tmux)" ] || [ "$now_pane" != "$(reg field "$held" pane)" ]; then
+        reg put "$held" "$(python3 -I -c 'import json,sys; print(json.dumps({"tmux": sys.argv[1], "pane": sys.argv[2], "state": "running"}))' "$now_target" "$now_pane")"
+        echo "session $uuid is the registry entry '$held': window updated to $now_target"
+        return 0
+      fi
+    fi
     echo "session $uuid is already the registry entry '$held'"
     return 0
   fi
