@@ -8,7 +8,7 @@
 # A detached worker waits for the turn to end (the transcript stays quiet and the pane shows no
 # running turn), then types into this session's pane:
 #   /clear
-#   /rename <next name>   (a tmux window named after the session is renamed too)
+#   /rename <next name>   (a single-pane tmux window with a fixed name is renamed too)
 #   <starter prompt>
 # Next name: --name as given, else the session's own name (the last "custom-title" record of its
 # transcript, set by /rename or claude -n) with its version bumped: a trailing V3 or v3 goes up by
@@ -39,8 +39,9 @@ if [ "${1:-}" = "--worker" ]; then
   echo "$(date '+%F %T') turn ended after ${waited}s, typing"
   tmux send-keys -t "$pane" -l '/clear'; tmux send-keys -t "$pane" Enter; sleep 3
   tmux send-keys -t "$pane" -l "/rename $name"; tmux send-keys -t "$pane" Enter; sleep 2
-  # A tmux window that carried the old session name gets the new one too.
-  if [ -n "$current" ] && [ "$(tmux display-message -p -t "$pane" '#{window_name}')" = "$current" ]; then
+  # tmux renames a window by itself from the pane title when automatic-rename is on. A window with
+  # a fixed name (opened with -n, or renamed by hand) has it off: give it the new name here.
+  if [ "$(tmux display-message -p -t "$pane" '#{automatic-rename}')" = 0 ] && [ "$(tmux display-message -p -t "$pane" '#{window_panes}')" = 1 ]; then
     tmux rename-window -t "$pane" "$name"
   fi
   tmux send-keys -t "$pane" -l "$prompt"; tmux send-keys -t "$pane" Enter
