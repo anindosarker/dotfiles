@@ -29,8 +29,5 @@ argument-hint: "[optional: next session focus]"
 - **Gotchas**: dead ends, traps, things that failed.
 - **Next steps**: ordered, concrete, first step first.
 - **References**: paths and URLs to plans, specs, issues, PRs.
-- **Starter prompt**: optional. One line the next session is started with, only when it needs more than reading this file (a slash command, a keyword such as `ultracode`). The line names this file's path. The `roll-over` skill types it.
 
-Drop empty sections.
-
-Reply with the file path only.
+Drop empty sections. Reply with the file path only.

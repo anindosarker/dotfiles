@@ -10,7 +10,8 @@
 #   /clear
 #   /rename <next name>   (a single-pane tmux window with a fixed name gets automatic-rename on)
 #   <starter prompt>
-# Next name: --name as given, else the session's own name (the last "custom-title" record of its
+# Next name: --name as given, else the first line under "## Session name" in the handoff, else
+# the session's own name (the last "custom-title" record of its
 # transcript, set by /rename or claude -n) with its version bumped: a trailing V3 or v3 goes up by
 # one, so does a trailing " 3"; no version: " v2" is appended. No name found: exit 4.
 # Starter prompt: the first line under "## Starter prompt" in the handoff, else
@@ -90,32 +91,38 @@ PY
   current="$(sed -n 1p <<<"$titles")"
   bumped="$(sed -n 2p <<<"$titles")"
 fi
+# section <title>: the first non-empty line under "## <title>" in the handoff, list marker and
+# backticks stripped; empty when the handoff has no such section.
+section() {
+  python3 -I - "$handoff" "$1" <<'PY'
+import re, sys
+want, line, inside = sys.argv[2].lower(), "", False
+for raw in open(sys.argv[1], encoding="utf-8", errors="replace"):
+    m = re.match(r"^#{1,6}\s+(.*?)\s*$", raw)
+    if m:
+        inside = m.group(1).lower() == want
+        continue
+    if inside and raw.strip():
+        line = re.sub(r"^[-*]\s+", "", raw.strip()).strip(chr(96)).strip()
+        break
+print(line)
+PY
+}
+
+[ -n "$name" ] || name="$(section "session name")"
 [ -n "$name" ] || name="$bumped"
 if [ -z "$name" ]; then
   echo "error: this session has no name in its transcript; pass --name" >&2
   exit 4
 fi
 
-prompt="$(python3 -I - "$handoff" <<'PY'
-import re, sys
-path = sys.argv[1]
-default = f"Read {path} and continue."
-line, inside = "", False
-for raw in open(path, encoding="utf-8", errors="replace"):
-    if re.match(r"^#{1,6}\s", raw):
-        inside = bool(re.match(r"^#{1,6}\s+starter prompt\s*$", raw.strip(), re.I))
-        continue
-    if inside and raw.strip():
-        line = re.sub(r"^[-*]\s+", "", raw.strip()).strip(chr(96)).strip()
-        break
-if not line:
-    print(default)
-elif path in line:
-    print(line)
-else:
-    print(f"{line.rstrip()} {default}")
-PY
-)"
+default_prompt="Read $handoff and continue."
+prompt="$(section "starter prompt")"
+if [ -z "$prompt" ]; then
+  prompt="$default_prompt"
+elif [[ "$prompt" != *"$handoff"* ]]; then
+  prompt="$prompt $default_prompt"
+fi
 
 own_pane() {
   if [ -n "${TMUX_PANE:-}" ]; then echo "$TMUX_PANE"; return; fi

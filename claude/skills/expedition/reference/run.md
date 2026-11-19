@@ -159,12 +159,11 @@ The runner then files a queue card and continues with work that does not depend 
 ## Roll over
 
 - `roll over` in any session of the run: use the `roll-over` skill. It clears the session in its own window, renames it and starts it again from the handoff. Workflows the session launched keep running and report to the same window. The skill knows nothing about leads or runners: everything below goes into the handoff.
-- A lead's handoff. `## Starter prompt`: `/expedition <stage> <release> Read <handoff path> and continue.` Next steps start with: send `LEAD <your session name>` to every live runner, with `run/runner.sh send "<runner name>" "LEAD <name>"` for each runner `run/runner.sh list` shows live, because the lead's name changed and the runners address the lead by name. Each send also records the lead's window as the registry `lead` entry, which the nudge watcher follows.
-- A runner's handoff is the run's handoff, rewritten (Handoff and end of run). `## Starter prompt`: `/expedition run <release> ultracode Read <handoff path> and continue.` It lists every Workflow still running: milestone, run id, task id. Next steps start with, in this order:
-  1. `run/runner.sh adopt <release> --replaces "<the runner's name before the roll over>"`: the cleared session has a new session id and gets its own entry in the runner list.
+- A lead's handoff. `## Starter prompt`: `/expedition <stage> <release> Read <handoff path> and continue.` No `## Session name`: the lead's name gets its version bumped. Next steps start with: send `LEAD <your session name>` to every live runner, with `run/runner.sh send "<runner name>" "LEAD <name>"` for each runner `run/runner.sh list` shows live, because the lead's name changed and the runners address the lead by name. Each send also records the lead's window as the registry `lead` entry, which the nudge watcher follows.
+- A runner's handoff is the run's handoff, rewritten (Handoff and end of run). `## Starter prompt`: `/expedition run <release> ultracode Read <handoff path> and continue.` `## Session name`: `<release> runner<n>`, `<n>` the next unused number in `run/runner.sh list`. It lists every Workflow still running: milestone, run id, task id. Next steps start with, in this order:
+  1. `run/runner.sh adopt <release> --replaces "<the runner's name before the roll over>"`: the cleared session has a new session id and gets its own entry in the runner list, under that same name.
   2. `NOTE runner: rolled over, now <new name>` to the lead.
   3. The wake check (Each loop fire). The Workflows the handoff lists are this runner's own, whatever owner `run/check.py` prints for them: one that is `alive` is left to finish.
-- A runner rolls over under the name its new list entry will get: `--name "<release> runner<n>"`, `<n>` the next unused number in `run/runner.sh list`. Session, window and list entry then carry one name.
 - A runner never stops a Workflow to roll over. After the clear a stopped run cannot be resumed with `resumeFromRunId`, only launched again.
 - Lead, on `roll over <runner name>`: `run/runner.sh send "<runner name>" "roll over"` types the word into that runner's window.
 
