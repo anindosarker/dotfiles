@@ -34,9 +34,8 @@
 # "name": --from, the "from <name>" of the sent line, or the name of a "LEAD <name>" line}), unless
 # called from a runner window (EXPEDITION_RUNNER set): a runner never takes the lead entry.
 #
-# Roll over: start --new called from a runner window opens the next runner with a first prompt
-# that names the newest handoff of the release and the wake check, and the lead as reply target.
-# Without --model it runs on the calling runner's model (the last model of its transcript). start also starts the nudge watcher
+# start --new called from a runner window, without --model, runs the new runner on the calling
+# runner's model (the last model of its transcript). start also starts the nudge watcher
 # (pid file ~/.claude/expedition-runners/nudge-watch.pid), which types "NUDGE <source>: <text>"
 # into the lead pane for each You Should Know note shown to a runner, a fork or an unknown
 # session; stop stops it once no runner or fork window is live.
@@ -55,7 +54,7 @@
 # ~/.claude/expedition-runners/<name>.status, written by the hooks in
 # templates/runner-settings.json ("idle" on Stop, "busy" on UserPromptSubmit); the hooks find
 # the name in EXPEDITION_RUNNER, exported here before exec.
-# Model: --model, else (roll over) the calling runner's model, else $EXPEDITION_RUNNER_MODEL, else fable. Fork model: --model, else
+# Model: --model, else (--new from a runner window) the calling runner's model, else $EXPEDITION_RUNNER_MODEL, else fable. Fork model: --model, else
 # $EXPEDITION_FORK_MODEL, else fable. Forks are registry entries of kind "fork", no status file.
 set -euo pipefail
 
@@ -288,7 +287,7 @@ cmd_watch() {
 
 # session_model: the model of the calling session, from the last assistant line of its transcript
 # (<projects>/*/$CLAUDE_CODE_SESSION_ID.jsonl, message.model, skipping "<synthetic>"); empty when
-# not found. Same logic as write-handoff/scripts/rollover.sh.
+# not found.
 session_model() {
   local sid="${CLAUDE_CODE_SESSION_ID:-}" f
   [ -n "$sid" ] || return 0
@@ -352,7 +351,7 @@ cmd_start() {
       || die "'$given' is already a registry entry that is not stopped"
     name="$given"
   elif [ "$new" = 1 ]; then name="$(next_runner_name "$release")"; else name="$(runner_name "$release")"; fi
-  # Model: --model; a roll over (--new from a runner window) keeps the calling runner's model;
+  # Model: --model; --new from a runner window keeps the calling runner's model;
   # else $EXPEDITION_RUNNER_MODEL, else fable.
   [ -n "$model" ] || [ "$new" != 1 ] || [ -z "${EXPEDITION_RUNNER:-}" ] || model="$(session_model)"
   [ -n "$model" ] || model="${EXPEDITION_RUNNER_MODEL:-fable}"
@@ -382,13 +381,6 @@ cmd_start() {
   sed -e "s|{{release}}|$release|g" -e "s|{{name}}|$name|g" -e "s|{{brief}}|$brief|g" "$BRIEF_TEMPLATE" > "$brief"
 
   local prompt="ultracode. You are $name, the expedition runner for $release. Follow the appended brief. Reply with one line: ready."
-  if [ -n "${EXPEDITION_RUNNER:-}" ]; then
-    # Roll over from a runner window: the new runner takes the run over.
-    local handoff lead
-    handoff="$(compgen -G "$cwd/.ai/plans/$release/*/run/handoffs/handoff-*.md" | awk -F/ '{ print $NF "\t" $0 }' | sort | tail -n 1 | cut -f2- || true)"
-    lead="$(reg field lead name)"
-    prompt="ultracode. You are $name, the expedition runner for $release, taking the run over from ${EXPEDITION_RUNNER//-/ }. Follow the appended brief. First read the newest handoff (${handoff:-run/handoffs/ of the release folder}), then run the wake check (run.md, Each loop fire, step 3), then continue every epic that has a running row in status/sprints.md.${lead:+ Reply target: $lead.}"
-  fi
   local -a cmd=("$CLAUDE_BIN" -n "$name" --dangerously-skip-permissions --model "$model"
                 --settings "$SETTINGS" --append-system-prompt-file "$brief")
   if [ "$resume" = 1 ]; then

@@ -59,7 +59,7 @@ The loop prompt must be safe to fire at any time. Each fire reads this file, abo
    - `silent`: stop it with `TaskStop`, then call Workflow with `resumeFromRunId` set to the same run id; finished agents come back from cache. Stop first: while the hung run is not stopped, Workflow answers `Workflow wf_... is still running (task ...). Stop it first with TaskStop`. A run that already ended (`ended killed`) needs no `TaskStop`. A run that `resumeFromRunId` refuses (one from before the session restarted) counts as `no run`.
    - `finished`: read its result and do the boundary step it missed (the mark, the merge fallback, a `wait`).
    - `no run`, or a run whose owner is a session that is gone (`(stopped)` or `(not in registry)`): when one of your running Workflows covers the milestone, record its id with `run/runs.py`; else launch a fresh Workflow on the existing branch, the builder continuing from the tracker, and record the new id.
-   - A row owned by another live runner: leave it to that runner. A row owned by the runner this one takes over from (its first prompt names it) counts as `(stopped)`.
+   - A row owned by another live runner: leave it to that runner.
 
    Then re-arm the loop wakeup. Then one line to the lead per row restarted or relaunched, `NOTE <milestone>: resumed`; nothing when every row was alive. A loop that died on a limit is woken by `scripts/run/nudge-watch.sh`: it types `ultracode resume` into a runner that owns a `silent`, `finished` or `no run` row and has been quiet for 20 minutes.
 4. Run `status/report.py <release>`, read `status/sprints.md` and the trackers of its `[ ]` rows.
