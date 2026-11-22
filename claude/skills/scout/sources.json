@@ -16,6 +16,14 @@
     "undated: optional 'now' = treat items without a date as fresh (for trending pages).",
     "min_rel: optional 0..1, fraction of keywords an item must contain to be kept (default: any for server; all for local, half when 3+ keywords).",
     "weight: optional rank multiplier, default 1.0 (e.g. 0.6 for article feeds that are about tools, not tools).",
+    "modes: optional list of 'new' and/or 'top' (default ['new']). 'new' sources feed the 'New and rising' block",
+    "     (recency decay, per-source cap, --days cutoff). 'top' sources feed the 'Top by stars' block (score log-normalized",
+    "     per source, relevance-weighted, no decay, no --days cutoff; put any activity filter in the URL, e.g. pushed:>{since_date}).",
+    "     A source listing both runs once and feeds both blocks.",
+    "date (github_search only): repo field used as the item date, default 'created_at' (e.g. 'pushed_at').",
+    "per_keyword (github_search, top): also search each of the first N keywords alone (needs a token; filter rule",
+    "     in scout.py, TOP_CONTEXT_MIN). top_cap: optional max rows for this source in the Top block.",
+    "age_label: optional word shown before the age in the signal, e.g. 'pushed' gives '81k★ pushed 2d'.",
     "Note: reddit allows about 1 unauthenticated request per minute; a second run inside that window skips it (HTTP 429)."
   ],
   "sources": [
@@ -24,7 +32,19 @@
       "type": "github_search",
       "url": "https://api.github.com/search/repositories?q={q}+created:>{since_date}&sort=stars&order=desc&per_page=30",
       "keyword": "server",
-      "unit": "★"
+      "unit": "★",
+      "modes": ["new"]
+    },
+    {
+      "name": "github_top",
+      "type": "github_search",
+      "url": "https://api.github.com/search/repositories?q={q}+pushed:>{since_date}&sort=stars&order=desc&per_page=30",
+      "keyword": "server",
+      "unit": "★",
+      "date": "pushed_at",
+      "age_label": "pushed",
+      "modes": ["top"],
+      "per_keyword": 3
     },
     {
       "name": "gh_trending_w",
@@ -160,6 +180,26 @@
       "topics": ["ai", "ml", "llm", "llms", "model", "models", "agent", "agents", "mcp", "gpt", "rag", "embedding", "embeddings", "diffusion", "tts", "stt", "speech", "vision", "ocr", "transformer", "transformers", "chatbot", "inference", "gguf", "lora", "nlp", "voice", "image", "video"]
     },
     {
+      "name": "hf_models_top",
+      "type": "json",
+      "url": "https://huggingface.co/api/models?search={q}&sort=likes&limit=20&full=false",
+      "keyword": "server",
+      "items": "",
+      "fields": {
+        "title": "id",
+        "url": "https://huggingface.co/{id}",
+        "desc": "pipeline_tag",
+        "score": "likes",
+        "date": "lastModified",
+        "tags": "tags"
+      },
+      "unit": "♥",
+      "topics": ["ai", "ml", "llm", "llms", "model", "models", "agent", "agents", "mcp", "gpt", "rag", "embedding", "embeddings", "diffusion", "tts", "stt", "speech", "vision", "ocr", "transformer", "transformers", "chatbot", "inference", "gguf", "lora", "nlp", "voice", "image", "video"],
+      "modes": ["top"],
+      "age_label": "upd",
+      "top_cap": 2
+    },
+    {
       "name": "hf_spaces",
       "type": "json",
       "url": "https://huggingface.co/api/spaces?search={q}&sort=trendingScore&limit=20",
@@ -175,6 +215,24 @@
       },
       "unit": "♥",
       "topics": ["ai", "ml", "llm", "llms", "model", "models", "agent", "agents", "mcp", "gpt", "rag", "embedding", "embeddings", "diffusion", "tts", "stt", "speech", "vision", "ocr", "transformer", "transformers", "chatbot", "inference", "gguf", "lora", "nlp", "voice", "image", "video"]
+    },
+    {
+      "name": "hf_spaces_top",
+      "type": "json",
+      "url": "https://huggingface.co/api/spaces?search={q}&sort=likes&limit=20",
+      "keyword": "server",
+      "items": "",
+      "fields": {
+        "title": "id",
+        "url": "https://huggingface.co/spaces/{id}",
+        "desc": "sdk",
+        "score": "likes",
+        "tags": "tags"
+      },
+      "unit": "♥",
+      "topics": ["ai", "ml", "llm", "llms", "model", "models", "agent", "agents", "mcp", "gpt", "rag", "embedding", "embeddings", "diffusion", "tts", "stt", "speech", "vision", "ocr", "transformer", "transformers", "chatbot", "inference", "gguf", "lora", "nlp", "voice", "image", "video"],
+      "modes": ["top"],
+      "top_cap": 2
     }
   ]
 }

@@ -1,8 +1,18 @@
 #!/usr/bin/env python3
-"""Scout fresh tools, repos, apps and libraries for a topic across many feeds at once.
+"""Scout popular and fresh tools, repos, apps and libraries for a topic across many feeds at once.
 
 Usage:
-  python3 scout.py "<keywords>" [--days 30] [--top 15] [--feed URL ...] [--only a,b] [--json]
+  python3 scout.py "<keywords>" [--mode both|new|top] [--days 30] [--top 15] [--top-n 8]
+                   [--feed URL ...] [--only a,b] [--json]
+
+Keywords are ONE quoted string; extra positional args exit with code 2.
+
+Modes (default both):
+  new   "New and rising": recency-decayed rank with a per-source cap (sources with modes "new").
+  top   "Top by stars": raw popularity (stars/likes), no decay, no cap (sources with modes "top").
+  both  every source for both modes in ONE parallel run, printed as "## Top by stars" (--top-n
+        rows) then "## New and rising" (--top rows). An item found in both shows only under Top.
+--json prints {"top": [...], "new": [...], ...metadata}.
 
 Sources live in ../sources.json (schema documented in its "_schema" block).
 Stdlib only. Every source runs in parallel; a failed or slow source is skipped with one
@@ -40,6 +50,40 @@ NO_SCORE = 0.5          # normalized score for sources without a popularity sign
 MAX_SOURCE_SHARE = 0.4  # no single source may take more than 40% of the top N.
 REL_FLOOR = 0.3         # rank weight = REL_FLOOR + (1 - REL_FLOOR) * fraction of keywords matched.
 LOCAL_MIN_REL = 0.5     # local-filter sources with 3+ keywords keep items matching half of them.
+
+# Top mode ("Top by stars"). Score is log-scaled, blending per-source and global normalization
+# so Hugging Face likes can compete with GitHub stars without a 1-like model topping the list:
+#   norm = TOP_SOURCE_BLEND * log1p(s)/log1p(source max) + (1 - TOP_SOURCE_BLEND) * log1p(s)/log1p(global max)
+#   rank = norm * (TOP_REL_FLOOR + (1 - TOP_REL_FLOOR) * fraction of keywords matched).
+# A high floor keeps popularity dominant: a 45k-star repo matching 1 of 2 keywords still beats a
+# 5k-star repo matching both. A source's optional "top_cap" limits its rows in the Top block.
+TOP_SOURCE_BLEND = 0.5
+TOP_REL_FLOOR = 0.7
+# Top-mode recall (github_search sources with "per_keyword": N). GitHub ANDs every word, so a
+# phrase like "resume tailoring" misses big repos that never say "tailoring". Besides the phrase
+# query, each of the first N non-stopword keywords is searched alone (only with a token: the
+# unauthenticated search limit is 10/min). A hit found ONLY by a single-keyword query is kept when
+#   a) its name/desc/topics contain another keyword, or
+#   b) it shares a "context topic": a repo topic seen on >= TOP_CONTEXT_MIN phrase hits, minus
+#      GENERIC_TOPICS and the keywords themselves (e.g. resume-builder, ats, cv, tts, voice-ai).
+# With fewer than TOP_CONTEXT_MIN phrase hits there is no context, so each single-keyword query
+# keeps only its TOP_KW_FALLBACK most-starred hits.
+TOP_CONTEXT_MIN = 2
+TOP_KW_FALLBACK = 3
+GENERIC_TOPICS = {
+    "ai", "llm", "llms", "ml", "machine-learning", "deep-learning", "artificial-intelligence",
+    "genai", "generative-ai", "ai-agent", "ai-agents", "agent", "agents", "agentic-ai",
+    "agent-skills", "skills", "claude", "claude-code", "claude-code-plugin", "claude-skills",
+    "codex", "opencode", "openclaw", "cursor", "anthropic", "openai", "gemini", "deepseek",
+    "ollama", "llama", "chatgpt", "gpt", "mcp", "mcp-server", "python", "javascript",
+    "typescript", "go", "golang", "rust", "java", "kotlin", "swift", "cpp", "c", "react",
+    "nextjs", "vue", "svelte", "nodejs", "fastapi", "django", "flask", "docker", "kubernetes",
+    "postgresql", "sqlite", "tailwindcss", "open-source", "opensource", "self-hosted",
+    "selfhosted", "local-first", "privacy", "automation", "cli", "api", "sdk", "framework",
+    "linux", "macos", "windows", "android", "ios", "web", "webapp", "hacktoberfest", "awesome",
+    "awesome-list", "productivity", "developer-tools", "tools", "chrome-extension",
+    "browser-extension", "vscode-extension", "extension", "electron", "tauri", "html", "css",
+    "json", "yaml", "markdown", "playwright", "selenium"}
 
 # npm (type npm_search). The search API "date" is the LATEST publish, so famous old packages
 # look fresh. Each candidate's FIRST publish date (packument time.created) is fetched instead,
@@ -335,15 +379,60 @@ def run_github_search(src, ctx):
         data = json.loads(fetch(url, headers))
         return data.get("items", [])
 
-    words = ctx["keywords"]
-    items = query(words)
-    # GitHub ANDs every word; a long phrase often yields nothing. Retry with the two most
-    # specific (longest) words.
-    if not items and len(words) > 2:
-        items = query(sorted(words, key=len, reverse=True)[:2])
-    return [make_item(src["name"], it.get("full_name"), it.get("html_url"), it.get("description"),
-                      it.get("stargazers_count"), it.get("created_at"), it.get("topics"))
-            for it in items]
+    def phrase():
+        words = ctx["keywords"]
+        items = query(words)
+        # GitHub ANDs every word; a long phrase often yields nothing. Retry with the two most
+        # specific (longest) words.
+        if not items and len(words) > 2:
+            items = query(sorted(words, key=len, reverse=True)[:2])
+        return items
+
+    date_key = src.get("date", "created_at")    # e.g. pushed_at for the top-mode query
+
+    def to_items(raw):
+        return [make_item(src["name"], it.get("full_name"), it.get("html_url"),
+                          it.get("description"), it.get("stargazers_count"), it.get(date_key),
+                          it.get("topics")) for it in raw]
+
+    terms = ctx["terms"]
+    extra = terms[:int(src.get("per_keyword", 0))] if len(terms) >= 2 else []
+    if extra and not ctx["gh_token"]:
+        log_skip(f"{src['name']} per-keyword", "no GitHub token; unauthenticated search is 10/min")
+        extra = []
+    if not extra:
+        return to_items(phrase())
+
+    # Phrase plus single-keyword queries in parallel (see TOP_CONTEXT_MIN rule at the top).
+    ex = cf.ThreadPoolExecutor(max_workers=1 + len(extra))
+    f_phrase = ex.submit(phrase)
+    f_kw = {kw: ex.submit(query, [kw]) for kw in extra}
+    ex.shutdown(wait=False)
+    items = to_items(f_phrase.result())          # phrase failure fails the source as before
+    seen = {norm_url(i["url"]) for i in items}
+    counts = {}
+    for i in items:
+        for t in set(i["tags"]):
+            counts[t] = counts.get(t, 0) + 1
+    context = {t for t, n in counts.items() if n >= TOP_CONTEXT_MIN} - GENERIC_TOPICS - set(terms)
+    context = {t for t in context if not t.isdigit()}     # year topics like "2026"
+    for kw, f in f_kw.items():
+        try:
+            hits = to_items(f.result())
+        except Exception as e:
+            log_skip(f"{src['name']} '{kw}'", describe_error(e))
+            continue
+        others = [t for t in terms if t != kw]
+        if len(items) >= TOP_CONTEXT_MIN:
+            hits = [i for i in hits if relevance(i, others) > 0 or set(i["tags"]) & context]
+        else:
+            hits = hits[:TOP_KW_FALLBACK]
+        for i in hits:
+            k = norm_url(i["url"])
+            if k not in seen:
+                seen.add(k)
+                items.append(i)
+    return items
 
 
 # ---------------------------------------------------------------- npm
@@ -482,6 +571,8 @@ def run_source(src, ctx):
             i["date"] = i["date"] or NOW
     for i in items:
         i["unit"] = src.get("unit", "")
+        i["age_label"] = src.get("age_label", "")
+        i["top_cap"] = src.get("top_cap")
     return [i for i in items if i["title"] and i["url"].startswith("http")]
 
 
@@ -542,6 +633,42 @@ def rank(items, days, top):
     return picked, len(ordered)
 
 
+def rank_top(items, top):
+    """Top mode: popularity log-normalized per source and weighted by relevance (TOP_REL_FLOOR),
+    no recency decay, no --days cutoff (activity filters live in the source URL). Only a
+    source's own "top_cap" limits its rows."""
+    mx = {}
+    for i in items:
+        mx[i["source"]] = max(mx.get(i["source"], 0), i["score"] or 0)
+    gmax = max(mx.values(), default=0)
+    for i in items:
+        m, s = mx[i["source"]], math.log1p(max(i["score"] or 0, 0))
+        norm = (TOP_SOURCE_BLEND * s / math.log1p(m) + (1 - TOP_SOURCE_BLEND) * s / math.log1p(gmax)
+                if m > 0 else 0.0)
+        rel = TOP_REL_FLOOR + (1 - TOP_REL_FLOOR) * i.get("rel", 1.0)
+        i["rank"] = norm * rel * i.get("weight", 1.0)
+    best = {}
+    for i in sorted(items, key=lambda x: (x["rank"], x.get("rel", 0)), reverse=True):
+        k = norm_url(i["url"])
+        if k in best:
+            if i["source"] != best[k]["source"] and i["source"] not in best[k]["also"]:
+                best[k]["also"].append(i["source"])
+            continue
+        i["also"] = []
+        best[k] = i
+    ordered = list(best.values())
+    picked, count = [], {}
+    for i in ordered:
+        cap = i.get("top_cap")
+        if cap is not None and count.get(i["source"], 0) >= cap:
+            continue
+        count[i["source"]] = count.get(i["source"], 0) + 1
+        picked.append(i)
+        if len(picked) >= top:
+            break
+    return picked, len(ordered)
+
+
 def compact(n):
     n = float(n)
     for div, suf in ((1e6, "M"), (1e3, "k")):
@@ -550,24 +677,35 @@ def compact(n):
     return str(int(n))
 
 
-def signal(i):
-    if i.get("created"):       # npm: age is since FIRST publish
+def signal(i, top=False):
+    if i.get("created") and not top:       # npm: age is since FIRST publish
         age = int((NOW - i["date"]) / 86400)
         return f"new {age}d, {compact(i['score'] or 0)}{i.get('unit', '')}"
     parts = []
     if i["score"] is not None:
-        parts.append(f"{int(i['score'])}{i.get('unit', '')}")
+        n = compact(i["score"]) if top else int(i["score"])
+        parts.append(f"{n}{i.get('unit', '')}")
     if i["date"]:
         age = (NOW - i["date"]) / 86400
+        if i.get("age_label"):
+            parts.append(i["age_label"])
         parts.append("today" if age < 1 else f"{int(age)}d")
     return " ".join(parts) or "-"
+
+
+def src_modes(s):
+    m = s.get("modes") or ["new"]
+    return {m} if isinstance(m, str) else set(m)
 
 
 def main():
     ap = argparse.ArgumentParser(description="Find fresh tools/repos/apps for a topic.")
     ap.add_argument("keywords")
     ap.add_argument("--days", type=int, default=30, help="drop dated items older than this")
-    ap.add_argument("--top", type=int, default=15)
+    ap.add_argument("--mode", choices=("both", "new", "top"), default="both",
+                    help="both (default): Top by stars + New and rising in one run")
+    ap.add_argument("--top", type=int, default=15, help="rows in the New and rising block")
+    ap.add_argument("--top-n", type=int, default=8, help="rows in the Top by stars block")
     ap.add_argument("--feed", action="append", default=[], help="extra rss/atom/json feed URL")
     ap.add_argument("--only", default="", help="comma list of source names to run")
     ap.add_argument("--json", action="store_true")
@@ -595,52 +733,74 @@ def main():
     if a.only:
         wanted = {n.strip() for n in a.only.split(",") if n.strip()}
         sources = [s for s in sources if s["name"] in wanted]
-    sources = [s for s in sources if topic_ok(s, ctx)]
-    for n, url in enumerate(a.feed, 1):
-        host = urllib.parse.urlsplit(url).netloc.removeprefix("www.") or f"feed{n}"
-        sources.append({"name": host, "type": "auto", "url": url, "keyword": "local"})
+    want = {"new", "top"} if a.mode == "both" else {a.mode}
+    sources = [s for s in sources if topic_ok(s, ctx) and src_modes(s) & want]
+    if "new" in want:
+        for n, url in enumerate(a.feed, 1):
+            host = urllib.parse.urlsplit(url).netloc.removeprefix("www.") or f"feed{n}"
+            sources.append({"name": host, "type": "auto", "url": url, "keyword": "local"})
     if any(s.get("type") == "github_search" for s in sources):
-        ctx["gh_token"] = github_token()
+        ctx["gh_token"] = github_token()   # one lookup, shared by every github query
 
-    all_items, hit, skipped = [], [], []
+    pools, hit, skipped = {"new": [], "top": []}, [], []
     ex = cf.ThreadPoolExecutor(max_workers=max(1, len(sources)))
-    futs = {ex.submit(run_source, s, ctx): s["name"] for s in sources}
+    futs = {ex.submit(run_source, s, ctx): s for s in sources}
     remaining = max(0.5, RUN_DEADLINE - (time.time() - t0))
     try:
         for f in cf.as_completed(futs, timeout=remaining):
-            name = futs[f]
+            name = futs[f]["name"]
             try:
                 res = f.result()
                 hit.append(name)
-                all_items.extend(res)
+                for m in src_modes(futs[f]) & want:
+                    pools[m].extend(dict(i) for i in res)   # copies: ranking mutates items
             except Exception as e:  # any network/parse failure: skip this source only
                 skipped.append(name)
                 log_skip(name, describe_error(e))
     except cf.TimeoutError:
-        for f, name in futs.items():
+        for f, s in futs.items():
             if not f.done():
-                skipped.append(name)
-                log_skip(name, "deadline")
+                skipped.append(s["name"])
+                log_skip(s["name"], "deadline")
     ex.shutdown(wait=False, cancel_futures=True)
 
-    top, uniq = rank(all_items, a.days, a.top)
+    top, top_uniq = rank_top(pools["top"], a.top_n) if "top" in want else ([], 0)
+    # Dedupe across blocks: an item in both shows only under Top (its new source joins `also`).
+    in_top = {norm_url(i["url"]): i for i in top}
+    new_pool = []
+    for i in pools["new"]:
+        t = in_top.get(norm_url(i["url"]))
+        if t is None:
+            new_pool.append(i)
+        elif i["source"] != t["source"] and i["source"] not in t["also"]:
+            t["also"].append(i["source"])
+    new, new_uniq = rank(new_pool, a.days, a.top) if "new" in want else ([], 0)
     elapsed = time.time() - t0
+    blocks = [(k, title, lst) for k, title, lst in
+              (("top", "Top by stars", top), ("new", "New and rising", new)) if k in want]
     if a.json:
-        out = {"keywords": a.keywords, "days": a.days, "elapsed_s": round(elapsed, 2),
+        def row(i, is_top):
+            return ({k: i[k] for k in ("source", "title", "desc", "url", "score", "unit")}
+                    | {"date": dt.datetime.fromtimestamp(i["date"], dt.timezone.utc)
+                       .strftime("%Y-%m-%d") if i["date"] else None,
+                       "also": i["also"], "signal": signal(i, is_top)})
+        out = {"keywords": a.keywords, "mode": a.mode, "days": a.days,
+               "elapsed_s": round(elapsed, 2),
                "sources_hit": sorted(hit), "sources_skipped": sorted(skipped),
-               "candidates": uniq,
-               "items": [{k: i[k] for k in ("source", "title", "desc", "url", "score", "unit")}
-                         | {"date": dt.datetime.fromtimestamp(i["date"], dt.timezone.utc)
-                            .strftime("%Y-%m-%d") if i["date"] else None,
-                            "also": i["also"], "signal": signal(i)} for i in top]}
+               "candidates": {"top": top_uniq, "new": new_uniq},
+               "top": [row(i, True) for i in top], "new": [row(i, False) for i in new]}
         print(json.dumps(out, ensure_ascii=False, indent=1))
     else:
-        print(f"# scout \"{a.keywords}\" days={a.days} | sources hit {len(hit)}, "
-              f"skipped {len(skipped)} | {len(top)} of {uniq} unique | {elapsed:.1f}s")
-        for i in top:
-            desc = i["desc"][:DESC_LEN] + ("..." if len(i["desc"]) > DESC_LEN else "")
-            src = i["source"] + ("+" + "+".join(i["also"]) if i["also"] else "")
-            print(f"[{src}] {i['title']} | {desc} | {signal(i)} | {i['url']}")
+        counts = ", ".join(f"{k} {len(lst)}" for k, _, lst in blocks)
+        print(f"# scout \"{a.keywords}\" mode={a.mode} days={a.days} | sources hit {len(hit)}, "
+              f"skipped {len(skipped)} | {counts} of {top_uniq + new_uniq} unique | "
+              f"{elapsed:.1f}s")
+        for k, title, lst in blocks:
+            print(f"\n## {title}")
+            for i in lst:
+                desc = i["desc"][:DESC_LEN] + ("..." if len(i["desc"]) > DESC_LEN else "")
+                src = i["source"] + ("+" + "+".join(i["also"]) if i["also"] else "")
+                print(f"[{src}] {i['title']} | {desc} | {signal(i, k == 'top')} | {i['url']}")
     sys.stdout.flush()
     sys.stderr.flush()
     # Straggler threads may still be blocked in a socket read; exit without joining them
