@@ -5,8 +5,8 @@ between its sources goes to stderr as one line starting "warning: ".
 Usage: python3 -I status/progress.py <release> [--owner X] [--root PATH]
 
 One block per epic with an unfinished milestone: "**E<n>** · Specs d/t" (t the epic's specs in
-the grid, d those whose milestones are all done), then "- **Running**" (specs with a running
-milestone) and "- **Blocked**" (specs with a stopped or waiting milestone, each with its reason),
+the grid, d those whose milestones are all done or stopped by a decision, "stopped (D<n>)"), then "- **Running**" (specs with a running
+milestone) and "- **Blocked**" (specs with a waiting milestone or one stopped for a reason other than a decision, each with its reason),
 each spec as its number and its Deliverables title. With nothing unfinished: the last epic's
 line, then "Nothing running." and the unticked Decided cards of queue.md as
 "Ready for an epic: **Q<n>**, ...".
@@ -52,6 +52,7 @@ def _common():
 C = _common()
 GRID_ROW_RE = re.compile(r"^E(\d+)\s+(\d{2}(?:\.\d+)?)\s+(.*)$")
 BRANCH_RE = re.compile(r"^Branch\s+`([^`]+)`", re.M)
+CLOSED = ("done", "skipped")  # skipped: the tracker says stopped (D<n>)
 CELL_WORDS = {"[ ]": "running", "[~]": "waiting", "·": "not started", "[!]": "stopped", "[x]": "done", "": "empty"}
 num_key = C.spec_key
 
@@ -101,7 +102,9 @@ def effective(cell, status):
     if state == "done":
         return "done", None, disagree if cell != "[x]" else None
     if state == "stopped":
-        return "stopped", None, disagree if cell != "[!]" else None
+        # stopped (D<n>): a decision ended the milestone, nothing is left to do or to unblock
+        kind = "skipped" if re.fullmatch(r"D\d+", inner or "") else "stopped"
+        return kind, None, disagree if cell != "[!]" else None
     if cell == "[!]":
         return "stopped", None, disagree if state == "waiting" else None
     if state == "waiting":
@@ -161,7 +164,7 @@ def print_progress(root, folder, plan, own, bd, q_text):
                     print(f"warning: {num} {row['name']}: {warn}", file=sys.stderr)
 
     def counts(specs):
-        return sum(1 for rows in specs.values() if all(r["kind"] == "done" for r in rows)), len(specs)
+        return sum(1 for rows in specs.values() if all(r["kind"] in CLOSED for r in rows)), len(specs)
 
     def title(num, rows):
         return titles.get(num) or rows[0]["name"]
@@ -172,7 +175,7 @@ def print_progress(root, folder, plan, own, bd, q_text):
     blocks = []
     for e in sorted(epics):
         specs = epics[e]
-        if all(r["kind"] == "done" for rows in specs.values() for r in rows):
+        if all(r["kind"] in CLOSED for rows in specs.values() for r in rows):
             continue
         d, t = counts(specs)
         lines = [f"**E{e}** · Specs {d}/{t}"]
