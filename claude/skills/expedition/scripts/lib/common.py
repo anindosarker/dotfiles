@@ -303,7 +303,12 @@ def push_plans(root, repo):
     remotes = subprocess.run(["git", "-C", str(repo), "remote"], capture_output=True, text=True).stdout.split()
     if not remotes:
         return
-    r = subprocess.run(["git", "-C", str(repo), "push", "-q", remotes[0], "HEAD"], capture_output=True, text=True)
+    push = lambda: subprocess.run(["git", "-C", str(repo), "push", "-q", remotes[0], "HEAD"], capture_output=True, text=True)
+    r = push()
+    if r.returncode:
+        # The remote moved (another session pushed): rebase with local edits set aside, then push once more.
+        subprocess.run(["git", "-C", str(repo), "pull", "-q", "--rebase", "--autostash"], capture_output=True, text=True)
+        r = push()
     if r.returncode:
         print(f"warning: git push in {repo} failed: {(r.stderr or r.stdout).strip()}", file=sys.stderr)
 
