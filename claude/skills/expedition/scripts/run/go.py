@@ -100,18 +100,22 @@ class Go:
         return subprocess.run(["git", "-C", str(self.root), *args], capture_output=True, text=True)
 
     def commit(self, paths, message):
-        """git add and commit the paths when any changed; True when a commit was made."""
-        paths = [str(p) for p in paths if Path(p).exists() or self.git("ls-files", "--", str(p)).stdout]
+        """git add and commit the paths when any changed, in the repo C.plan_repo names; True
+        when a commit was made."""
+        repo, paths = C.plan_repo(self.root, paths)
+        git = lambda *args: subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+        paths = [p for p in paths if Path(p).exists() or git("ls-files", "--", p).stdout]
         if not paths:
             return False
-        r = self.git("add", "-A", "--", *paths)
+        r = git("add", "-A", "--", *paths)
         if r.returncode:
             raise StepFailed(f"git add: {last_line(r)}")
-        if self.git("diff", "--cached", "--quiet", "--", *paths).returncode == 0:
+        if git("diff", "--cached", "--quiet", "--", *paths).returncode == 0:
             return False
-        r = self.git("commit", "-q", "-m", message, "--", *paths)
+        r = git("commit", "-q", "-m", message, "--", *paths)
         if r.returncode:
             raise StepFailed(f"git commit: {last_line(r)}")
+        C.push_plans(self.root, repo)
         return True
 
     def logged(self, what):

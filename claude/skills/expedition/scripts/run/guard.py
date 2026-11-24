@@ -119,6 +119,7 @@ def git_roots(cwd):
 
 def allowed_roots(cwd):
     roots = [os.path.realpath(cwd)] + git_roots(cwd)
+    roots += [os.path.realpath(p) for p in (os.path.join(r, ".ai", "plans") for r in roots) if os.path.islink(p)]
     for t in ("/tmp", "/private/tmp", "/var/folders", "/private/var/folders",
               os.environ.get("TMPDIR", ""), os.environ.get("CLAUDE_SCRATCHPAD", "")):
         if t:

@@ -149,7 +149,7 @@ const RELEASE_SCHEMA = { type: 'object', properties: { version: { type: 'string'
 // Rules for agents in the main checkout (merge, check, release): no worktree, plan files committed by path.
 const ROOT_RULES = `
 Rules that bind you: read ${PROCESS_FILE} first (the project facts: branches, merge, checks, agent sandbox) and follow every line. In addition:
-- Work in the main checkout ${ROOT}. Run \`git -C ${ROOT} status\` first; leave unrelated changes as they are. Commit plan files only with named paths (\`git commit -- <paths>\`), never \`git add -A\` or \`git commit -a\`.
+- Work in the main checkout ${ROOT}. Run \`git -C ${ROOT} status\` first; leave unrelated changes as they are. Commit plan files only with named paths (\`git commit -- <paths>\`), never \`git add -A\` or \`git commit -a\`. When \`${PLANS}\` sits behind a link into another repo, commit plan files in that repo: \`git -C ${PLANS} commit -- <paths relative to it>\`.
 - Commit trailer and PR body line exactly as the harness reminder gives them.
 - Decisions: ${PLANS}/decisions.md (read it first; never re-decide).
 - Questions are not possible. Record a judgment call the owner may want to revert as one line in attention, its first sentence saying what goes wrong for a user of the library or a reader of the docs if it is ignored; a point that cannot say that is not an attention line. Never stop the run.

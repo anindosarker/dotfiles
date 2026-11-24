@@ -133,11 +133,18 @@ def ignore_renders(folder):
     path = Path(r.stdout.strip()) / ".gitignore"
     text = path.read_text(encoding="utf-8") if path.is_file() else ""
     have = {l.strip() for l in text.splitlines()}
-    missing = [l for l in RENDER_IGNORES if l not in have]
+    missing = [l for l in render_ignores(folder, r.stdout.strip()) if l not in have]
     if missing:
         sep = "" if not text or text.endswith("\n") else "\n"
         path.write_text(text + sep + "".join(l + "\n" for l in missing), encoding="utf-8")
         print(f"{path}: added {', '.join(missing)}")
+
+
+def render_ignores(folder, top):
+    """RENDER_IGNORES relative to the repo top level that holds the release folder: the same lines
+    when .ai/plans is a plain folder, the link target's path in its own repo when it is a link."""
+    rel = Path(folder).resolve().parent.parent.relative_to(Path(top).resolve()).as_posix()
+    return [l.replace(".ai/plans", rel, 1) for l in RENDER_IGNORES]
 
 
 def ensure_gitignore(folder):
@@ -150,7 +157,7 @@ def ensure_gitignore(folder):
     except Exception:
         return
     gi = Path(root) / ".gitignore"
-    lines = [".ai/plans/*/*/status/index.html", ".ai/plans/*/*/status/data/"]
+    lines = render_ignores(folder, root)
     have = gi.read_text().splitlines() if gi.is_file() else []
     missing = [l for l in lines if l not in have]
     if missing:
@@ -275,10 +282,38 @@ def git(root, *args):
         die(f"git {' '.join(args[:1])} failed: {(r.stderr or r.stdout).strip()}")
 
 
+def plan_repo(root, paths):
+    """(repo, paths) for a commit of plan files: root and the paths as given, or, when
+    root/.ai/plans is a link, the repo the link points into and the paths resolved through it."""
+    plans = Path(root) / ".ai" / "plans"
+    if not plans.is_symlink():
+        return Path(root), [str(p) for p in paths]
+    r = subprocess.run(["git", "-C", str(plans.resolve()), "rev-parse", "--show-toplevel"],
+                       capture_output=True, text=True)
+    if r.returncode:
+        die(f"{plans} links to {plans.resolve()}, which is not in a git repo")
+    return Path(r.stdout.strip()), [str(Path(p).resolve()) for p in paths]
+
+
+def push_plans(root, repo):
+    """Push repo when it is not root (the .ai/plans link target) and has a remote; a failed push
+    warns and the commit stays."""
+    if Path(repo).resolve() == Path(root).resolve():
+        return
+    remotes = subprocess.run(["git", "-C", str(repo), "remote"], capture_output=True, text=True).stdout.split()
+    if not remotes:
+        return
+    r = subprocess.run(["git", "-C", str(repo), "push", "-q", remotes[0], "HEAD"], capture_output=True, text=True)
+    if r.returncode:
+        print(f"warning: git push in {repo} failed: {(r.stderr or r.stdout).strip()}", file=sys.stderr)
+
+
 def commit(root, paths, message):
     """git add and commit the paths that exist, with --only; nothing when none changed. Dies with
-    one line on a git failure. Never pushes."""
-    git_ = lambda *args: subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
+    one line on a git failure. Commits in the repo plan_repo names; pushes only that repo when it
+    is not root and has a remote."""
+    repo, paths = plan_repo(root, paths)
+    git_ = lambda *args: subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
     tracked = [str(p) for p in paths if Path(p).exists()]
     r = git_("add", "--", *tracked)
     if r.returncode:
@@ -289,6 +324,7 @@ def commit(root, paths, message):
     r = git_("commit", "-q", "-m", message, "--only", "--", *tracked)
     if r.returncode:
         die(f"git commit failed: {(r.stderr or r.stdout).strip()}")
+    push_plans(root, repo)
     return True
 
 
