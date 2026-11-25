@@ -4,7 +4,7 @@
 
 ### 1.1 Overview
 
-Two or three sentences: the problem and why this spec exists. Cite the decision, as `(D7)`.
+Two or three sentences: the problem and why this spec exists. Cite the decision, as (D<n>).
 
 ### 1.2 Goals
 

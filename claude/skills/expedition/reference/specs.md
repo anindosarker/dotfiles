@@ -6,7 +6,7 @@ What expedition adds on top of a plan file. The planning guidelines ([planning-g
 
 - Under expedition the root plan file `<release>-plan.md` is an index with two sections only, `## Goals` and `## Deliverables` ([files.md](files.md), `<release>-plan.md` sections).
 - Each spec, `plan/specs/NN-<slug>.md`, is one plan file written by the guidelines. Where the guidelines say "plan", read "spec".
-- The plan folder of the guidelines is the release folder `.ai/plans/v0.<n>.x/<owner>/`. Its other files and folders belong to expedition: [files.md](files.md), Layout.
+- The plan folder of the guidelines is the release folder `.ai/plans/v0.<n>.x/<owner>/`. `<owner>` is the folder name the scripts find, the most common folder name under `.ai/plans/v*.x/`, or the value of `--owner`; it is not read from `git config`. Its other files and folders belong to expedition: [files.md](files.md), Layout.
 - A scope agreed in discussion is recorded in `decisions.md` before the spec is written. The spec implements the decision and never re-decides it.
 - A question is asked in chat. Once the owner has answered it and said the explicit word, the answer goes to `decisions.md`, never into a spec.
 
@@ -26,9 +26,9 @@ The three aims to weigh, and what to do when they pull against each other: [SKIL
 
 These lines are expedition's own. The contract in [SKILL.md](../SKILL.md) says which of them a script needs.
 
-- Decision cites: `(D7)` at the end of each line that implements decision D7, `(Q3)` for a queue card, `(v0.4.x D9)` for a decision of another release.
+- Decision cites: `(D7)` at the end of each line that implements decision D7, outside code fences (the scripts count every cite in the file outside a fence), `(Q3)` for a queue card, `(v0.4.x D9)` for a decision of another release.
 - `- Review: none | fable` in each milestone block. `Review: fable` only where the change warrants a review: a public API, shared state, or a change across specs. Every other milestone says `Review: none` and gets its checks only. The runner picks the orchestration.
-- `- Local CI:` in each milestone block: what runs on the merged tree before the merge, beyond the task checks, or `none`.
+- `- Local CI:` in each milestone block: what runs on the merged tree before the merge, beyond the task checks, or `none`. Examples: `pnpm test --changed`, `act pull_request -j <job>`.
 - A judged Acceptance: the `- Acceptance:` line names the reference path and the points the three judges rule on ([run.md](run.md), Milestones and sprints, the Acceptance bullet). A programmatic Acceptance needs no judges.
 - `- Epic: E<n>` under the spec title and `- Starts: S<n>` in a milestone block are written by `epics/tag.py` and `plan/new_fix.py`. No session writes them by hand.
 

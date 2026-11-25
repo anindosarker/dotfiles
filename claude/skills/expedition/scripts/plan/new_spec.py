@@ -9,7 +9,7 @@ Usage: python3 -I plan/new_spec.py <release> <num> <slug> "<Title>" "<scope>"
 
 Template: --template PATH, else a contract stub when the project has planning
 rules (plan/find_rules.py), else the bundled templates/spec.md. Section 2.1 holds one "### Milestone: [name]" block with
-the lines Files owned, Depends on, Review and its Task lines; write one block per
+the lines Files owned, Depends on, Review, Local CI and its Task lines; write one block per
 milestone, then run sprints/check.py and sprints/refresh.py. A later milestone's tracker is
 run/trackers/NN-<milestone-slug>-tracker.md.
 
@@ -54,6 +54,7 @@ Follow the project planning rules: {paths}. Keep the contract in the expedition 
 - Files owned: `[path]`, `[path]`
 - Depends on: none
 - Review: none
+- Local CI: none
 - Task 1: [step] Checks: `[command]`
 - Task 2: [step] Checks: `[command]`
 """

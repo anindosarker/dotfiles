@@ -183,11 +183,11 @@ These are aims, not rules. They pull against each other, and the right cut depen
 
 The contract. It applies inside any template, and it is stated here only. Under expedition the root `<release>-plan.md` is the index with `## Goals` and `## Deliverables`, and each spec is one plan file written by the guidelines.
 
-Part 1, what the plan file must carry. A plan written by the bundled guidelines already has all of it:
+Part 1, what the plan file must carry. A plan written by the bundled guidelines already has all of it but the file name, which `plan/new_spec.py` sets:
 
 - Hard, a script stops or schedules wrong without it:
   - The file name `NN-<slug>.md` (a follow-up spec `NN.M-<slug>.md`) in `plan/specs/`. `lib/ownership.py` does not see a file with another name.
-  - One `### Milestone: <name>` block per milestone.
+  - One `### Milestone: <name>` block per milestone. Milestone names are unique across the release and hold no `|`; a repeat is a `sprints/check.py` error.
   - `- Files owned: a, b` in each block. A block without the line is a `sprints/check.py` error.
   - `- Depends on:` in each block: exact milestone names, spec numbers, or `none`. An unknown name is a `sprints/check.py` error; a missing line schedules the milestone as if it depended on nothing.
 - Shown only as `status/report.py` warnings, fixed in the readiness check (step 7):
@@ -197,7 +197,7 @@ Part 1, what the plan file must carry. A plan written by the bundled guidelines 
 
 Part 2, what the spec writer adds on top. No planning guidelines need to mention these:
 
-- Hard: `(D7)` on each line that implements decision D7. `epics/tag.py`, `epics/table.py` and `run/go.py` find an epic's specs by these cites.
+- Hard: `(D7)` at the end of each line that implements decision D7, outside code fences. `epics/tag.py`, `epics/table.py` and `run/go.py` find an epic's specs by these cites.
 - `(Q3)` for a queue card, `(v0.4.x D9)` for a decision of another release.
 - `- Review: none | fable` in each milestone block. No script acts on it; the runner reads it when it writes the workflow script.
 - `- Local CI:` in each milestone block (Process notes).
