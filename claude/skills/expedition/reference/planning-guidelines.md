@@ -34,13 +34,7 @@ Nothing under `status/` is written by hand: `sprints/refresh.py` writes it and `
 
 ## Cutting an epic into specs
 
-Weigh three aims.
-
-- As much as possible runs side by side. Specs that do not share files can be built at the same time.
-- No spec is bloated. One spec is a piece of work one builder can hold and one review can cover.
-- Work is not split so finely that agents repeat each other. Changes to the same area are cheaper in one spec: a filter look change and a filter bug fix go to the same builder, who already has that code in context.
-
-These are aims, not rules. They pull against each other, and the right cut depends on the epic. Choose the plan that is best overall, and do not bend a good plan to satisfy one aim. The ownership table and its Sprint column show the result; they do not pass or fail it. The reason for a deliberate choice (two specs sharing a file, or one larger spec) goes in the spec, in one line.
+The three aims to weigh, and what to do when they pull against each other: [SKILL.md](../SKILL.md), Stage 2, Cutting an epic into specs.
 
 ## Rules
 
@@ -263,7 +257,7 @@ Client component; highlights the active file when opened.
 Every spec file keeps these four, whatever template it follows:
 
 1. Decisions cited as `(D7)`, queue cards as `(Q3)`.
-2. One `### Milestone: <name>` block per milestone in section 2.1, with `Files owned`, `Depends on` and `Review`; `Review: fable` only where the change warrants a review (public API, shared state, cross-spec); otherwise `none`: the run manager picks the orchestration.
+2. One `### Milestone: <name>` block per milestone in section 2.1, with `Files owned`, `Depends on` and `Review`; `Review: fable` only where the change warrants a review (public API, shared state, cross-spec); otherwise `none`: the runner picks the orchestration.
 3. Checks per task.
 4. No open questions in plan files.
 

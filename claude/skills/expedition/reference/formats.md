@@ -177,7 +177,7 @@ kanban-plugin: basic
   3. No such row: Done when it is closed by hand (a ticked card in Done: `decisions/close.py <release> D<n>` for a decision with nothing to run) or when any spec citing it has merged; In progress when it carries `#E<n>`; else To do.
   A release spec that only names a decision in its text does not keep that decision open.
 - The board may be viewed in the Unified Kanban extension, but a drag or a tick there is not a state change: `status/report.py` flags a card whose lane disagrees with the Done rule or whose tick disagrees with its lane, and the next sync moves it back.
-- Built: a milestone citing the decision has a `[ ]` or `[x]` cell in `status/sprints.md`. Before that, a change is an edit of its bullets, same id; from then on, a supersede.
+- Built: a milestone citing the decision has a `[ ]`, `[~]` or `[x]` cell in `status/sprints.md`; a `[~]` row never launched does not count (Milestone status). Before that, a change is an edit of its bullets, same id; from then on, a supersede.
 - Supersede: `decisions/supersede.py <release> D7 D15` marks both sides: D7 gets `(superseded by D15)` at the end of its title and `#superseded`, and moves to Done; D15's first bullet is `- Supersedes D7.` The mark is the only edit an old decision ever gets.
 - Deferred to another release: add the bullet `- Deferred to v0.5.x`; the sync adds `#deferred` and moves the card to Done. That release's specs cite it as `(v0.4.x D9)`.
 - A decision that came from a card ends with `- Source: Q<n>`, the last bullet.
@@ -227,9 +227,9 @@ Columns are the sprints `S1`, `S2`, ... that `lib/ownership.py` computes. Rows a
 ```md
 | Milestone | S1 | S2 |
 |---|---|---|
-| Row virtualizer  D101 | [x] |  |
-| Sticky footer  D102 | [x] |  |
-| Resize handle  D104, D105 |  | [ ] |
+| E1 01 Row virtualizer | [x] |  |
+| E1 02 Sticky footer | [x] |  |
+| E2 03 Resize handle |  | [ ] |
 ```
 
 ## Milestone status
@@ -319,7 +319,7 @@ Written with the `write-handoff` skill.
   - Stage: <the Stage line of status/report.py, e.g. discuss, run (S2)>
   - Next: `/expedition <stage> <release>`, <where to start, e.g. Q1 or spec 04.1>
   - Runner: window `<runner name>` in tmux session <name>, or none; registry `~/.claude/expedition-runners.json`
-- Writer: session `<name>` `<uuid from $CLAUDE_CODE_SESSION_ID>`, so the next session can ask it or grep its transcript (`/recall`).
+  - Writer: session `<name>` `<uuid from $CLAUDE_CODE_SESSION_ID>`, so the next session can ask it or grep its transcript (`/recall`).
   ```
 
 - No release line: the folder gives the release.
