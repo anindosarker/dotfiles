@@ -3,6 +3,7 @@
 - DISCUSS FIRST. No Edit/Write until explicit "go / apply / yes".
 - DO NOT ASK UNNECESSARY QUESTIONS. Trivial choices: decide yourself, do not ask.
 - Delegate coding to agents; main session plans and reviews.
+- Agents: shut down your own idle sub-agents once their work is merged or the topic is closed; never leave it to me. One-shot lookups are spawned without a name so they end on their own.
 - Browser checks: Broswer-use/ Playwright / agent-browser. Use whatever appropriate. Default Browser-use.
 - No em dashes.
 - "Explain" always means explain simply: 3 to 4 short bullets, plain words without technical prose; detail only on a follow-up.
