@@ -40,7 +40,7 @@ Exactly two, in order: `## Goals`, `## Deliverables`. No other `## ` section. Pr
 
 Deliverables table: columns `#`, `Spec` (linked to the spec file), `Epic` (filled at go), `Scope`. Scope is one outcome sentence under 120 characters: no file lists, no mechanics; the spec file holds them.
 
-Milestones live in the spec files, not in `<release>-plan.md`: each spec's section 2.1 holds one `### Milestone: <name>` block per milestone with the lines `- Files owned: a, b`, `- Depends on: <milestone names or spec numbers, or none>`, `- Review: none | fable`, then `- Task 1: ... Checks: ...` lines. Branch and worktree are assigned at launch and recorded in the milestone's tracker, never in the spec.
+Milestones live in the spec files, not in `<release>-plan.md`: each spec holds one `### Milestone: <name>` block per milestone, with the lines of the contract ([SKILL.md](../SKILL.md), Stage 2, The contract). Branch and worktree are assigned at launch and recorded in the milestone's tracker, never in the spec.
 
 Checks live in each task's `Checks:` and the release's `process.md`; Acceptance in each spec's `Acceptance:` line (programmatic or judged); the release in the release spec; sandbox rules in `process.md`.
 
@@ -103,9 +103,9 @@ Precedence, highest first:
 
 1. `--template PATH` on `plan/new_spec.py`.
 2. Project planning rules, found by `plan/find_rules.py`: files named like `*plan*guide*.md` or `planning*.md`, and `CLAUDE.md` or `AGENTS.md` lines that mention plan files. `plan/new_spec.py` writes a contract stub and prints each path. The agent then writes the spec by hand in the project's template. The project rules override the bundled guidelines completely: structure, headings, rules, template.
-3. Bundled default, only when no project rules are found: [planning-guidelines.md](planning-guidelines.md), template [../templates/spec.md](../templates/spec.md).
+3. Bundled default, only when no project rules are found: [planning-guidelines.md](planning-guidelines.md), which are general purpose and do not mention expedition, and the template [../templates/spec.md](../templates/spec.md), which is expedition's own and carries the added lines.
 
-The contract applies in all three: citations, the `### Milestone: <name>` blocks, checks per task, no open questions. A project template that lacks one gets it added in that project's style.
+The contract applies in all three: [SKILL.md](../SKILL.md), Stage 2, The contract. The lines expedition adds to a spec: [specs.md](specs.md).
 
 ## Conventions
 

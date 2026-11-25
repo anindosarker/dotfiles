@@ -43,7 +43,7 @@ die = C.die
 
 STUB = """# {heading}
 
-Follow the project planning rules: {paths}. Keep the expedition contract.
+Follow the project planning rules: {paths}. Keep the contract in the expedition skill's SKILL.md, Stage 2, The contract.
 
 ## 2. Instructions for AI
 

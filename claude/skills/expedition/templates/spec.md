@@ -4,7 +4,7 @@
 
 ### 1.1 Overview
 
-Two or three sentences: the problem and why this spec exists. Link the decision.
+Two or three sentences: the problem and why this spec exists. Cite the decision, as `(D7)`.
 
 ### 1.2 Goals
 
@@ -39,17 +39,19 @@ sequenceDiagram
 
 Sketch: [reference/flow.excalidraw](reference/flow.excalidraw) _(when one exists)_
 
-### 1.6 Components
+### 1.6 Modules
 
-One block per logical unit the spec introduces or modifies. Required: a short description
-and a bullet list of what it does and does not do. Optional: operations table, interfaces,
-dependencies, stays unchanged, usage examples.
+A module in a spec is one unit of the design. One block per module the spec introduces or
+modifies, grouped by logical unit, not by file. Required: a short description and a bullet
+list of what it does and does not do. Optional: operations table, interfaces, dependencies,
+stays unchanged, usage examples.
 
 #### 1.6.1 Data artifacts _(optional, always first when present)_
 
-Registry items, config files, generated files, changelog entries: what changes in them.
+Data models and fields, stored enums, config files, generated files: what changes in them.
+One entry per data model, with every field.
 
-#### 1.6.2 [Component]
+#### 1.6.2 [Module]
 
 Description and the scope decisions that shaped it.
 
@@ -70,9 +72,9 @@ export interface Example {
 }
 ```
 
-**Stays unchanged:** files this component touches without modifying.
+**Stays unchanged:** files this module touches without modifying.
 
-**Usage:**
+**Usage:** one example per distinct caller pattern.
 
 ```typescript
 example.doX({ id });
@@ -86,6 +88,8 @@ New packages, env vars (name, default, purpose), reused infrastructure.
 
 ### 2.1 Milestones
 
+One block per milestone. A milestone is one branch, one worktree, one tracker and one merge.
+
 ### Milestone: [Name]
 
 - Files owned: [a, b]
@@ -94,7 +98,7 @@ New packages, env vars (name, default, purpose), reused infrastructure.
 - Local CI: [none | `pnpm test --changed` | `act pull_request -j <job>`] (what runs on the merged tree before the merge, beyond the task checks)
 - Task 1: [what]. Checks: [commands]
 - Task 2: [what]. Checks: [commands]
-- Task N: Cleanup, delete old code, update references. Checks: repo checks
+- Task N: Cleanup, delete old code, update references. Checks: the project's checks
 
 ### 2.2 Checks
 

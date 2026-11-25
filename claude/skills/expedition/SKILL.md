@@ -43,7 +43,7 @@ Mechanical steps use the scripts, never hand-written files. The scripts sit in `
 
 Each runs as `python3 -I ${CLAUDE_SKILL_DIR}/scripts/<command>`; `run/runner.sh` runs as `${CLAUDE_SKILL_DIR}/scripts/run/runner.sh`. Arguments, what each script writes and what it refuses: [reference/files.md](reference/files.md), Scripts. A script that refuses an old release folder names a `migrate/` script: read [reference/migrate.md](reference/migrate.md) then. Also read it for a release started under an older form of this skill: trackers that say `merged` or `skipped`, or an epic with grid rows and no `Starts:`; no script refuses those.
 
-File layout, scripts and conventions: [reference/files.md](reference/files.md). File formats (decisions, queue, epic file, tracker, handoff): [reference/formats.md](reference/formats.md).
+File layout, scripts and conventions: [reference/files.md](reference/files.md). What expedition adds to a plan file: [reference/specs.md](reference/specs.md). File formats (decisions, queue, epic file, tracker, handoff): [reference/formats.md](reference/formats.md).
 
 ## Process notes
 
@@ -168,10 +168,10 @@ These are aims, not rules. They pull against each other, and the right cut depen
 
 1. Write `<release>-plan.md` first, two sections only: `## Goals`, `## Deliverables` (`#`, `Spec` linked to the spec file, `Epic` filled at go, `Scope`; Scope one outcome sentence under 120 characters, no files or mechanics). Integration never waits on CI: merge on local checks that pass, merge commit per milestone; CI is the second run, on the staging branch after the one fast-forward (stage 3). It may exist while decisions are still open. Example: [reference/example-plan.md](reference/example-plan.md).
 2. Write a spec file only when every decision it cites is accepted. A spec waiting on an open decision stays a row in `<release>-plan.md`.
-3. Create each spec with `plan/new_spec.py`. If it printed project planning rules, it wrote a contract stub. Read the rules, then write the spec by hand in the project's template. The rules override the bundled guidelines completely. Otherwise follow [reference/planning-guidelines.md](reference/planning-guidelines.md). Either way, keep the contract below. Specs implement decisions and never re-decide.
+3. Create each spec with `plan/new_spec.py`. If it printed project planning rules, it wrote a contract stub. Read the rules, then write the spec by hand in the project's template. The rules override the bundled guidelines completely. Otherwise follow [reference/planning-guidelines.md](reference/planning-guidelines.md), which say how to write one plan file and do not mention expedition. Either way, keep the contract below and add expedition's own lines ([reference/specs.md](reference/specs.md)). Specs implement decisions and never re-decide.
    - Before a spec is written, the spec writer (the forked session) maps every site the change touches (file:line table); the spec lists those files, not guesses.
    - A ride-along item (a timeout bump, a glob fix) joins the nearest spec as a named ride-along, never its own spec.
-4. Each spec says what must be proven (its `Acceptance:` line), not how it is run; the runner picks the orchestration per column ([reference/run.md](reference/run.md), Orchestration). Section 2.1 holds one `### Milestone: <name>` block per milestone with the lines `- Files owned: a, b`, `- Depends on: <milestone names or spec numbers, or none>`, `- Review: none | fable`, then its `- Task 1: ... Checks: ...` lines. Merge adjacent small tasks. A milestone whose change warrants a review (public API, shared state, a cross-spec change) says `Review: fable`; the rest get checks only. Each milestone block gets its tracker, `run/trackers/NN-<slug>-tracker.md` from `templates/tracker.md` with `Status: planned`, in the same step.
+4. Each spec says what must be proven (its `Acceptance:` line), not how it is run; the runner picks the orchestration per column ([reference/run.md](reference/run.md), Orchestration). The spec holds one `### Milestone: <name>` block per milestone; the lines of the block are in the contract below. Merge adjacent small tasks. Each milestone block gets its tracker, `run/trackers/NN-<slug>-tracker.md` from `templates/tracker.md` with `Status: planned`, in the same step.
 5. After each spec file, run `sprints/check.py`: it computes, in memory, each milestone's column and each epic's critical path from the milestone blocks, and writes nothing. A file shared by two milestones of the same column, or a dependency cycle, is a script error naming the file and the two milestones: fix it in the spec and run `sprints/check.py` again. When the epic's specs are written, `epics/table.py E<n>` completes the epic file's table. On go, `run/go.py` runs `sprints/refresh.py` then `sprints/swimlanes.py`: they write the `status/sprints.md` grid, one column per sprint, and the swimlane data for `status/index.html` (see [reference/files.md](reference/files.md)). Checks sit in each task's `Checks:` and `process.md`, Acceptance in each spec's line, the release in the release spec, sandbox rules in `process.md` P5. `status/report.py` flags a missing or extra piece.
    - The run unit is the milestone: one team, its own branch, worktree, tracker and merge. Usually one milestone per spec; a spec may yield several (file groups, or a read-only side job like captures). Every changed file is owned by exactly one milestone while it runs; two milestones that share a file sit in different columns (`lib/ownership.py` orders them, lower spec number first), or the two merge.
    - Sprints are computed across every epic: `lib/ownership.py` puts each milestone in the first column at or after its epic's start sprint (`Starts:` in the epic file, the current sprint at go) whose dependencies and file owners are satisfied. A milestone with a running or finished grid row keeps its column. A new epic never lands in a finished column, and a milestone added after go (`plan/new_fix.py`) starts at the current sprint ([reference/files.md](reference/files.md), Ownership).
@@ -181,13 +181,32 @@ These are aims, not rules. They pull against each other, and the right cut depen
 8. The release's `process.md`: before the first go, one `opus` audit agent reads it against this skill, the code (workflows, package manifests, coding standards) and the release's decisions, and returns a keep / cut / move / rewrite table per bullet; the main agent applies the table itself, rewrites the file (Process notes) and records one short decision; nothing reaches the owner unless a bullet is a real choice (Owner input). A rule that no longer applies is deleted; a rewrite of the whole file may renumber, with one line in the header mapping the old numbers (`P12 preview → D72`) so older specs and trackers still read. No placeholder left (`status/report.py` reports it). `<release>-plan.md` is not frozen: each go fills the epic's Epic cells; `status/sprints.md` moves all run long.
 9. Handoff: only when the owner asks.
 
-The contract. It applies inside any template:
+The contract. It applies inside any template, and it is stated here only. Under expedition the root `<release>-plan.md` is the index with `## Goals` and `## Deliverables`, and each spec is one plan file written by the guidelines.
 
-- Decisions cited as `(D7)`, queue cards as `(Q3)`. A decision from another release: `(v0.4.x D9)`.
-- Checks per task.
-- No open questions in plan files.
+Part 1, what the plan file must carry. A plan written by the bundled guidelines already has all of it:
 
-A project template that lacks one gets it added in that project's style. Nothing else changes.
+- Hard, a script stops or schedules wrong without it:
+  - The file name `NN-<slug>.md` (a follow-up spec `NN.M-<slug>.md`) in `plan/specs/`. `lib/ownership.py` does not see a file with another name.
+  - One `### Milestone: <name>` block per milestone.
+  - `- Files owned: a, b` in each block. A block without the line is a `sprints/check.py` error.
+  - `- Depends on:` in each block: exact milestone names, spec numbers, or `none`. An unknown name is a `sprints/check.py` error; a missing line schedules the milestone as if it depended on nothing.
+- Shown only as `status/report.py` warnings, fixed in the readiness check (step 7):
+  - `- Task N: ... Checks: ...` lines, each task with its checks.
+  - One `- Acceptance:` line per spec.
+  - No open question in a plan file. The report flags each line that ends in `?`.
+
+Part 2, what the spec writer adds on top. No planning guidelines need to mention these:
+
+- Hard: `(D7)` on each line that implements decision D7. `epics/tag.py`, `epics/table.py` and `run/go.py` find an epic's specs by these cites.
+- `(Q3)` for a queue card, `(v0.4.x D9)` for a decision of another release.
+- `- Review: none | fable` in each milestone block. No script acts on it; the runner reads it when it writes the workflow script.
+- `- Local CI:` in each milestone block (Process notes).
+- The reference and the judges on the `- Acceptance:` line, when the Acceptance is judged ([reference/run.md](reference/run.md), Milestones and sprints, the Acceptance bullet).
+- `- Epic: E<n>` and `- Starts: S<n>` are written by `epics/tag.py` and `plan/new_fix.py`, never by hand.
+
+When to use each line of part 2, with an example block: [reference/specs.md](reference/specs.md).
+
+Project planning rules override the bundled guidelines completely. A project template that lacks a line of part 1 gets it added in that project's style. The lines of part 2 are added to every spec, whatever template it follows. Nothing else in the template changes.
 
 ## Stage 3: run
 
