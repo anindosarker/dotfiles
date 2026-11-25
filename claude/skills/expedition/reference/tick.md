@@ -1,6 +1,6 @@
 # One loop fire
 
-The loop prompt names this file, so every loop fire reads it and nothing more. It holds what one fire needs; the full run rules are in [run.md](run.md). After a compaction the session may no longer hold the run rules: re-read [run.md](run.md) and [formats.md](formats.md) then, before step 4.
+The loop prompt names this file, so every loop fire reads it and nothing more. It holds what one fire needs; the full run rules are in [run.md](run.md). Re-read [run.md](run.md) and [formats.md](formats.md) before step 4 when this session has not read them since its last compaction, handoff or start; when unsure, re-read.
 
 The loop prompt must be safe to fire at any time. Loop: the loop skill with no interval (`ScheduleWakeup` dynamic mode), 30 minute fallback; the workflow or watcher notification is the real wake signal. The exact loop prompt: [run.md](run.md), Starting the run, step 5. The tick reads `status/sprints.md` and the trackers of its `[ ]` rows, not transcripts.
 
@@ -17,7 +17,7 @@ The loop prompt must be safe to fire at any time. Loop: the loop skill with no i
 
    Then re-arm the loop wakeup. Then one line to the lead per row restarted or relaunched, `NOTE <milestone>: resumed`; nothing when every row was alive. A loop that died on a limit is woken by `scripts/run/nudge-watch.sh`: it types `ultracode resume` into a runner that owns a `silent`, `finished` or `no run` row and has been quiet for 20 minutes.
 4. Run `status/report.py <release>`, read `status/sprints.md` and the trackers of its `[ ]` rows.
-5. Do the next step: a milestone launched, waiting, resumed, merged or stopped gets its mark (`sprints/mark.py <release> <milestone> launch|wait|resume|merge|stop`; [run.md](run.md), Epics); launch every `·` row whose dependencies in earlier columns have merged, from any epic that has been RUN; an epic whose every milestone is `[x]` or `[!]` gets the closing steps of [run.md](run.md), Epics. A run whose tracker has not changed since the previous tick: ask the builder "what is blocking you" and fix the environment (a port, a server, a fixture, compute); do not read its code.
+5. Do the next step: a milestone launched, waiting, resumed, merged or stopped gets its mark (`sprints/mark.py <release> <milestone> launch|wait|resume|merge|stop` (`<milestone>`: the tracker file name without `-tracker.md`, for example `47-comparison-page`); [run.md](run.md), Epics); launch every `·` row whose dependencies in earlier columns have merged, from any epic that has been RUN; an epic whose every milestone is `[x]` or `[!]` gets the closing steps of [run.md](run.md), Epics. A run whose tracker has not changed since the previous tick: ask the builder "what is blocking you" and fix the environment (a port, a server, a fixture, compute); do not read its code. A launch: [run.md](run.md), Orchestration and Workflow per milestone (record the run id with `run/runs.py`). A wait, a hold or a stop: run.md, Milestones and sprints. A merge: run.md, Results, trackers and the queue, and Handoff and end of run.
 6. Tick economy:
    - Read `status/sprints.md` and the trackers only. No `git status`, `diff` or `log` in worktrees; no pull unless a merge is due this tick.
    - A tick with work (a mark, a merge, a launch) reports one line per action.

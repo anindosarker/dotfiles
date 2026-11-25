@@ -29,7 +29,7 @@ Mechanical steps use the scripts, never hand-written files. The scripts sit in `
 - `epics/overlap.py <release> <spec numbers or D ids>`: overlap with running epics; writes nothing.
 - `epics/new.py <release> E<n> <D ids>`: starts the epic file; `--note "<text>"` appends a Notes bullet.
 - `run/go.py <release> E<n> --from <lead>`: every go step in order (On go), `epics/tag.py` among them.
-- `sprints/refresh.py <release>`: the grid refresh; the lead runs it only in Changing a decision.
+- `sprints/refresh.py <release>`: the grid refresh; run by `run/go.py` and `sprints/mark.py`, by hand in Changing a decision and after a migration.
 - `run/runner.sh start|list|stop|send|fork|resume|adopt <release>`: the runner and spec fork windows.
 - `sprints/mark.py <release> <milestone> launch|wait|resume|merge|stop`: the only writer of the cells of `status/sprints.md`.
 - `plan/new_fix.py <release> <slug> "<Title>" <spec> --files a,b --checks "<checks>"`: a mid-run fix.
@@ -41,7 +41,7 @@ Mechanical steps use the scripts, never hand-written files. The scripts sit in `
 - `status/progress.py <release>`: the progress reply for the owner (Owner input).
 - The runner's own: `run/runs.py` (the run id record) and `run/check.py` (the wake check).
 
-Each runs as `python3 -I ${CLAUDE_SKILL_DIR}/scripts/<command>`; `run/runner.sh` runs as `${CLAUDE_SKILL_DIR}/scripts/run/runner.sh`. Arguments, what each script writes and what it refuses: [reference/files.md](reference/files.md), Scripts. A script that refuses an old release folder names a `migrate/` script: read [reference/migrate.md](reference/migrate.md) then.
+Each runs as `python3 -I ${CLAUDE_SKILL_DIR}/scripts/<command>`; `run/runner.sh` runs as `${CLAUDE_SKILL_DIR}/scripts/run/runner.sh`. Arguments, what each script writes and what it refuses: [reference/files.md](reference/files.md), Scripts. A script that refuses an old release folder names a `migrate/` script: read [reference/migrate.md](reference/migrate.md) then. Also read it for a release started under an older form of this skill: trackers that say `merged` or `skipped`, or an epic with grid rows and no `Starts:`; no script refuses those.
 
 File layout, scripts and conventions: [reference/files.md](reference/files.md). File formats (decisions, queue, epic file, tracker, handoff): [reference/formats.md](reference/formats.md).
 
@@ -209,4 +209,4 @@ Folded into stage 1: the run's cards are queue cards and come up through `queue/
 
 ## Agents or Workflow
 
-Judgment, by cost. A Workflow when a milestone has more than one stage or any parallel step, so the main session wakes once; a single Agent for one bounded task; inline for mechanical edits. The next step needs a decision: end the Workflow at that boundary (`needs-decision`).
+Judgment, by cost. A Workflow when a milestone has more than one stage or any parallel step, so the main session wakes once; a single Agent for one bounded task; inline for mechanical edits. The next step needs a decision: end the Workflow at that boundary (`needs-decision`). `opus` for the shared milestone, build, fix, verify, check, baselines and lookups; `fable` for review, judges and plan writing.

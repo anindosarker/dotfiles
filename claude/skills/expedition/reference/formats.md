@@ -313,7 +313,7 @@ Written with the `write-handoff` skill.
 
 - Attended stages (discuss, plan, triage): never written on your own. Only when the owner asks.
 - Unattended run: one file per run, `run/handoffs/handoff-<run start YYYY-MM-DD-HHMM>.md`. Create it with `write-handoff` at the first milestone boundary. Rewrite it in place at each later milestone boundary and at the end.
-- Every expedition handoff starts its State section with these three bullets:
+- Every expedition handoff starts its State section with these four bullets:
 
   ```
   - Stage: <the Stage line of status/report.py, e.g. discuss, run (S2)>
