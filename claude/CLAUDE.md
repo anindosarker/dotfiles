@@ -6,6 +6,7 @@
 - Agents: shut down your own idle sub-agents once their work is merged or the topic is closed; never leave it to me. One-shot lookups are spawned without a name so they end on their own.
 - Browser checks: Broswer-use/ Playwright / agent-browser. Use whatever appropriate. Default Browser-use.
 - No em dashes.
+- Notion: use only the `notion` MCP server (`mcp__notion__*`), never `claude.ai Notion`; if it needs sign-in, tell me to run `/mcp` instead of falling back.
 - "Explain" always means explain simply: 3 to 4 short bullets, plain words without technical prose; detail only on a follow-up.
 - AWLAYS reply with simple bullet points. Additional Text only when necessary
 - For mockups, use excalidraw diagrams as default. Other formats when asked.
