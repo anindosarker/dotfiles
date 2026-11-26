@@ -45,6 +45,16 @@ Each runs as `python3 -I ${CLAUDE_SKILL_DIR}/scripts/<command>`; `run/runner.sh`
 
 File layout, scripts and conventions: [reference/files.md](reference/files.md). What expedition adds to a plan file: [reference/specs.md](reference/specs.md). File formats (decisions, queue, epic file, tracker, handoff): [reference/formats.md](reference/formats.md).
 
+## First run
+
+Only when the project has no plan folder yet (the line above reads `No process.md found`), and before `plan/new_cycle.py` runs. A project that already has a plan folder is never asked. Trees and the root `CLAUDE.md` lines: [templates/root-layout.md](templates/root-layout.md).
+
+- The lead shows the suggested tree, says what the current folder has and what differs, and hints at a local `git init` in the root (no remote needed) and worktrees under `<repo>.worktrees/`.
+- It asks the one thing that varies, `Plans inside the repo (default), or in the root?`, and ends with `Say "set up" to arrange it, or "keep" to stay as is.`
+- `set up`: the lead creates what is missing: the root `CLAUDE.md` from the template (an existing one is never overwritten: the lead shows the lines to add), the folder `<repo>.worktrees/`, and a local git repo in the root when there is none, with `<repo>/` and `<repo>.worktrees/` added to the root's `.git/info/exclude`. Then the release folder, and the layout bullets of `process.md` filled for the chosen tree.
+- `keep`: nothing is arranged; `process.md` is filled by hand.
+- Nothing existing is moved or renamed, ever. A project whose worktrees or plans already sit elsewhere is told the difference and keeps them unless the owner moves them.
+
 ## Process notes
 
 The release's `process.md` holds project facts only: branches, the milestone branch and worktree, merge, release, checks on the shared machine, the agent sandbox, the public surface, commits, shared files, plans. The process itself is this skill; commands are in the package manifests; code rules in the project's coding standards; what a milestone must run is in its spec (`Local CI:` line). An owner instruction about how the project is worked is a decision (`D<n>`) first; it becomes a `P<n>` bullet only when it is a standing project fact every spec needs. A lesson from the run goes to the tracker's Notes or to this skill, never to `process.md`.
@@ -53,7 +63,7 @@ Writing a rule: one rule per topic, two to five bullets; each bullet a full sent
 
 ## Owner input
 
-- Owner words: `record it`, `accepted`, `k`, `epic`, `hold D<n>`, `go`, `epic go`, `roll over`.
+- Owner words: `record it`, `accepted`, `k`, `epic`, `hold D<n>`, `go`, `epic go`, `roll over`; `set up` and `keep` for the First run question only.
 - **Explicit word.** No plan-file write until the owner's explicit word. The point of this rule: while the owner is still talking an item through, nothing about it goes into plan files, card notes included. Write once the owner is done with it: they say so, or they move to another item. When unsure whether they are done, keep discussing. A question mark anywhere in the owner's message, also alone on the last line, is a hint that they are still discussing: answer, DO NOT GO TO THE RECORD STEP, and write nothing to plan files. A plan-file write is a new D item, a sentence added to or changed in an existing D item, or a queue card moved, dropped or closed. The words: "record it" or "accepted" writes the decision; "later" moves the card to Later; "drop it" moves it to Dropped. "k" is a yes to what the agent just asked. Asked to record (the complete item ending with the line `Say "record it" to record it, or add to it.`): it records. Asked for go: it is the go. Agent asked nothing: "k" does nothing. A picked option, a comment, specifics, a correction, "fix it", "makes sense", or any message with a question is discussion: answer the question, fold it all into the item, post the item again, and wait. Not covered: an item that never reaches the owner (a card that is not a real choice, which the lead settles or closes by Lead-side close; a card the run sends to Autofix). Once the owner comments on such an item, the rule applies to it.
 - On `progress` (or "status") the session, lead or runner, runs `status/progress.py <release>`. No warning and nothing the session knows to be wrong: it replies with the output unchanged and nothing else. Otherwise it checks, corrects the source (`sprints/mark.py` for a mark, the tracker `Status:` line for waiting), runs the script again and replies with that output. Only when no file field can hold the truth does it correct the block text itself, in the same format. The owner sees one block, no added line. When the block says a milestone waits on the lead, the lead does that work in the same turn, after the block. Example output:
 

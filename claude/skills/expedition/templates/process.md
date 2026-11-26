@@ -13,7 +13,7 @@ One rule per topic, two to five bullets. Each bullet is a full sentence that sta
 ## P2 Milestone branch and worktree
 
 - Branch `[pattern]`, created from the integration branch, never from another milestone's unmerged branch.
-- Worktree from the pool `[path]`; the reset command in a code block.
+- Worktree `[repo].worktrees/<name>`, in the root folder beside `[repo]/`; the reset command in a code block.
 - Never force-push; never bare `git stash`.
 
 ## P3 Merge
@@ -46,4 +46,6 @@ One rule per topic, two to five bullets. Each bullet is a full sentence that sta
 
 ## P10 Plans
 
+- Sessions start in the root folder, the folder that holds `[repo]/` and `[repo].worktrees/`; git runs as `git -C [repo]`.
+- The plan folder is `[repo]/.ai/plans/`; plan commits are made in `[repo]`, with the project.
 - The planning template the specs follow; what `<release>-plan.md` names; how bugs are reproduced before planning.

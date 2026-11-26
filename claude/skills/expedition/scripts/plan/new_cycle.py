@@ -67,14 +67,17 @@ def process_text(root, owner, release):
     if earlier:
         src = earlier[-1]
         text = src.read_text(encoding="utf-8")
-        text = re.sub(r"^# Expedition process, .*$", f"# Expedition process, {release}", text, count=1, flags=re.M)
+        text = re.sub(r"^# (?:Expedition process|Process), .*$", f"# Process, {release}", text, count=1, flags=re.M)
         print(f"process.md copied from {src.relative_to(root)}; trim it for this release")
         return text
     tpl = C.TEMPLATES / "process.md"
     if not tpl.is_file():
         die(f"template missing: {tpl}")
     print("process.md from the skill template; fill every [...] placeholder")
-    return tpl.read_text(encoding="utf-8").replace("[project]", release, 1)
+    text = tpl.read_text(encoding="utf-8").replace("[release]", release, 1)
+    # The plan folder sits in the project repo unless a folder below it is a repo of its own.
+    nested = any((d / ".git").exists() for d in root.iterdir() if d.is_dir())
+    return text if nested else text.replace("[repo]", root.name)
 
 
 
