@@ -101,21 +101,33 @@ def secret(path):
 
 
 def worktree_roots(cwd):
-    """The folders of the repo's registered worktrees that exist; never /, the home folder or
-    a folder above it. Any failure gives none."""
+    """The folders of the repo's linked worktrees: registered, holding a .git file, never the
+    main checkout, a bare repo, /, the home folder or a folder above it. Any failure gives none."""
     try:
-        out = subprocess.run(["git", "-C", cwd, "worktree", "list", "--porcelain"],
-                             capture_output=True, text=True, timeout=2).stdout.split("\n")
-        trees = [os.path.realpath(line[9:]) for line in out if line.startswith("worktree ")]
-        home = os.path.realpath(HOME)
-        return [t for t in trees if os.path.isdir(t) and not under(home, t)]
+        out = subprocess.run(["git", "-C", cwd, "worktree", "list", "--porcelain", "-z"],
+                             capture_output=True, text=True, timeout=2).stdout
+        home, trees = os.path.realpath(HOME), []
+        for record in out.split("\0\0")[1:]:  # the first record is the main checkout
+            fields = record.strip("\0").split("\0")
+            if not fields[0].startswith("worktree ") or "bare" in fields:
+                continue
+            t = os.path.realpath(fields[0][9:])
+            if os.path.isfile(os.path.join(t, ".git")) and not under(home, t):
+                trees.append(t)
+        return trees
     except Exception:
         return []
 
 
 def in_worktree(path, tree):
-    """True for the worktree folder itself and for a path inside it."""
-    return path == tree or path.split("*", 1)[0].startswith(tree.rstrip("/") + "/")
+    """True when the target's real path is the worktree folder or inside it. A glob is judged
+    by the folder that holds it; a glob in a folder name is never inside."""
+    head, star, rest = path.partition("*")
+    if star:
+        if "/" in rest:
+            return False
+        path = head if head.endswith("/") else os.path.dirname(head)
+    return under(os.path.realpath(path), tree)
 
 
 def git_roots(cwd):
@@ -199,7 +211,9 @@ def check_rm(words, cwd):
         found.append((raw, p, base))
     if not cwd or not found:
         return
-    roots, trees = allowed_roots(cwd), worktree_roots(cwd)
+    roots = allowed_roots(cwd)
+    here = os.path.realpath(cwd)  # the worktree the session is in keeps the rule of any repo root
+    trees = [t for t in worktree_roots(cwd) if not under(here, t)]
     for raw, p, base in found:
         if not any(under(base, r, strict=True) for r in roots) and not any(in_worktree(p, t) for t in trees):
             block(f"rm -r on {raw}: outside the repo, its worktrees, the working folder and temp folders")
