@@ -47,5 +47,5 @@ One rule per topic, two to five bullets. Each bullet is a full sentence that sta
 ## P10 Plans
 
 - Sessions start in the root folder, the folder that holds `[repo]/` and `[repo].worktrees/`; git runs as `git -C [repo]`.
-- The plan folder is `[repo]/.ai/plans/`; plan commits are made in `[repo]`, with the project.
+- The plan folder is `[plan folder]`; plan commits are made in `[plan repo]`.
 - The planning template the specs follow; what `<release>-plan.md` names; how bugs are reproduced before planning.

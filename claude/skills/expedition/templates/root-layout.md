@@ -48,4 +48,4 @@ Only when plans are in the root, one more line:
 
 ## process.md
 
-`templates/process.md` is written for plans in the repo. With plans in the root, the plan folder bullet of its Plans rule becomes: The plan folder is `.ai/plans/` in the root folder; plan commits are made in the git repo that holds it, never in `<repo>`.
+With plans in the repo, `plan/new_cycle.py` fills `[repo]`, `[plan folder]` and `[plan repo]` in the new `process.md`. With plans in the root it leaves them, and the lead fills them: `[repo]` is the project repo's folder name, `[plan folder]` is `.ai/plans/` in the root folder, and `[plan repo]` is the git repo that holds that folder, never `<repo>`.

@@ -7,8 +7,8 @@ Reads the hook JSON on stdin and blocks a Bash command that no run ever needs:
   "<" redirect) naming ~/.ssh/, ~/.aws/, ~/.gnupg/, ~/.netrc, ~/.npmrc, ~/.config/gh/hosts.yml,
   ~/.claude/.credentials.json or ~/.claude.json;
 - rm -r / rm -rf whose target is /, ~, $HOME, or a path not strictly inside the session's
-  repo, its worktrees folder (<repo>.worktrees), a registered worktree or the folder that holds
-  those worktrees, the working folder, or a temp folder.
+  repo, its worktrees folder (<repo>.worktrees), the working folder or a temp folder, and that
+  is not a registered worktree of the repo or a path inside one.
 A block prints one line on stderr and exits 2 (the hook protocol's block). Anything else, and
 any input it cannot parse, exits 0 with no output, so the guard can never wedge a run. It only
 parses its input; nothing in it is executed. A guard against mistakes and poisoned text, not a
@@ -100,22 +100,26 @@ def secret(path):
     return next((s for s in secrets if path and under(path, s)), None)
 
 
-def worktree_roots(cwd, main):
-    """The registered worktrees outside the main checkout, and their common parent folder
-    unless the main checkout sits under it (that folder then holds other projects too)."""
-    out = subprocess.run(["git", "-C", cwd, "worktree", "list", "--porcelain"],
-                         capture_output=True, text=True, timeout=2).stdout.split("\n")
-    trees = [os.path.realpath(line[9:]) for line in out if line.startswith("worktree ")]
-    trees = [t for t in trees if not under(t, main)]
-    if not trees:
+def worktree_roots(cwd):
+    """The folders of the repo's registered worktrees that exist; never /, the home folder or
+    a folder above it. Any failure gives none."""
+    try:
+        out = subprocess.run(["git", "-C", cwd, "worktree", "list", "--porcelain"],
+                             capture_output=True, text=True, timeout=2).stdout.split("\n")
+        trees = [os.path.realpath(line[9:]) for line in out if line.startswith("worktree ")]
+        home = os.path.realpath(HOME)
+        return [t for t in trees if os.path.isdir(t) and not under(home, t)]
+    except Exception:
         return []
-    parent = os.path.commonpath([os.path.dirname(t) for t in trees])
-    return trees + ([] if under(main, parent) else [parent])
+
+
+def in_worktree(path, tree):
+    """True for the worktree folder itself and for a path inside it."""
+    return path == tree or path.split("*", 1)[0].startswith(tree.rstrip("/") + "/")
 
 
 def git_roots(cwd):
-    """The session's repo roots: the current top level, the main checkout, <main>.worktrees,
-    and the registered worktrees with the folder that holds them."""
+    """The session's repo roots: the current top level, the main checkout, <main>.worktrees."""
     roots = []
     try:
         out = subprocess.run(["git", "-C", cwd, "rev-parse", "--path-format=absolute",
@@ -127,8 +131,7 @@ def git_roots(cwd):
             if common.endswith("/.git"):
                 main = os.path.realpath(common[:-5])
                 roots += [main, main + ".worktrees"]
-                roots += worktree_roots(cwd, main)
-    except (OSError, subprocess.SubprocessError):
+    except Exception:
         pass
     return roots
 
@@ -183,8 +186,8 @@ def check_rm(words, cwd):
         if w.startswith("-") and not seen_dashdash:
             continue
         targets.append(w)
-    roots = allowed_roots(cwd) if cwd else None
     home = os.path.realpath(HOME)
+    found = []
     for t in targets:
         raw = t.strip("'\"")
         p = expand(raw, cwd)
@@ -193,7 +196,12 @@ def check_rm(words, cwd):
         base = p.split("*", 1)[0].rstrip("/") or "/"
         if base in ("/", home):
             block(f"rm -r on {raw}")
-        if roots is not None and not any(under(base, r, strict=True) for r in roots):
+        found.append((raw, p, base))
+    if not cwd or not found:
+        return
+    roots, trees = allowed_roots(cwd), worktree_roots(cwd)
+    for raw, p, base in found:
+        if not any(under(base, r, strict=True) for r in roots) and not any(in_worktree(p, t) for t in trees):
             block(f"rm -r on {raw}: outside the repo, its worktrees, the working folder and temp folders")
 
 

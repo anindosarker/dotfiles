@@ -18,6 +18,7 @@ import datetime
 import importlib.util
 import re
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -57,6 +58,17 @@ def release_key(name):
     return tuple(int(x) for x in re.findall(r"\d+", name))
 
 
+def repo_name(root):
+    """The project repo's folder name when the plan folder is inside that repo (its main
+    checkout or a worktree of it), else None: root is in no git repo, or a folder below it is
+    a repo of its own (plans in the root)."""
+    r = subprocess.run(["git", "-C", str(root), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                       capture_output=True, text=True)
+    if r.returncode or any((d / ".git").exists() for d in root.iterdir() if d.is_dir()):
+        return None
+    return Path(r.stdout.strip()).parent.name
+
+
 def process_text(root, owner, release):
     """The newest earlier release's process.md with its title updated, else the template."""
     plans = root / ".ai" / "plans"
@@ -75,9 +87,11 @@ def process_text(root, owner, release):
         die(f"template missing: {tpl}")
     print("process.md from the skill template; fill every [...] placeholder")
     text = tpl.read_text(encoding="utf-8").replace("[release]", release, 1)
-    # The plan folder sits in the project repo unless a folder below it is a repo of its own.
-    nested = any((d / ".git").exists() for d in root.iterdir() if d.is_dir())
-    return text if nested else text.replace("[repo]", root.name)
+    repo = repo_name(root)
+    if repo:
+        text = (text.replace("[plan folder]", f"{repo}/.ai/plans/").replace("[plan repo]", repo)
+                .replace("[repo]", repo))
+    return text
 
 
 

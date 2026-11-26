@@ -47,12 +47,13 @@ File layout, scripts and conventions: [reference/files.md](reference/files.md). 
 
 ## First run
 
-Only when the project has no plan folder yet (the line above reads `No process.md found`), and before `plan/new_cycle.py` runs. A project that already has a plan folder is never asked. Trees and the root `CLAUDE.md` lines: [templates/root-layout.md](templates/root-layout.md).
+Only when the project has no `.ai/plans/` folder, in the repo or in the root, and before `plan/new_cycle.py` runs. A project that already has one is never asked. Trees and the root `CLAUDE.md` lines: [templates/root-layout.md](templates/root-layout.md).
 
 - The lead shows the suggested tree, says what the current folder has and what differs, and hints at a local `git init` in the root (no remote needed) and worktrees under `<repo>.worktrees/`.
 - It asks the one thing that varies, `Plans inside the repo (default), or in the root?`, and ends with `Say "set up" to arrange it, or "keep" to stay as is.`
 - `set up`: the lead creates what is missing: the root `CLAUDE.md` from the template (an existing one is never overwritten: the lead shows the lines to add), the folder `<repo>.worktrees/`, and a local git repo in the root when there is none, with `<repo>/` and `<repo>.worktrees/` added to the root's `.git/info/exclude`. Then the release folder, and the layout bullets of `process.md` filled for the chosen tree.
 - `keep`: nothing is arranged; `process.md` is filled by hand.
+- The first release folder, run from the root after either word: `plan/new_cycle.py <release> --owner <owner> --root <repo>` for plans in the repo, `--root .` for plans in the root.
 - Nothing existing is moved or renamed, ever. A project whose worktrees or plans already sit elsewhere is told the difference and keeps them unless the owner moves them.
 
 ## Process notes
