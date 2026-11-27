@@ -22,9 +22,9 @@
 ├── run/trackers/NN-<slug>-tracker.md ← one per milestone: branch, check lines, staged attention items, notes; no status
 ├── run/handoffs/          ← write-handoff output
 ├── status/sprints.md       ← generated, like everything under status/ (never edited by hand); sprints/refresh.py, by run/go.py: the grid, one row per milestone, one column per sprint; its marks set by sprints/mark.py only
-├── status/index.html       ← the swimlane page, copied from templates/swimlanes.html by plan/new_cycle.py, refreshed by sprints/swimlanes.py when the template is newer; a render, git-ignored, never committed
+├── status/index.html       ← the status page, a render, git-ignored, never committed: in a release of format 0.2 the task board, copied from templates/task-board.html by plan/new_cycle.py and kept current by sprints/swimlanes.py; in an earlier release the swimlane page from templates/swimlanes.html
 ├── status/data/status.json ← the store of every status (epic, spec, milestone, task) and the data of the status board; written by status/status.py and sprints/mark.py only; committed
-├── status/data/status.data.js, sprints.data.js, sprints.json ← page data, rewritten with every status change; git-ignored, never committed
+├── status/data/status.data.js ← the task board's data, rewritten with every status change; git-ignored, never committed. sprints.data.js and sprints.json, the swimlane page's data, are written only in a release made before status.json
 ├── status/data/go.log      ← run/go.py: one line per runner step done (the writer window closed, the RUN line sent) per epic, so a rerun skips it; git-ignored
 ├── status/data/runs.json   ← run/runs.py: the Workflow run id of each milestone, written by the runner at launch, the newest id wins; read by run/check.py; git-ignored
 ├── status/data/.ids.lock   ← the write lock every writing script takes (ids, the queue, decisions, the grid and its marks); an empty file, git-ignored with the folder

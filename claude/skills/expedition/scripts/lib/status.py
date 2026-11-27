@@ -268,6 +268,12 @@ def save(folder, data):
     else:
         write_json(p, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
         CHANGED.append(p)
+    write_page_data(folder, data)
+
+
+def write_page_data(folder, data=None):
+    """status.data.js, the data of the page status/index.html: the stored file plus "root"."""
+    data = data or load(folder)
     page = {k: v for k, v in data.items() if k in ("release", "format", "updated")}
     page.update(root=str(folder), **{k: v for k, v in data.items() if k not in page})
     write_json(folder / SCRIPT, f"window.STATUS_DATA = {json.dumps(page, indent=2, ensure_ascii=False)};\n")

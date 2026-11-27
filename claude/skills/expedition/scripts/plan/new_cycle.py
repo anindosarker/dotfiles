@@ -7,7 +7,7 @@ earlier release (else the skill template), and the sub-folders:
   run/trackers/  run/handoffs/   written during the run
   status/index.html  status/data/       generated; nothing under status/ is edited by hand
 
-status/index.html is copied from templates/swimlanes.html. status/index.html and status/data/
+status/index.html is copied from templates/task-board.html. status/index.html and status/data/
 are renders, never committed: the two .ai/plans/*/*/status/ lines are appended to the repo's
 .gitignore when missing. status/sprints.md and status/data/ are written later by sprints/refresh.py.
 
@@ -93,7 +93,7 @@ def main():
     for sub in ("plan/specs", "plan/epics", "run/trackers", "run/handoffs", "status/data"):
         (folder / sub).mkdir(parents=True)
         print(folder / sub)
-    tpl = C.TEMPLATES / "swimlanes.html"
+    tpl = C.TEMPLATES / "task-board.html"
     if not tpl.is_file():
         die(f"template missing: {tpl}")
     shutil.copyfile(tpl, folder / "status" / "index.html")

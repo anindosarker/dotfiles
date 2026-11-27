@@ -10,7 +10,7 @@ What is new:
 - A spec in work grows: a new piece of work is the next module, its task files and its own milestone, added with `plan/milestone.py add`. `plan/task.py add` adds one more task. A spec that is done takes nothing; later work is a new spec.
 - One status file, `status/data/status.json`, holds the status of every epic, spec, milestone and task in five words: not started, in progress, blocked, done, skipped. One command reads and writes it, `status/status.py`. The sprint grid and the `status:` line of each file are copies it writes.
 - A task whose only open check is the owner's own look is blocked with that reason, and shows as such.
-- The same file is the data of the status board, with `status/data/status.data.js`.
+- A release in format 0.2 has the task board at `status/index.html`, in place of the swimlane page. It reads `status/data/status.data.js`, written from the status file on every change, and reloads every 30 seconds.
 - The process file starts from a short template and carries `updated`, the time its facts were last checked.
 - `templates/` holds the shape of every authored file, and `example/` one small release with every kind of file filled in.
 - Migrations sit in `scripts/migrate/`, one folder per version step, each with a guide.
