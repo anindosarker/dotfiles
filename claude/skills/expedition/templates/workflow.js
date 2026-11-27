@@ -106,12 +106,12 @@ const SPECIFICS = {
   'NN': `Milestone NN specifics: ...`,
 }
 
-const buildPrompt = (p, wt = p.wt, branch = p.branch) => `You are the coder for milestone ${p.id}. Implement its "### Milestone:" block of the epic ${list(p.plan)} (read the epic whole, plus ${PLANS}/<release>-plan.md and ${PLANS}/decisions.md) on worktree ${wt}.
+const buildPrompt = (p, wt = p.wt, branch = p.branch) => `You are the coder for milestone ${p.id}. Implement its "Milestone:" block of the epic ${list(p.plan)} (read the epic whole, plus ${PLANS}/<release>-plan.md and ${PLANS}/decisions.md) on worktree ${wt}.
 ${RULES(p, wt, branch)}
 How to work:
 - The branch may already hold commits from an interrupted earlier attempt: read \`git log --oneline ${BASE_SHA}..HEAD\` and \`git status\` first and continue from that state; do not redo finished tasks.
 - The epic's "Acceptance:" line (section 1.2) is your check: run it yourself and keep going until it passes; for a judged check, capture, compare against the named reference, run the judges, fix, repeat.
-- Follow your milestone's Task lines in order (its block in section 2.1). Each task ends with its checks green and one or more commits pushed. Per task run only tsc and lint on your own files; at milestone end run the unit tests plus one base of the long per-base checks. The verifier runs every base. Slow checks run in parallel, not one after another: per-base checks on separate ports at once, builds at once, test runs at once.
+- Follow your milestone's tasks in order: the tasks its "- Tasks:" line lists by id (each defined in section 2.1, with its "Detail:" section or "Plan:" task file), or the "- Task N:" lines inside the block when it has those. Each task ends with its checks green and one or more commits pushed. Per task run only tsc and lint on your own files; at milestone end run the unit tests plus one base of the long per-base checks. The verifier runs every base. Slow checks run in parallel, not one after another: per-base checks on separate ports at once, builds at once, test runs at once.
 - Record every check you ran in ${list(p.tracker)} under "Checks:" as one bullet: command, commit, result. The verifier trusts that record and does not repeat it. Set "Status: running" when you start; add one line per task with its last commit. No narration, no check output, no commit lists.
 - Design decisions are in the epic; implementation is yours. Where the epic says "does NOT", respect it.
 - ${SPECIFICS[p.id]}
