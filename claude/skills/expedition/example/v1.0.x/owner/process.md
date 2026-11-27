@@ -86,4 +86,4 @@ Example of a filled process file, for one web app project (`apps/web/`), made fr
 ## P14 Owner requests
 
 - The owner's approval of a remark that belongs to a spec already in progress is also its go: the lead records the decision, files the task and sends it to the runner, and answers in one line.
-- Work that needs a new spec keeps the two steps: the decision is recorded first, and it starts on the owner's go.
+- Work that needs a new spec keeps the two steps: the decision is recorded first, and it starts on the owner's `delegate`.

@@ -125,6 +125,7 @@ The spec says what must be proven (`Acceptance:`); the runner decides how, per m
   - The main session wakes at each milestone's end, or at a `needs-decision`.
 - Inline for mechanical edits (a rename, a version bump, a changelog line).
 - The milestones of a sprint with no dependency between them run at the same time, each in its own worktree.
+- A milestone or an epic that arrives while other work runs (the owner's `iterate`): the runner chooses the moment from the plan files and the lead's line. It shares no file with running work: it starts at once, beside the rest. It shares a file with a running milestone: it starts after that milestone's merge. It replaces running work: the lead's `SKIP` stops that work first.
 - Review depth matches risk: a review only where the milestone asks for one (public API, shared state, a cross-spec change); mechanical changes get the checks only.
   - A review is one review on the whole diff, round 2 on `git diff <round 1 head>..HEAD` only, two rounds at most; majors still open after round 2 return `review-open` and the milestone does not merge.
   - The `opus` fixer reads the findings and the diff only.

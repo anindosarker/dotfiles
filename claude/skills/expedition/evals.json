@@ -18,7 +18,7 @@
       "Says in one line where each goes: the blur remark belongs to spec 27, the billing area is a decision for a new spec",
       "Records each decision only after the owner's explicit word",
       "For the blur remark runs plan/milestone.py add <release> 27 \"<Name>\" --decision D<n>, which adds the next module, a task file and a milestone to spec 27, and tells the runner with one NOTE line",
-      "Does not add the billing work to spec 27; it stays a decision in To do until an epic and a go",
+      "Does not add the billing work to spec 27; it stays a decision in To do until an epic and a delegate",
       "Fills the new module and task file after the script; edits no status by hand"
     ]
   },
@@ -42,6 +42,18 @@
       "Does not call the Workflow tool and does not copy templates/workflow.js",
       "After a green report merges the milestone itself and runs sprints/mark.py <release> <milestone> merge --commit <sha>",
       "Starts no separate verifier agent"
+    ]
+  },
+  {
+    "skills": ["expedition"],
+    "query": "/expedition discuss v0.3.x  (spec 27 Sidebar is in progress in the running epic E11; spec 12 Tables is done. Two items are open, each posted in its turn. Q60 \"the sidebar footer covers the last menu item on a short screen\": the owner writes \"iterate\". Q61 \"table rows need a compact density\": the owner writes \"iterate\".)",
+    "expected_behavior": [
+      "Records each item as a decision on the word iterate, with no further word from the owner",
+      "Q60: adds the next module, task file and milestone to spec 27 with plan/milestone.py add, fills them, and tells the runner with one NOTE line",
+      "Q61: does not add it to the finished spec 12; starts an epic of this one decision with epics/new.py, has its spec written by the regular steps, and runs run/go.py at once after the SPECS check",
+      "Says in one line per item which case it is, and asks the owner nothing about it",
+      "Does not wait for other ready decisions and does not post an Epic ready line for these items",
+      "Skips no plan file: decision, spec or module, task file, milestone, epic file"
     ]
   }
 ]

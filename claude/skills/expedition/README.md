@@ -16,7 +16,7 @@ Expedition is a skill for long work that does not fit one session. It keeps the 
 2. The lead posts the card with its options. The owner decides, and the lead records the decision.
 3. Decisions that are ready are grouped into an epic. A spec writer turns the epic into specs.
 4. A spec says what is wanted in modules, lists the work as task files, and groups the tasks into milestones.
-5. On the owner's go, the runner builds each milestone: a builder does the tasks and ticks each task's checks.
+5. On the owner's `delegate`, the runner builds each milestone: a builder does the tasks and ticks each task's checks.
 6. A milestone merges when its checks pass. A check that only the owner can make waits for the owner's look.
 7. The decision moves to Done when its milestones are merged. Problems found on the way come back as new cards.
 

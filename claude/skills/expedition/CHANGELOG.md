@@ -34,6 +34,8 @@ Changed after the tag `expedition-v2.0`, same format:
 - A failed Workflow stage is resumed when that is possible; a plain agent may do it otherwise.
 - In discuss, the lead fills the module and the task file of a milestone it adds to a spec in progress.
 - `queue/item.py` refuses a second `--bullet`.
+- Owner words: `delegate` and `epic delegate` replace `go` and `epic go`, which stay accepted as old names.
+- New owner word `iterate`: the open item is decided, planned by the regular steps and sent to the runner at once, as the next module of its spec or as a new spec with its own epic. The runner chooses the moment it starts.
 
 Migration: [scripts/migrate/v1.0-v2.0/README.md](scripts/migrate/v1.0-v2.0/README.md).
 
