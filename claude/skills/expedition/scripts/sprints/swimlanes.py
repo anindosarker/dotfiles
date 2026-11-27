@@ -14,6 +14,11 @@ status/progress.py shows for it without "waits on the " ("owner: <what>"), or fo
 its first ## Attention bullet, else the detail of its tracker's Status line, from the same
 tracker copies status/progress.py reads (the milestone's own worktree included); empty when none
 is found.
+Each milestone also holds "specType" ("structured" or "iterative") and "tasks", the tasks of a
+new-form milestone in the order it lists them (empty for an old-form one): id (the section
+number), title, status (one of lib/specs.py STATUSES, read by task_status), blocked (the reason
+of a blocked task, else null), decision ("D58" or null) and file (the absolute path of its task
+file, or null).
 Refreshes status/index.html from templates/swimlanes.html when the template is newer or the
 page is missing. Both are renders, ignored by git (plan/new_cycle.py and migrate/layout.py add
 the .gitignore lines), never committed. Writes nothing else. sprints/refresh.py runs it last, after
@@ -101,6 +106,18 @@ def build(folder, release, own):
             print(f"error: {e}", file=sys.stderr)
         die("the milestones do not schedule: fix the specs (sprints/check.py names the error)")
     owners = {m["name"]: m for m in comp["milestones"]}
+    sp = C.load("lib/specs")
+    kinds = {num: own.read_spec(p)["type"] for num, p in own.spec_files(folder)}
+    blocks = {b["name"]: b for bl in own.new_collect(folder, plan)["blocks"].values() for b in bl}
+
+    def tasks_of(name):
+        b = blocks.get(name)
+        out = []
+        for t in (b["tasks"] if b and b["id"] is not None else []):
+            status, why = sp.task_status(t, b["tracker"])
+            out.append({"id": t["id"], "title": t["title"], "status": status, "blocked": why,
+                        "decision": t["decision"], "file": str(t["path"]) if sp.has_file(t) else None})
+        return out
     paths = {f"E{e}": names for e, names in sorted(comp["paths"].items())}
     union = [n for names in paths.values() for n in names]
 
@@ -136,6 +153,8 @@ def build(folder, release, own):
             "outcome": spec.get("outcome"),
             "critical": name in paths.get(epic, []),
             "specAbs": str(folder / spec["spec"]) if spec.get("spec") else None,
+            "specType": kinds.get(number, "structured"),
+            "tasks": tasks_of(name),
         })
     why = reasons(folder, release, own, [(ms["name"], ms["marker"]) for ms in milestones])
     for ms in milestones:
