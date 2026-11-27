@@ -110,6 +110,9 @@ def main():
     st = C.load("lib/status")
     st.save(folder, st.build(folder, c, ({}, {})))
     print(st.path(folder))
+    open(C.lock_file(folder), "a").close()
+    print(f"statuses of this release: status/status.py {c} set|get|list (the store is status/data/status.json); "
+          "specs are folders with task files: re-read the expedition skill before the first spec")
 
 
 if __name__ == "__main__":

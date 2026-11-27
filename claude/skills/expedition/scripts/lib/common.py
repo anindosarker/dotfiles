@@ -369,14 +369,16 @@ def tracker_text(num, title, status_line=False):
     """templates/tracker.md with the header filled in, up to its first "## " section (Attention
     and Notes are optional; empty is normal). status_line=True adds "Status: planned" for a
     release made before status/data/status.json, where the tracker holds the milestone status."""
+    if status_line:
+        return (f"# {num}: {title}, tracker\n\nStatus: planned\nBranch `[branch]`, worktree [name]\nChecks:\n"
+                "- Check: [name], `[command]` at [commit]: [pass | fail]\n\n"
+                "- Task 1 [name]: [planned | running | done (<commit>, <workflow run id>)]\n")
     out = []
     for line in template("tracker.md").splitlines():
         if line.startswith("## "):
             break
         if line.startswith("# "):
             line = f"# {num}: {title}, tracker"
-            if status_line:
-                line += "\n\nStatus: planned"
         out.append(line)
     return "\n".join(out).rstrip() + "\n"
 

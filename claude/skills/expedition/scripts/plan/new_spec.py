@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Create a spec in a release: its folder plan/specs/NN-<slug>/ with the file NN-<slug>.md and
 the empty folder tasks/, and the row "| NN | [Title](plan/specs/NN-<slug>/NN-<slug>.md) |  |
-scope |" (Epic cell empty) in the Deliverables table of <release>-plan.md.
+scope |" (Epic cell empty) in the Deliverables table of <release>-plan.md. In a release made
+before status/data/status.json it writes what it wrote then (old_spec): the flat file
+plan/specs/NN-<slug>.md and the tracker of its first milestone.
 
 Usage: python3 -I plan/new_spec.py <release> <num> <slug> "<Title>" "<scope>"
        [--owner X] [--template PATH] [--root PATH]
@@ -18,6 +20,7 @@ Refuses a superseded decision (title mark "(superseded by D<n>)", or named by a 
 "- Supersedes D<n>." bullet) when the title, scope or template cites one.
 """
 import argparse
+import fcntl
 import importlib.util
 import re
 import sys
@@ -57,6 +60,65 @@ Follow the project planning rules: {paths}. Keep the contract in the expedition 
 
 ### 2.2 Milestones
 """
+
+
+OLD_STUB = """# {heading}
+
+Follow the project planning rules: {paths}. Keep the contract in the expedition skill's SKILL.md, Stage 2, The contract.
+
+## 2. Instructions for AI
+
+### 2.1 Milestones
+
+### Milestone: [name]
+
+- Files owned: `[path]`, `[path]`
+- Depends on: none
+- Review: none
+- Local CI: none
+- Task 1: [step] Checks: `[command]`
+- Task 2: [step] Checks: `[command]`
+"""
+
+
+def old_spec(a, root, own, folder, plan):
+    """A release made before status/data/status.json: the flat file plan/specs/NN-<slug>.md from
+    the old stub or templates/spec-flat.md, and the tracker of its first milestone."""
+    spec_name = f"{a.num}-{a.slug}.md"
+    specs_dir = folder / own.SPECS_DIR
+    trackers_dir = folder / own.TRACKERS_DIR
+    for d in (specs_dir, trackers_dir):
+        d.mkdir(parents=True, exist_ok=True)
+    spec = specs_dir / spec_name
+    tracker = trackers_dir / f"{a.num}-{a.slug}-tracker.md"
+    for p in (spec, tracker):
+        if p.exists():
+            die(f"refusing to overwrite {p}")
+    clash = [p.name for p in specs_dir.glob(f"{a.num}-*.md")]
+    if clash:
+        die(f"spec {a.num} already has a file: {clash[0]}")
+    row = f"| {a.num} | [{a.title}](plan/specs/{spec_name}) |  | {a.scope} |"
+    new_plan = C.insert_row(plan.read_text(encoding="utf-8"), a.num, row)
+    rules = [] if a.template else C.find_rules(root)
+    if a.template:
+        template = load_template(root, a.template, rules)
+    elif rules:
+        template = OLD_STUB.format(heading="[title]", paths=", ".join(rules))
+    else:
+        template = (C.TEMPLATES / "spec-flat.md").read_text(encoding="utf-8")
+    cited = set()
+    for text in (a.title, a.scope, template):
+        for m in re.finditer(r"\((D\d+[^)]*)\)", text):
+            cited |= {int(n) for n in re.findall(r"\bD(\d+)\b", m.group(1))}
+    own.refuse_superseded(folder, cited, f"spec {spec_name}")
+    spec.write_text(set_heading(template, f"# {a.num}: {a.title}"), encoding="utf-8")
+    print(spec)
+    tracker.write_text(C.tracker_text(a.num, a.title, True), encoding="utf-8")
+    print(tracker)
+    plan.write_text(new_plan, encoding="utf-8")
+    print("next: fill the ### Milestone: blocks, then sprints/check.py and sprints/refresh.py")
+    for r in rules:
+        print(f"Project planning rules: {r}")
 
 
 def load_template(root, flag, rules):
@@ -116,12 +178,13 @@ def main():
     plan = folder / f"{a.release}-plan.md"
     if not plan.is_file():
         die(f"{plan.name} missing: {plan}")
+    st = C.load("lib/status")
+    if not st.active(folder):
+        return old_spec(a, root, own, folder, plan)
 
     spec_name = f"{a.num}-{a.slug}.md"
     specs_dir = folder / own.SPECS_DIR
-    trackers_dir = folder / own.TRACKERS_DIR
-    for d in (specs_dir, trackers_dir):
-        d.mkdir(parents=True, exist_ok=True)
+    specs_dir.mkdir(parents=True, exist_ok=True)
     spec = specs_dir / f"{a.num}-{a.slug}" / spec_name
     if spec.exists():
         die(f"refusing to overwrite {spec}")
@@ -139,13 +202,14 @@ def main():
             cited |= {int(n) for n in re.findall(r"\bD(\d+)\b", m.group(1))}
     own.refuse_superseded(folder, cited, f"spec {spec_name}")
 
-    (spec.parent / "tasks").mkdir(parents=True)
-    spec.write_text(set_heading(template, f"# {a.num}: {a.title}"), encoding="utf-8")
-    print(spec)
-    plan.write_text(new_plan, encoding="utf-8")
-    st = C.load("lib/status")
-    if st.active(folder):
+    with open(C.lock_file(folder), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        (spec.parent / "tasks").mkdir(parents=True)
+        spec.write_text(set_heading(template, f"# {a.num}: {a.title}"), encoding="utf-8")
+        print(spec)
+        plan.write_text(new_plan, encoding="utf-8")
         st.sync(folder, a.release)
+        fcntl.flock(lock, fcntl.LOCK_UN)
     print("next: write section 1, then plan/milestone.py add for each piece of work, then sprints/check.py")
     for r in rules:
         print(f"Project planning rules: {r}")

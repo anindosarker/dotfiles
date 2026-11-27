@@ -22,7 +22,7 @@ Arguments: `$ARGUMENTS`. Stage missing: run `python3 -I ${CLAUDE_SKILL_DIR}/scri
 
 Mechanical steps use the scripts, never hand-written files. The scripts sit in `scripts/` by subject, one job each: `plan/`, `epics/`, `sprints/`, `queue/`, `decisions/`, `status/`, `run/`, `migrate/`, and the shared code in `lib/`. The scripts find the release folder from the cwd or one level below it, so sessions never `cd` for them and use `git -C <repo>` for git. The main agent calls scripts, never does a script's job by hand, never spawns an agent only to call one (the spec writer, a forked session, calls `plan/new_spec.py` as part of its work):
 
-- `plan/new_cycle.py v0.<n>.x`: a new release folder.
+- `plan/new_cycle.py v0.<n>.x`: a new release folder. A release made now has its specs in folders and its statuses in `status/data/status.json`; a session that read this skill before that change re-reads it whole before it creates a release. A release made earlier keeps its form, and `plan/new_spec.py` and `plan/new_fix.py` (the earlier name of `plan/milestone.py add` for a fix) still write that form there.
 - `plan/new_spec.py <release> NN <slug> "<Title>" "<scope>"`: a new spec folder, with its plan row.
 - `sprints/check.py <release>`: the ownership check, after each spec is written; writes nothing.
 - `epics/table.py <release> E<n> [<spec numbers>]`: the epic table, the pre-go preview; commits nothing.
