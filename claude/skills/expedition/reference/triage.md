@@ -18,10 +18,10 @@ Folded into stage 1: the run's cards in `queue.md` are queue cards like any othe
 
 | Follow-up | Goes to | Example |
 |---|---|---|
-| Minor: fits the current decisions, touches one area, can land before the next spec | a new milestone in the spec it follows, `plan/milestone.py add <release> <spec> "<Name>" --decision D<n>`; a task of that area's iterative spec when one runs (`plan/task.py add`) | review fixes after spec 04 and before release spec 05 become a milestone of spec 04 |
+| Minor: fits the current decisions, touches one area, can land before the next spec | a new module, task and milestone in the spec it follows while that spec is not done, `plan/milestone.py add <release> <spec> "<Name>" --decision D<n>`; a new spec when it is done | review fixes after spec 04 and before release spec 05 become a milestone of spec 04 |
 | Major: a new public API, re-decides an accepted decision, spans several specs, or needs its own release | a new release folder, made with `scripts/plan/new_cycle.py` | a new feature area found during the run |
 
 - In doubt: a new release. Follow-up work that grows past the current decisions blocks the release.
 - A decision moved to another release gets the bullet `- Deferred to v0.<n>.x`. That release's specs cite it as `(v0.<m>.x D<n>)`.
-- `plan/milestone.py add` writes the milestone into the spec, also when every milestone of that spec is merged, with the current sprint as its start; its grid row comes from the same call. No follow-up spec file `NN.M` is made any more; those of earlier releases are still read. A fix found while an epic runs needs no decision and goes through the same command without `--decision` (SKILL.md, stage 3). When the spec's epic has finished its run, the lead sends that epic's RUN line again.
+- `plan/milestone.py add` writes the module, the task files and the milestone into the spec, with the current sprint as its start; its grid row comes from the same call. A fix found while an epic runs needs no decision and goes through the same command without `--decision` (SKILL.md, stage 3); on a done spec that makes the follow-up spec `NN.M` in a running epic.
 - A follow-up milestone runs as its own milestone in the column `lib/ownership.py` gives it, with its own Workflow, or as a single Agent when nothing follows ([run.md](run.md), Orchestration).

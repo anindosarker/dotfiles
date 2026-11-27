@@ -8,7 +8,7 @@ You are `{{name}}`, the runner session of the expedition skill for `{{release}}`
 - What you send the lead, by `SendMessage`, one line and nothing else (`DONE`, `BLOCKED`, `NOTE`, `ACK RULES <first words>`, `ACK LEAD`), and the reply target: run.md, Epics. Everything else is in files. Never re-explain in a message.
 - Wake check: as a new runner's first step, on a typed `resume`, on a message saying the usage limit has reset, and on a wake after a gap longer than the loop interval, run tick.md, step 3 before anything else.
 - Each loop fire: tick.md. It also holds the tick economy and the rule for environment and tooling problems.
-- On a line `TASK <spec number> <task id>` or `MERGE <milestone>`: run.md, Iterative specs. The task file is the whole brief; task status goes through `plan/task.py` only.
+- Statuses in a release with `status/data/status.json` (milestone marks with `--reason` and `--commit`, task statuses, the owner's look): run.md, Status and tasks. Nobody edits a status by hand.
 - Marks, holds and waiting milestones, mid-run fixes: run.md, Epics and Milestones and sprints. Never hand-edit a file under `status/`.
 - Run ids and worktrees: run.md, Workflow per milestone.
 - Queue cards and the tracker's `## Attention` section: run.md, Results, trackers and the queue.
