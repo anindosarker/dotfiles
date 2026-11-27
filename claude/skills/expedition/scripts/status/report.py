@@ -5,7 +5,7 @@ Usage: python3 -I status/report.py <release> [--owner X] [--root PATH]
 
 The next queue card: queue/next.py. The owner's progress reply: status/progress.py.
 
-Layout: <release>-plan.md (## Goals and ## Deliverables only), plan/specs/NN-<slug>.md,
+Layout: <release>-plan.md (## Goals and ## Deliverables only), plan/specs/NN-<slug>/NN-<slug>.md (or the flat NN-<slug>.md of an earlier release),
 plan/epics/E<n>.md, queue.md, status/index.html, status/sprints.md (sprints/refresh.py), run/trackers/
 (one per milestone, NN-<slug>-tracker.md). The ownership facts come from
 lib/ownership.py compute, in memory.
@@ -45,10 +45,10 @@ Checks, no Acceptance line; milestones sprints/check.py would refuse (collision,
 status/sprints.md missing, without a "| Milestone" grid, with text under the grid, with a cell
 not one of [x], [ ], [~], ·, [!] or blank, or with rows that differ from the milestones of the specs
 with an Epic line. Ownership also prints each tagged epic's critical path,
-computed on the fly. A folder without plan/ is refused (migrate/layout.py), a folder still on
-the old queue files too (migrate/queue.py), a decisions.md in the heading format too
-(migrate/decisions.py), a folder that still has status/ownership.md too
-(migrate/epics.py), a folder that still has run/trackers/fix-*-tracker.md too (migrate/fixes.py).
+computed on the fly. A folder without plan/ is refused (migrate/pre-v1.0/layout.py), a folder still on
+the old queue files too (migrate/pre-v1.0/queue.py), a decisions.md in the heading format too
+(migrate/pre-v1.0/decisions.py), a folder that still has status/ownership.md too
+(migrate/pre-v1.0/epics.py), a folder that still has run/trackers/fix-*-tracker.md too (migrate/pre-v1.0/fixes.py).
 A tracker Status of done (or the old merged) counts as done. A tracker no milestone owns counts as citing the
 queue cards named on its first line.
 """
@@ -257,7 +257,7 @@ def new_print(folder, plan, d, own):
     print("Specs:")
     text = read(plan) if plan.is_file() else ""
     if not plan.is_file():
-        print(f"  {plan.name} missing: plan/new_cycle.py writes it")
+        print(f"  {plan.name} missing: plan/new_release.py writes it")
     elif not re.search(r"^## Deliverables\s*$", text, re.M):
         print(f"  {plan.name} has no ## Deliverables section")
     print(f"  {plan.name} rows: {len(rows)}, linked spec files: {len(docs)}")
@@ -286,7 +286,7 @@ def new_print(folder, plan, d, own):
         if not bl:
             print(f"  {p.relative_to(folder)}: no '### Milestone:' block")
         for b in bl:
-            if b["files"] is None:
+            if b["files"] is None and b["id"] is None:
                 print(f"  {p.relative_to(folder)}:{b['line']}: milestone {b['name']}: no Files owned line")
     for line in d["missing"]:
         print(f"  {line}")
@@ -327,7 +327,7 @@ def new_print(folder, plan, d, own):
             end = start
             while end < len(lines) and lines[end].strip().startswith("|"):
                 end += 1
-            if any(l.strip() for l in lines[end:]):
+            if any(l.strip() and not l.startswith("Marks:") for l in lines[end:]):
                 print("  status/sprints.md has text under the grid: grid only")
             for r in data:
                 for c in r[1:]:
@@ -354,10 +354,17 @@ def new_print(folder, plan, d, own):
         name = p.relative_to(folder)
         tasks = 0
         for b in d["blocks"][num]:
-            for i, t in b["tasks"]:
+            for t in b["tasks"]:
                 tasks += 1
-                if "Checks:" not in t:
-                    print(f"  {name}:{i}: Task line without Checks")
+                if t["path"] is None:
+                    if not t["checks"]:
+                        print(f"  {name}:{t['line']}: Task line without Checks")
+                        quiet = False
+                elif not t["path"].is_file():
+                    print(f"  {name}:{t['line']}: task {t['id']}: no file {t['plan']}")
+                    quiet = False
+                elif not re.search(r"^\s*-\s*\[[ xX]\]", read(t["path"]), re.M):
+                    print(f"  {t['path'].relative_to(folder)}: no Verification box")
                     quiet = False
         if not tasks and not any(GATES_LINE_RE.match(l) for _, l in outside_fences(text)):
             print(f"  {name}: no checks")
@@ -369,6 +376,10 @@ def new_print(folder, plan, d, own):
             if line.rstrip().endswith("?"):
                 print(f"  {name}:{i}: open question? {line.strip()[:80]}")
                 quiet = False
+    for f, have, want in C.load("lib/status").differences(folder):
+        print(f"  {f.relative_to(folder)}: status line says {have or 'nothing'}, status.json says {want}: "
+              "a status is set with status/status.py, never by hand")
+        quiet = False
     if quiet:
         print("  ok")
 
@@ -440,7 +451,10 @@ def main():
     decisions = folder / "decisions.md"
     print("Files:")
     for p in (plan, folder / SPRINTS_MD, folder / INDEX_HTML, decisions, queue):
-        print(f"  {p.relative_to(folder)}: {'present' if p.is_file() else 'missing'}")
+        # git-ignored: a fresh clone has none. An earlier release keeps its line, "missing".
+        render = p.name == "index.html" and not p.is_file() and C.load("lib/status").active(folder)
+        print(f"  {p.relative_to(folder)}: "
+              + ("not rendered yet (sprints/swimlanes.py writes it)" if render else 'present' if p.is_file() else 'missing'))
 
     own = C.load("lib/ownership")
     d = own.new_collect(folder, plan)
@@ -455,7 +469,7 @@ def main():
     print("Process:")
     proc = folder / "process.md"
     if not proc.is_file():
-        print("  process.md missing: plan/new_cycle.py copies it from the previous release")
+        print("  process.md missing: plan/new_release.py copies it from the previous release")
         p_ids = []
     else:
         lines = [l for _, l in outside_fences(read(proc))]
@@ -529,7 +543,7 @@ def main():
     for e in sorted(set(marks) | {n for n, v in starts.items() if v}):
         v = starts.get(e)
         if e in marks and e in starts and not v:
-            print(f"  E{e} has rows in status/sprints.md and no Starts value: sprints/backfill_starts.py {a.release}")
+            print(f"  E{e} has rows in status/sprints.md and no Starts value: migrate/pre-v1.0/backfill_starts.py {a.release}")
         elif v and not own.SPRINT_VALUE_RE.match(v):
             print(f"  plan/epics/E{e}.md: Starts '{v}' is not S<number>")
     for gap in own.epic_gaps(folder, own.compute(folder)):
@@ -544,6 +558,10 @@ def main():
     if running:
         parts.append(f"run ({', '.join(running)})")
     print(f"Stage: {', '.join(parts) or 'discuss'}")
+    have, skill = C.load("lib/status").release_format(folder), C.skill_version()
+    if tuple(map(int, have.split("."))) < tuple(map(int, skill.split("."))):
+        print(f"this release is in format v{have}, the skill is v{skill}: "
+              f"see scripts/migrate/v{have}-v{skill}/README.md")
 
 
 if __name__ == "__main__":

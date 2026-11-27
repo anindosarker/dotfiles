@@ -16,7 +16,7 @@ held_unlaunched) is no run mark here.
 
 Rows: every milestone of a spec that carries a "- Epic: E<n>" line (epics/tag.py). An epic's
 milestones start at its start sprint (the current sprint at its go), a milestone added after go
-at its own "- Starts: S<n>" line (plan/new_fix.py); dependent ones open the next column. Row text
+at its own "- Starts: S<n>" line (plan/milestone.py); dependent ones open the next column. Row text
 is the epic label, the spec number and the milestone name, "E1 01 Filtering"; rows sorted by
 epic, spec number, then milestone order in the spec.
 
@@ -27,7 +27,7 @@ epic that has gone (a Starts value, not every decision in Done), touching only t
 decisions.md moved to the lanes of the Done rule (lib/decisions.py sync), so a merge reaches
 the board; then the Decided cards of queue.md synced with those lanes (lib/board.py sync: the
 tick and the #E<n> tag). sprints/refresh.py,
-sprints/mark.py, run/go.py (through sprints/refresh.py), plan/new_fix.py and migrate/fixes.py use
+sprints/mark.py, run/go.py (through sprints/refresh.py), plan/milestone.py and migrate/pre-v1.0/fixes.py use
 refresh(); the swimlane data (sprints/swimlanes.py) follows it. set_mark() sets one run cell for
 sprints/mark.py, the only writer of the marks; resume_mark() is the cell a resume sets.
 """
@@ -88,7 +88,7 @@ def mark_of(cells):
     return next((c for c in cells if c in RUN_MARKS), PLANNED)
 
 
-def build(release, milestones, col, existing, num_key, label=None, held=()):
+def build(release, milestones, col, existing, num_key, label=None, held=(), view=False):
     """Return (text, warnings) for status/sprints.md. label maps a milestone name to its epic number;
     held names the "[~]" rows never launched."""
     n_old, rows_old = existing
@@ -127,6 +127,9 @@ def build(release, milestones, col, existing, num_key, label=None, held=()):
     sep = "|---|" + "---|" * width
     show = lambda name: f"E{label[name]} {spec[name]} {name}" if label.get(name) else name
     body = "".join(f"| {show(name)} | " + " | ".join(cells_of(name)) + " |\n" for name in rows)
+    if view:
+        legend = ", ".join(f"`{m}` {w}" for w, m in C.load("lib/status").MARKS.items())
+        return f"# {release} sprints\n\n{head}\n{sep}\n{body}\nMarks: {legend}.\n", warnings
     text = f"# {release} sprints\n\nUpdated: {now:%Y-%m-%d %H:%M}\n\n{head}\n{sep}\n{body}"
     return text, warnings
 
@@ -158,14 +161,30 @@ def write_grid(folder, release, quiet=False):
     n_old, rows_old, _ = read_grid(path)
     label = epic_rows(folder, own, milestones)
     milestones = [m for m in milestones if m["name"] in label]
+    st = C.load("lib/status")
+    view = st.active(folder)
+    if view:
+        n_old, rows_old = stored_rows(st, folder)
     text, warnings = build(release, milestones, col, (n_old, rows_old), C.num_key, label,
-                           own.held_unlaunched(folder))
+                           () if view else own.held_unlaunched(folder), view)
     for w in warnings:
         print(f"warning: {w}", file=sys.stderr)
     path.write_text(text, encoding="utf-8")
     if not quiet:
         print(path)
     return text, comp
+
+
+def stored_rows(st, folder):
+    """(column count, rows) of the grid as status.json holds it: each milestone's mark, from its
+    status, in the column of its sprint. The grid file is a view of this, never read back."""
+    rows = []
+    for m in st.entries(folder)[0].values():
+        if m.get("sprint"):
+            c = int(m["sprint"][1:])
+            rows.append((m["name"], [""] * (c - 1) + [st.MARKS[m["status"]]]))
+    n = max([len(c) for _, c in rows] + [0])
+    return n, [(name, c + [""] * (n - len(c))) for name, c in rows]
 
 
 def sync_epics(folder, comp):
@@ -198,6 +217,9 @@ def refresh(folder, release, quiet=False, locked=False):
     lanes, the queue sync. locked=True: the caller holds the .ids.lock lock. Returns the grid text."""
     text, comp = write_grid(folder, release, quiet)
     sync_epics(folder, comp)
+    st = C.load("lib/status")
+    if st.active(folder):
+        st.sync(folder, release)
     sync_decisions(folder, locked)
     sync_queue(folder, locked)
     return text

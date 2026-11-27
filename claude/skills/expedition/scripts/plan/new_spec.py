@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""Create a spec file (plan/specs/NN-<slug>.md) and the tracker of its first milestone
-(run/trackers/NN-<slug>-tracker.md) in a release, and add the row
-"| NN | [Title](plan/specs/NN-<slug>.md) |  | scope |" (Epic cell empty) to the Deliverables table of
-<release>-plan.md.
+"""Create a spec in a release: its folder plan/specs/NN-<slug>/ with the file NN-<slug>.md and
+the empty folder tasks/, and the row "| NN | [Title](plan/specs/NN-<slug>/NN-<slug>.md) |  |
+scope |" (Epic cell empty) in the Deliverables table of <release>-plan.md. In a release made
+before status/data/status.json it writes what it wrote then (old_spec): the flat file
+plan/specs/NN-<slug>.md and the tracker of its first milestone.
 
 Usage: python3 -I plan/new_spec.py <release> <num> <slug> "<Title>" "<scope>"
        [--owner X] [--template PATH] [--root PATH]
 
-Template: --template PATH, else a contract stub when the project has planning
-rules (plan/find_rules.py), else the bundled templates/spec.md. Section 2.1 holds one "### Milestone: [name]" block with
-the lines Files owned, Depends on, Review, Local CI and its Task lines; write one block per
-milestone, then run sprints/check.py and sprints/refresh.py. A later milestone's tracker is
-run/trackers/NN-<milestone-slug>-tracker.md.
+Template: --template PATH, else a contract stub when the project has planning rules
+(plan/find_rules.py), else the bundled templates/spec.md, without its note and with the
+sections 1.6 Modules, 2.1 Tasks and 2.2 Milestones empty. Write section 1, then add each piece
+of work with plan/milestone.py add: it writes the module heading, the task files, the task
+pointers, the milestone block and the milestone's tracker. Then run sprints/check.py.
 
 The epic tags on go are epics/tag.py.
 
@@ -19,6 +20,7 @@ Refuses a superseded decision (title mark "(superseded by D<n>)", or named by a 
 "- Supersedes D<n>." bullet) when the title, scope or template cites one.
 """
 import argparse
+import fcntl
 import importlib.util
 import re
 import sys
@@ -41,7 +43,26 @@ SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 die = C.die
 
 
-STUB = """# {heading}
+STUB = """---
+status: not started
+---
+# {heading}
+
+Follow the project planning rules: {paths}. Keep the contract in the expedition skill's SKILL.md, Stage 2, The contract.
+
+## 1. Architecture
+
+### 1.6 Modules
+
+## 2. Instructions for AI
+
+### 2.1 Tasks
+
+### 2.2 Milestones
+"""
+
+
+OLD_STUB = """# {heading}
 
 Follow the project planning rules: {paths}. Keep the contract in the expedition skill's SKILL.md, Stage 2, The contract.
 
@@ -60,6 +81,47 @@ Follow the project planning rules: {paths}. Keep the contract in the expedition 
 """
 
 
+def old_spec(a, root, own, folder, plan):
+    """A release made before status/data/status.json: the flat file plan/specs/NN-<slug>.md from
+    the old stub or templates/spec-flat.md, and the tracker of its first milestone."""
+    spec_name = f"{a.num}-{a.slug}.md"
+    specs_dir = folder / own.SPECS_DIR
+    trackers_dir = folder / own.TRACKERS_DIR
+    for d in (specs_dir, trackers_dir):
+        d.mkdir(parents=True, exist_ok=True)
+    spec = specs_dir / spec_name
+    tracker = trackers_dir / f"{a.num}-{a.slug}-tracker.md"
+    for p in (spec, tracker):
+        if p.exists():
+            die(f"refusing to overwrite {p}")
+    clash = [p.name for p in specs_dir.glob(f"{a.num}-*.md")]
+    if clash:
+        die(f"spec {a.num} already has a file: {clash[0]}")
+    row = f"| {a.num} | [{a.title}](plan/specs/{spec_name}) |  | {a.scope} |"
+    new_plan = C.insert_row(plan.read_text(encoding="utf-8"), a.num, row)
+    rules = [] if a.template else C.find_rules(root)
+    if a.template:
+        template = load_template(root, a.template, rules)
+    elif rules:
+        template = OLD_STUB.format(heading="[title]", paths=", ".join(rules))
+    else:
+        template = (C.TEMPLATES / "spec-flat.md").read_text(encoding="utf-8")
+    cited = set()
+    for text in (a.title, a.scope, template):
+        for m in re.finditer(r"\((D\d+[^)]*)\)", text):
+            cited |= {int(n) for n in re.findall(r"\bD(\d+)\b", m.group(1))}
+    own.refuse_superseded(folder, cited, f"spec {spec_name}")
+    spec.write_text(set_heading(template, f"# {a.num}: {a.title}"), encoding="utf-8")
+    print(spec)
+    tracker.write_text(C.tracker_text(a.num, a.title, True), encoding="utf-8")
+    print(tracker)
+    plan.write_text(new_plan, encoding="utf-8")
+    print("next: fill the ### Milestone: blocks, then sprints/check.py and sprints/refresh.py "
+          "(this release is format 1.0: reference/old-form/planning-guidelines.md and reference/old-form/specs.md)")
+    for r in rules:
+        print(f"Project planning rules: {r}")
+
+
 def load_template(root, flag, rules):
     """Return template text: --template, else contract stub, else bundled."""
     if flag:
@@ -69,12 +131,11 @@ def load_template(root, flag, rules):
         return p.read_text(encoding="utf-8")
     if rules:
         return STUB.format(heading="[title]", paths=", ".join(rules))
-    bundled = C.TEMPLATES / "spec.md"
-    if not bundled.is_file():
-        die(f"bundled template missing: {bundled}")
-    return bundled.read_text(encoding="utf-8")
-
-
+    sp = C.load("lib/specs")
+    text = "".join(l + "\n" for l in C.template("spec.md").splitlines() if not l.startswith("- Epic: E["))
+    for name in ("Modules", "Tasks", "Milestones"):
+        text = sp.empty_section(text, name)
+    return text
 
 
 def set_heading(text, heading):
@@ -118,23 +179,15 @@ def main():
     plan = folder / f"{a.release}-plan.md"
     if not plan.is_file():
         die(f"{plan.name} missing: {plan}")
+    st = C.load("lib/status")
+    if not st.active(folder):
+        return old_spec(a, root, own, folder, plan)
 
+    st.load(folder)  # a store that cannot be read stops here, before anything is written
     spec_name = f"{a.num}-{a.slug}.md"
     specs_dir = folder / own.SPECS_DIR
-    trackers_dir = folder / own.TRACKERS_DIR
-    for d in (specs_dir, trackers_dir):
-        d.mkdir(parents=True, exist_ok=True)
-    spec = specs_dir / spec_name
-    tracker = trackers_dir / f"{a.num}-{a.slug}-tracker.md"
-    for p in (spec, tracker):
-        if p.exists():
-            die(f"refusing to overwrite {p}")
-    clash = [p.name for p in specs_dir.glob(f"{a.num}-*.md")]
-    if clash:
-        die(f"spec {a.num} already has a file: {clash[0]}")
-
-    row = f"| {a.num} | [{a.title}](plan/specs/{spec_name}) |  | {a.scope} |"
-    new_plan = C.insert_row(plan.read_text(encoding="utf-8"), a.num, row)
+    specs_dir.mkdir(parents=True, exist_ok=True)
+    spec = specs_dir / f"{a.num}-{a.slug}" / spec_name
     rules = [] if a.template else C.find_rules(root)
     template = load_template(root, a.template, rules)
     cited = set()
@@ -142,13 +195,22 @@ def main():
         for m in re.finditer(r"\((D\d+[^)]*)\)", text):
             cited |= {int(n) for n in re.findall(r"\bD(\d+)\b", m.group(1))}
     own.refuse_superseded(folder, cited, f"spec {spec_name}")
-
-    spec.write_text(set_heading(template, f"# {a.num}: {a.title}"), encoding="utf-8")
-    print(spec)
-    tracker.write_text(C.tracker_text(a.num, a.title), encoding="utf-8")
-    print(tracker)
-    plan.write_text(new_plan, encoding="utf-8")
-    print("next: fill the ### Milestone: blocks, then sprints/check.py and sprints/refresh.py")
+    with open(C.lock_file(folder), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)  # before the plan file is read: two new specs at once
+        if spec.exists():
+            die(f"refusing to overwrite {spec}")
+        clash = [p.name for p in specs_dir.glob(f"{a.num}-*")]
+        if clash:
+            die(f"spec {a.num} already has a file: {clash[0]}")
+        row = f"| {a.num} | [{a.title}](plan/specs/{a.num}-{a.slug}/{spec_name}) |  | {a.scope} |"
+        new_plan = C.insert_row(plan.read_text(encoding="utf-8"), a.num, row)
+        (spec.parent / "tasks").mkdir(parents=True)
+        spec.write_text(set_heading(template, f"# {a.num}: {a.title}"), encoding="utf-8")
+        print(spec)
+        plan.write_text(new_plan, encoding="utf-8")
+        st.sync(folder, a.release)
+        fcntl.flock(lock, fcntl.LOCK_UN)
+    print("next: write section 1, then plan/milestone.py add for each piece of work, then sprints/check.py")
     for r in rules:
         print(f"Project planning rules: {r}")
 

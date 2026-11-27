@@ -18,9 +18,12 @@ The lane is the state, from the Done rule (rule_lanes):
 2. Rows in the Ownership table of an epic file that has gone (a "Starts: S<n>" value) with a
    Spec cell: its own specs are the row specs that cite it "(D<n>)" in a heading line (the title
    line, a "### Milestone:" heading or any "#" heading); none, then every row spec. Done when
-   every milestone tracker of every own spec is done or stopped, else In progress.
+   every milestone tracker of every own spec is done or stopped, else In progress. In a
+   new-form spec (modules, task pointers, numbered milestones) only the milestones count that
+   hold a task of a module citing it; a citing module with no task in a milestone keeps it In
+   progress, except in a spec migrate/v1.0-v2.0/format.py marked "migrated: true".
 3. No such row: Done when it is closed by hand (a ticked card in Done: decisions/close.py writes
-   it for a decision with nothing to run, migrate/decisions.py for an old "[Done]" tag line) or
+   it for a decision with nothing to run, migrate/pre-v1.0/decisions.py for an old "[Done]" tag line) or
    when any spec citing it has merged; In progress when it carries "#E<n>"; else To do.
 The checkbox is [x] only in Done. sync() moves every card whose lane disagrees with the rule,
 sets every card's tick to its lane and writes its tags in the order above; the scripts are the
@@ -194,22 +197,39 @@ def started_rows(folder):
     return out
 
 
-def spec_merged(folder, num, path):
-    """True when every milestone tracker of the spec is done or stopped."""
+def spec_state(folder, num, path):
+    """(merged, {D number: done}): merged is True when every milestone of the spec is done or
+    stopped; the second holds, for a new-form spec, each decision a module heading cites: True
+    when every milestone that holds a task of such a module is done or stopped, and each such
+    module has a task in a milestone."""
     o = own()
     m = re.match(r"^\d{2}(?:\.\d+)?-(.+)\.md$", path.name)
     slug = m.group(1) if m else ""
-    blocks = o.parse_spec(path)
+    doc = o.read_spec(path)
+    blocks = doc["blocks"]
     if blocks:
         trackers = [o.milestone_tracker(folder, num, slug, i, b["name"]) for i, b in enumerate(blocks)]
     else:
         trackers = [folder / o.TRACKERS_DIR / f"{num}-tracker.md"]
     states = [o.tracker_status(folder, num, t) for t in trackers]
-    return all(s is not None and s[0] in MERGED for s in states)
+    ok = [s is not None and s[0] in MERGED for s in states]
+    per, placed = {}, set()
+    for b, done in zip(blocks, ok):
+        for t in b["tasks"] if b["id"] is not None else []:
+            placed.add(t["module"])
+            for d in t["cites"]:
+                per[d] = per.get(d, True) and done
+    pure = bool(doc["tasks"]) and "migrated" not in doc["front"]  # migrate/v1.0-v2.0/format.py: modules older than the tasks
+    for mod, cites in (doc["modules"].items() if pure else ()):
+        if mod not in placed:
+            for d in cites:
+                per[d] = False
+    return all(ok), per
 
 
 def spec_facts(folder):
-    """{spec number: (D numbers cited in a heading line, D numbers cited anywhere, merged)}."""
+    """{spec number: (D numbers cited in a heading line, D numbers cited anywhere, merged,
+    {D number: done} of spec_state)}."""
     o = own()
     out = {}
     for num, p in o.spec_files(folder):
@@ -221,7 +241,7 @@ def spec_facts(folder):
             every |= found
             if line.startswith("#"):
                 head |= found
-        out[num] = (head, every, spec_merged(folder, num, p))
+        out[num] = (head, every) + spec_state(folder, num, p)
     return out
 
 
@@ -241,8 +261,8 @@ def rule_lanes(folder, cards):
             out[n] = DONE
         elif rows.get(n):
             mine = [s for s in rows[n] if s in facts and n in facts[s][0]] or rows[n]
-            out[n] = DONE if all(s in facts and facts[s][2] for s in mine) else PROGRESS
-        elif hand_closed(c) or any(n in f[1] and f[2] for f in facts.values()):
+            out[n] = DONE if all(s in facts and facts[s][3].get(n, facts[s][2]) for s in mine) else PROGRESS
+        elif hand_closed(c) or any(n in f[1] and f[3].get(n, f[2]) for f in facts.values()):
             out[n] = DONE
         elif c["epic"]:
             out[n] = PROGRESS

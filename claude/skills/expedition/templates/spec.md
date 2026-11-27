@@ -1,105 +1,70 @@
-# [Spec name]
+---
+status: not started
+---
+<!--
+In one line each
+- Module: what is wanted. Lives in the spec.
+- Task: the work. Lives in its own file, with its status.
+- Milestone: tasks built and merged together. Lives in the spec.
+-->
+# [NN]: [Title]
+- Epic: E[n]
 
 ## 1. Architecture
 
 ### 1.1 Overview
 
-Two or three sentences: the problem and why this spec exists. Cite the decision, as (D<n>).
+[What this spec is for, in a few sentences. Cite the decisions it carries out.]
 
 ### 1.2 Goals
 
-- Measurable outcome
-- Measurable outcome
-- Acceptance: the one check the builder runs itself and loops on, programmatic (a type check, a grep, a `diff` against a baseline, a test) or a reference plus judges (captures next to a named reference, three judges on named points)
+- [One line per outcome.]
+- Acceptance: [how to tell the whole spec is done.]
 
-### 1.3 Current structure _(optional, skip for greenfield)_
+### 1.3 Current structure
 
-```
-path/today/
-├── file-a.ts
-└── file-b.ts
-```
+[The files and parts as they are today. Left out when nothing exists yet.]
 
 ### 1.4 Target structure
 
-```
-path/after/
-├── file-a.ts        ← one-line purpose
-└── sub/
-    └── file-c.ts    ← one-line purpose
-```
+[The files and parts as they will be.]
 
-### 1.5 Flow _(optional, for dispatch, state machines, cross-service flows)_
+### 1.5 Flow
 
-```mermaid
-sequenceDiagram
-  Caller->>Service: call()
-  Service->>Store: persist
-```
-
-Sketch: [reference/flow.excalidraw](reference/flow.excalidraw) _(when one exists)_
+[How the parts work together. A sketch in `reference/` when it helps.]
 
 ### 1.6 Modules
 
-A module in a spec is one unit of the design. One block per module the spec introduces or
-modifies, grouped by logical unit, not by file. Required: a short description and a bullet
-list of what it does and does not do. Optional: operations table, interfaces, dependencies,
-stays unchanged, usage examples.
+#### 1.6.1 [Module title] (D[n])
 
-#### 1.6.1 Data artifacts _(optional, always first when present)_
+[What is wanted and how it should behave. For a feedback item: the owner's remark, quoted, then the requirements.]
 
-Data models and fields, stored enums, config files, generated files: what changes in them.
-One entry per data model, with every field.
+#### 1.6.2 [Module title] (D[n])
 
-#### 1.6.2 [Module]
+[...]
 
-Description and the scope decisions that shaped it.
+### 1.7 Dependencies and env
 
-- Does X
-- Does NOT do Y
-
-**Operations:**
-
-| Operation | Status | Notes |
-| --------- | ------ | ----- |
-| `doX()`   | new    |       |
-
-**Interfaces:**
-
-```typescript
-export interface Example {
-  readonly id: string;
-}
-```
-
-**Stays unchanged:** files this module touches without modifying.
-
-**Usage:** one example per distinct caller pattern.
-
-```typescript
-example.doX({ id });
-```
-
-### 1.7 Dependencies and env _(optional)_
-
-New packages, env vars (name, default, purpose), reused infrastructure.
+[Packages, services, environment values. Left out when there are none.]
 
 ## 2. Instructions for AI
 
-### 2.1 Milestones
+### 2.1 Tasks
 
-One block per milestone. A milestone is one branch, one worktree, one tracker and one merge.
+- 01 [Task title] · module 1.6.1 · tasks/01-[slug].md
+- 02 [Task title] · module 1.6.1 · tasks/02-[slug].md
+- 03 [Task title] · module 1.6.2 · tasks/03-[slug].md
 
-### Milestone: [Name]
+### 2.2 Milestones
 
+#### 2.2.1 Milestone: [Name]
+- Tasks: 01, 02
 - Files owned: [a, b]
-- Depends on: [milestone names or spec numbers, or none]
-- Review: [none | fable]
-- Local CI: [none | `pnpm test --changed` | `act pull_request -j <job>`] (what runs on the merged tree before the merge, beyond the task checks)
-- Task 1: [what]. Checks: [commands]
-- Task 2: [what]. Checks: [commands]
-- Task N: Cleanup, delete old code, update references. Checks: the project's checks
+- Depends on: [milestone names, or none]
 
-### 2.2 Checks
+#### 2.2.2 Milestone: [Name]
+- Tasks: 03
 
-- `command` per base, what green means
+### 2.3 Checks
+
+[Checks that hold for the whole spec.]

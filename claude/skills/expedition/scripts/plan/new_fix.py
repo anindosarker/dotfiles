@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Add a fix found during a run to the epic it belongs to. A fix is never free-standing: it is a
+"""The earlier name of plan/milestone.py add for a fix, kept with its arguments for sessions
+that still call it. In a release with status/data/status.json it hands the call to
+plan/milestone.py add (the slug is not used there); in a release made before that file it does
+what it always did:
+
+Add a fix found during a run to the epic it belongs to. A fix is never free-standing: it is a
 milestone of the spec it repairs, or a small follow-up spec in a running epic.
 
 Usage: python3 -I plan/new_fix.py <release> <slug> "<Title>" <spec> --files a,b --checks "<checks>"
@@ -73,7 +78,7 @@ def block_text(name, files, deps, start, title, cites, checks, level="###"):
 
 
 def tracker_text(num, title, cites):
-    text = C.tracker_text(num, title)
+    text = C.tracker_text(num, title, True)
     if cites:
         text = text.replace(f"# {num}: {title}, tracker", f"# {num}: {title} ({', '.join(cites)}), tracker", 1)
     return text
@@ -170,6 +175,13 @@ def main():
     bd = load("lib/board")
     root = own.repo_root(a.root, a.release)
     folder = own.release_folder(root, own.detect_owner(root, a.owner), a.release)
+    if load("lib/status").active(folder):
+        argv = ["add", a.release, a.spec, a.title, "--files", a.files, "--checks", a.checks]
+        for flag, val in (("--cites", a.cites), ("--depends", a.depends), ("--epic", a.epic),
+                          ("--owner", a.owner), ("--root", a.root)):
+            argv += [flag, val] if val else []
+        sys.argv = [sys.argv[0]] + argv
+        return load("plan/milestone").main()
     with open(C.lock_file(folder), "a") as lock:
         run(a, own, bd, root, folder, ids, files, want_epic, lock)
 

@@ -43,8 +43,13 @@ D_RE = re.compile(r"^D(\d+)$")
 die = C.die
 
 
-def stub(own, epic):
-    return f"# {epic}\n\nDecisions:\nSpecs:\nStarts:\n\n" + "\n".join([own.OWN_HEAD, ""] + own.render_table([])) + "\n"
+def stub(own, epic, folder):
+    """An empty epic file: front matter (status, decisions, specs, starts) in a release with
+    status/data/status.json, the "Decisions:", "Specs:", "Starts:" lines in an earlier one."""
+    table = "\n".join([own.OWN_HEAD, ""] + own.render_table([])) + "\n"
+    if C.load("lib/status").active(folder):
+        return f"---\nstatus: not started\ndecisions:\nspecs:\nstarts:\n---\n# {epic}\n\n" + table
+    return f"# {epic}\n\nDecisions:\nSpecs:\nStarts:\n\n" + table
 
 
 def start(own, folder, path, epic, nums):
@@ -66,7 +71,7 @@ def start(own, folder, path, epic, nums):
             bad.append(f"D{d} is done with nothing to run")
     if bad:
         die("; ".join(bad) + ": nothing written")
-    text = own.read(path) if path.is_file() else stub(own, epic)
+    text = own.read(path) if path.is_file() else stub(own, epic, folder)
     rows, err = own.read_table(text)
     if err:
         die(f"{path}: {err}")
@@ -138,7 +143,7 @@ def main():
     else:
         if path.exists():
             die(f"refusing to overwrite {path}")
-        path.write_text(stub(own, a.epic), encoding="utf-8")
+        path.write_text(stub(own, a.epic, folder), encoding="utf-8")
         C.commit(root, [path], f"docs(plan): {a.release} {a.epic} epic file")
     print(path)
 

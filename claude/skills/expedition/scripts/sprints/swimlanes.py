@@ -14,8 +14,11 @@ status/progress.py shows for it without "waits on the " ("owner: <what>"), or fo
 its first ## Attention bullet, else the detail of its tracker's Status line, from the same
 tracker copies status/progress.py reads (the milestone's own worktree included); empty when none
 is found.
-Refreshes status/index.html from templates/swimlanes.html when the template is newer or the
-page is missing. Both are renders, ignored by git (plan/new_cycle.py and migrate/layout.py add
+In a release with status/data/status.json none of that is written: the page is
+board/task-board.html, which reads status/data/status.data.js (lib/status.py), and this
+script only keeps the page and that file current (refresh_board).
+Refreshes status/index.html from board/swimlanes.html when the template is newer or the
+page is missing. Both are renders, ignored by git (plan/new_release.py and migrate/pre-v1.0/layout.py add
 the .gitignore lines), never committed. Writes nothing else. sprints/refresh.py runs it last, after
 the grid chain.
 """
@@ -43,7 +46,7 @@ C = _common()
 NUM = r"\d{2}(?:\.\d+)?"
 PLAN_ROW_RE = re.compile(r"^\|\s*(" + NUM + r")\s*\|\s*\[(.+?)\]\((.+?)\)\s*\|\s*(E\d+)?\s*\|\s*(.+?)\s*\|\s*$", re.M)
 GRID_LABEL_RE = re.compile(r"^(E\d+)\s+(" + NUM + r")\s+(.+)$")
-TEMPLATE = C.TEMPLATES / "swimlanes.html"
+TEMPLATE = C.BOARD / "swimlanes.html"
 
 
 die = C.die
@@ -159,6 +162,27 @@ def build(folder, release, own):
     }
 
 
+BOARD = C.BOARD / "task-board.html"
+
+
+def refresh_board(folder):
+    """A release with status/data/status.json: status/index.html is board/task-board.html,
+    copied when the page is missing or differs; its data, status.data.js, is written from the
+    status file, and the swimlane data files of the earlier page are removed. Returns True when
+    the page was written."""
+    st = C.load("lib/status")
+    st.write_page_data(folder)
+    for old in ("sprints.json", "sprints.data.js"):
+        (folder / "status" / "data" / old).unlink(missing_ok=True)
+    page = folder / "status" / "index.html"
+    if not BOARD.is_file():
+        die(f"template missing: {BOARD}")
+    if not page.is_file() or page.read_bytes() != BOARD.read_bytes():
+        shutil.copyfile(BOARD, page)
+        return True
+    return False
+
+
 def refresh_page(folder):
     """Copy the template to status/index.html when the page is missing or older."""
     page = folder / "status" / "index.html"
@@ -171,6 +195,13 @@ def refresh_page(folder):
 
 
 def write(folder, release, quiet=False):
+    if C.load("lib/status").active(folder):
+        page = refresh_board(folder)
+        if not quiet:
+            print(folder / C.load("lib/status").SCRIPT)
+            if page:
+                print(folder / "status" / "index.html")
+        return None
     own = load_ownership()
     data = build(folder, release, own)
     out = folder / "status" / "data"

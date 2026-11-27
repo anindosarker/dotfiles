@@ -1,0 +1,207 @@
+{
+  "release": "v1.0.x",
+  "format": "2.0",
+  "updated": "2026-11-27 09:10",
+  "statuses": [
+    "not started",
+    "in progress",
+    "blocked",
+    "done",
+    "skipped"
+  ],
+  "sprints": [
+    {
+      "id": "S1",
+      "status": "in progress",
+      "done": 1,
+      "total": 2
+    },
+    {
+      "id": "S2",
+      "status": "blocked",
+      "done": 0,
+      "total": 2
+    }
+  ],
+  "epics": [
+    {
+      "id": "E11",
+      "name": "Sidebar",
+      "status": "in progress",
+      "specs": [
+        "27"
+      ]
+    }
+  ],
+  "specs": [
+    {
+      "id": "27",
+      "title": "Sidebar",
+      "path": "plan/specs/27-sidebar/27-sidebar.md",
+      "epic": "E11",
+      "status": "in progress"
+    }
+  ],
+  "milestones": [
+    {
+      "id": "27-settings-pages-in-sidebar",
+      "name": "Settings pages in sidebar",
+      "number": 1,
+      "section": "2.2.1",
+      "ref": "27.1",
+      "epic": "E11",
+      "spec": "27",
+      "sprint": "S1",
+      "status": "done",
+      "reason": "",
+      "changed": "2026-11-27 08:40",
+      "commit": "7be03d5",
+      "critical": true,
+      "depends": [],
+      "outcome": "The sidebar holds the settings pages, a collapse shortcut and a numbered layout picker; its menus keep their blur.",
+      "files": []
+    },
+    {
+      "id": "27-collapse-shortcut",
+      "name": "Collapse shortcut",
+      "number": 2,
+      "section": "2.2.2",
+      "ref": "27.2",
+      "epic": "E11",
+      "spec": "27",
+      "sprint": "S1",
+      "status": "in progress",
+      "reason": "",
+      "changed": "2026-11-27 08:55",
+      "commit": "",
+      "critical": false,
+      "depends": [],
+      "outcome": "The sidebar holds the settings pages, a collapse shortcut and a numbered layout picker; its menus keep their blur.",
+      "files": []
+    },
+    {
+      "id": "27-layout-picker",
+      "name": "Layout picker",
+      "number": 3,
+      "section": "2.2.3",
+      "ref": "27.3",
+      "epic": "E11",
+      "spec": "27",
+      "sprint": "S2",
+      "status": "not started",
+      "reason": "",
+      "changed": "",
+      "commit": "",
+      "critical": false,
+      "depends": [],
+      "outcome": "The sidebar holds the settings pages, a collapse shortcut and a numbered layout picker; its menus keep their blur.",
+      "files": [
+        "apps/web/src/lib/layouts.ts"
+      ]
+    },
+    {
+      "id": "27-sidebar-menus-keep-their-blur",
+      "name": "Sidebar menus keep their blur",
+      "number": 4,
+      "section": "2.2.4",
+      "ref": "27.4",
+      "epic": "E11",
+      "spec": "27",
+      "sprint": "S2",
+      "status": "blocked",
+      "reason": "waits for the owner's look",
+      "changed": "2026-11-27 09:05",
+      "commit": "",
+      "critical": false,
+      "depends": [],
+      "outcome": "The sidebar holds the settings pages, a collapse shortcut and a numbered layout picker; its menus keep their blur.",
+      "files": []
+    }
+  ],
+  "tasks": [
+    {
+      "id": "27-01",
+      "milestone": "27-settings-pages-in-sidebar",
+      "spec": "27",
+      "number": "01",
+      "title": "Settings pages as a sidebar section",
+      "status": "done",
+      "reason": "",
+      "changed": "2026-11-27 08:35",
+      "ownerCheck": false,
+      "type": "feat",
+      "decision": "D57",
+      "file": "plan/specs/27-sidebar/tasks/01-settings-pages-in-sidebar.md"
+    },
+    {
+      "id": "27-02",
+      "milestone": "27-settings-pages-in-sidebar",
+      "spec": "27",
+      "number": "02",
+      "title": "Remove the old settings side menu",
+      "status": "done",
+      "reason": "",
+      "changed": "2026-11-27 08:35",
+      "ownerCheck": false,
+      "type": "feat",
+      "decision": "D57",
+      "file": "plan/specs/27-sidebar/tasks/02-remove-settings-side-menu.md"
+    },
+    {
+      "id": "27-03",
+      "milestone": "27-collapse-shortcut",
+      "spec": "27",
+      "number": "03",
+      "title": "Toggle the sidebar with a keyboard shortcut",
+      "status": "in progress",
+      "reason": "",
+      "changed": "2026-11-27 08:55",
+      "ownerCheck": false,
+      "type": "feat",
+      "decision": "D58",
+      "file": "plan/specs/27-sidebar/tasks/03-shortcut.md"
+    },
+    {
+      "id": "27-04",
+      "milestone": "27-layout-picker",
+      "spec": "27",
+      "number": "04",
+      "title": "Layout picker as a numbered list",
+      "status": "not started",
+      "reason": "",
+      "changed": "",
+      "ownerCheck": false,
+      "type": "feat",
+      "decision": "D61",
+      "file": "plan/specs/27-sidebar/tasks/04-layout-picker-numbered-list.md"
+    },
+    {
+      "id": "27-05",
+      "milestone": "27-layout-picker",
+      "spec": "27",
+      "number": "05",
+      "title": "Remove layout versions 2 and 7",
+      "status": "not started",
+      "reason": "",
+      "changed": "",
+      "ownerCheck": false,
+      "type": "feat",
+      "decision": "D61",
+      "file": "plan/specs/27-sidebar/tasks/05-remove-layouts-2-and-7.md"
+    },
+    {
+      "id": "27-06",
+      "milestone": "27-sidebar-menus-keep-their-blur",
+      "spec": "27",
+      "number": "06",
+      "title": "Sidebar menus stay blurred while their list scrolls",
+      "status": "blocked",
+      "reason": "waits for the owner's look",
+      "changed": "2026-11-27 09:05",
+      "ownerCheck": true,
+      "type": "bug",
+      "decision": "D62",
+      "file": "plan/specs/27-sidebar/tasks/06-menu-keeps-blur.md"
+    }
+  ]
+}

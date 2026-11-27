@@ -19,6 +19,7 @@ from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent.parent
 TEMPLATES = SCRIPTS.parent / "templates"
+BOARD = SCRIPTS.parent / "board"  # the status pages: task-board.html, swimlanes.html
 
 RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
 SPECS_DIR = "plan/specs"
@@ -32,7 +33,9 @@ INDEX_HTML = "status/index.html"
 LEGACY_OWNERSHIP_MD = "status/ownership.md"
 LEGACY_FIX_GLOB = "fix-*-tracker.md"
 ROW_RE = re.compile(r"^\|\s*(\d{2}(?:\.\d+)?)\s*\|")
-RENDER_IGNORES = (".ai/plans/*/*/status/index.html", ".ai/plans/*/*/status/data/")
+# status/data/ holds renders and the lock, never committed, apart from status.json, the status store.
+RENDER_IGNORES = (".ai/plans/*/*/status/index.html", ".ai/plans/*/*/status/data/*",
+                  "!.ai/plans/*/*/status/data/status.json")
 
 
 def load(rel):
@@ -49,6 +52,18 @@ def load(rel):
     return mod
 
 
+def skill_version():
+    """The skill's version, from the one place that holds it: "version" in the "metadata" block
+    of the front matter of SKILL.md."""
+    text = (SCRIPTS.parent / "SKILL.md").read_text(encoding="utf-8")
+    front = re.match(r"\A---\n(.*?)\n---\n", text, re.S)
+    m = re.search(r"^metadata:\n(?:[ \t]+.*\n)*?[ \t]+version:[ \t]*\"?([0-9][0-9.]*)\"?[ \t]*$",
+                  (front.group(1) + "\n") if front else "", re.M)
+    if not m:
+        die("SKILL.md has no metadata version in its front matter")
+    return m.group(1)
+
+
 def script(rel):
     """The path of scripts/<rel>, as messages name it."""
     return SCRIPTS / rel
@@ -62,7 +77,7 @@ def die(msg):
 def repo_root(flag, release, new=False):
     """The repository root every script works in. Order: --root; else the git top level of the
     cwd when it holds .ai/plans/<release>/; else the one direct child folder of the cwd or of
-    that top level that holds it. new=True (plan/new_cycle.py, release not made yet) looks for
+    that top level that holds it. new=True (plan/new_release.py, release not made yet) looks for
     .ai/plans/ instead. Several matches stop with the list. No match falls back to the git top
     level, so the caller's usual error follows."""
     if flag:
@@ -77,7 +92,7 @@ def repo_root(flag, release, new=False):
     except FileNotFoundError:
         top = None
     if top and (top / mark).is_dir():
-        return top
+        return top if new else one_copy(top, mark)
     found = []
     for base in (Path.cwd(), top):
         try:
@@ -91,6 +106,9 @@ def repo_root(flag, release, new=False):
                 hit = False
             if hit and d.resolve() not in found:
                 found.append(d.resolve())
+    if not found and top:
+        # plans in a root folder: a project repo or one of its worktrees sits one or two levels below it
+        found = [p for p in list(top.parents)[:2] if (p / mark).is_dir()]
     if len(found) == 1:
         return found[0]
     if found:
@@ -99,6 +117,24 @@ def repo_root(flag, release, new=False):
     if top is None:
         die("not inside a git repository")
     return top
+
+
+def one_copy(top, mark):
+    """The checkout whose copy of a release folder the scripts write in, for a release with
+    status/data/status.json: every writer must use one copy, also when it is run from a
+    milestone worktree that holds a copy of the plan folder. The main checkout's copy when it
+    has one; else the copy of the one worktree that holds the scripts' lock file; else top.
+    A release made before status.json is read where it is found, as before."""
+    if not any((top / mark).glob("*/status/data/status.json")):
+        return top
+    r = subprocess.run(["git", "-C", str(top), "worktree", "list", "--porcelain"], capture_output=True, text=True)
+    wts = [Path(l[len("worktree "):]) for l in r.stdout.splitlines() if l.startswith("worktree ")] if r.returncode == 0 else []
+    if not wts or wts[0] == top:
+        return top
+    if any((wts[0] / mark).glob("*/status/data/status.json")):
+        return wts[0]
+    held = [w for w in wts if any((w / mark).glob("*/status/data/.ids.lock"))]
+    return held[0] if len(held) == 1 else top
 
 
 def check_name(value, what):
@@ -131,6 +167,7 @@ def ignore_renders(folder):
         print(f"warning: {folder} is not in a git repo; .gitignore not touched", file=sys.stderr)
         return
     path = Path(r.stdout.strip()) / ".gitignore"
+    upgrade_ignore(path, render_ignores(folder, r.stdout.strip()))
     text = path.read_text(encoding="utf-8") if path.is_file() else ""
     have = {l.strip() for l in text.splitlines()}
     missing = [l for l in render_ignores(folder, r.stdout.strip()) if l not in have]
@@ -138,6 +175,24 @@ def ignore_renders(folder):
         sep = "" if not text or text.endswith("\n") else "\n"
         path.write_text(text + sep + "".join(l + "\n" for l in missing), encoding="utf-8")
         print(f"{path}: added {', '.join(missing)}")
+
+
+def upgrade_ignore(path, lines):
+    """Replace every line that ignores a whole status/data/ folder, whatever its prefix, by the
+    pair that keeps status.json in git: a file inside an ignored folder cannot be un-ignored."""
+    if not path.is_file():
+        return
+    out, hit = [], False
+    for l in path.read_text(encoding="utf-8").splitlines():
+        s = l.strip()
+        if s.endswith("status/data/") and not s.startswith(("#", "!")):
+            hit = True
+            pair = [s + "*", "!" + s + "status.json"]
+            out += [x for x in pair if x not in out]
+        elif not (hit and s in out and s.endswith(("status/data/*", "status/data/status.json"))):
+            out.append(l)
+    if hit:
+        path.write_text("".join(l + "\n" for l in out), encoding="utf-8")
 
 
 def render_ignores(folder, top):
@@ -148,8 +203,8 @@ def render_ignores(folder, top):
 
 
 def ensure_gitignore(folder):
-    """Append the status render ignores to the repo's .gitignore when missing. plan/new_cycle.py
-    and migrate/layout.py run it before ignore_renders, which then finds nothing missing; the two
+    """Append the status render ignores to the repo's .gitignore when missing. plan/new_release.py
+    and migrate/pre-v1.0/layout.py run it before ignore_renders, which then finds nothing missing; the two
     differ in the blank line they leave before the lines and in what they print, so each keeps
     its own behaviour."""
     try:
@@ -158,6 +213,7 @@ def ensure_gitignore(folder):
         return
     gi = Path(root) / ".gitignore"
     lines = render_ignores(folder, root)
+    upgrade_ignore(gi, lines)
     have = gi.read_text().splitlines() if gi.is_file() else []
     missing = [l for l in lines if l not in have]
     if missing:
@@ -175,17 +231,17 @@ def release_folder(root, owner, release):
         die(f"release folder missing: {folder}")
     if not (folder / "plan").is_dir():
         die(f"{folder} has the old layout (no plan/): run python3 -I "
-            f"{script('migrate/layout.py')} {release}")
-    old = load("migrate/queue").refusal(folder, release) or load("migrate/decisions").refusal(folder, release)
+            f"{script('migrate/pre-v1.0/layout.py')} {release}")
+    old = load("migrate/pre-v1.0/queue").refusal(folder, release) or load("migrate/pre-v1.0/decisions").refusal(folder, release)
     if old:
         die(old)
     if (folder / LEGACY_OWNERSHIP_MD).is_file():
         die(f"{folder} still has {LEGACY_OWNERSHIP_MD}: run python3 -I "
-            f"{script('migrate/epics.py')} {release}")
+            f"{script('migrate/pre-v1.0/epics.py')} {release}")
     fixes = legacy_fixes(folder)
     if fixes:
         die(f"{folder} still has {len(fixes)} free-standing fix trackers ({fixes[0].name}): run python3 -I "
-            f"{script('migrate/fixes.py')} {release} --dry-run, then without --dry-run")
+            f"{script('migrate/pre-v1.0/fixes.py')} {release} --dry-run, then without --dry-run")
     return folder
 
 
@@ -333,22 +389,39 @@ def commit(root, paths, message):
     return True
 
 
-def tracker_text(num, title):
-    """templates/tracker.md with the header filled in and Status: planned.
-
-    The optional Attention and Notes sections are left out; empty is normal.
-    """
-    path = TEMPLATES / "tracker.md"
+def template(name):
+    """templates/<name> as a script writes it into a release: without its "<!-- ... -->" note,
+    and for a board without the placeholder cards ("**D[n]**", "**Q[n]**") and their bullets."""
+    path = TEMPLATES / name
     if not path.is_file():
         die(f"bundled template missing: {path}")
+    text = re.sub(r"<!--.*?-->\n?", "", path.read_text(encoding="utf-8"), flags=re.S)
+    out, card = [], False
+    for line in text.splitlines():
+        if re.match(r"^- \[[ x]\] \*\*[DQ]\[n\]\*\*", line):
+            card = True
+            continue
+        if card and line.startswith("\t"):
+            continue
+        card = False
+        out.append(line)
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).rstrip("\n") + "\n"
+
+
+def tracker_text(num, title, status_line=False):
+    """templates/tracker.md with the header filled in, up to its first "## " section (Attention
+    and Notes are optional; empty is normal). status_line=True adds "Status: planned" for a
+    release made before status/data/status.json, where the tracker holds the milestone status."""
+    if status_line:
+        return (f"# {num}: {title}, tracker\n\nStatus: planned\nBranch `[branch]`, worktree [name]\nChecks:\n"
+                "- Check: [name], `[command]` at [commit]: [pass | fail]\n\n"
+                "- Task 1 [name]: [planned | running | done (<commit>, <workflow run id>)]\n")
     out = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in template("tracker.md").splitlines():
         if line.startswith("## "):
             break
         if line.startswith("# "):
             line = f"# {num}: {title}, tracker"
-        elif line.startswith("Status:"):
-            line = "Status: planned"
         out.append(line)
     return "\n".join(out).rstrip() + "\n"
 

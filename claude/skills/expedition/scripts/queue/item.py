@@ -112,8 +112,7 @@ def main():
     with open(C.lock_file(folder), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         if not queue.is_file():
-            tpl = C.TEMPLATES / "queue.md"
-            queue.write_text(tpl.read_text(encoding="utf-8"), encoding="utf-8")
+            queue.write_text(C.template("queue.md"), encoding="utf-8")
         board = queue.read_text(encoding="utf-8")
         new = None
         written = []
