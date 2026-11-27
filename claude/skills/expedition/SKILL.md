@@ -1,6 +1,6 @@
 ---
 name: expedition
-description: Runs long, multi-part work as a release of four stages (discuss, plan, run, triage) in a versioned plan folder, in epics of decisions run by a separate runner session, with a decisions file, one queue file for every item not yet decided, spec files with milestones, tasks and an Acceptance line, and follow-up specs. Use when the user runs /expedition. Not for small or single-session tasks.
+description: Runs long, multi-part work as a release of four stages (discuss, plan, run, triage) in a versioned plan folder, in epics of decisions run by a separate runner session, with a decisions file, one queue file for every item not yet decided, spec folders with tasks, milestones and an Acceptance line, in two types (structured, iterative). Use when the user runs /expedition. Not for small or single-session tasks.
 argument-hint: "<discuss|plan|run|triage> [release, e.g. v0.5.x]"
 disable-model-invocation: true
 allowed-tools: Bash(python3 -I ${CLAUDE_SKILL_DIR}/scripts/plan/process.py *)
@@ -12,7 +12,7 @@ allowed-tools: Bash(python3 -I ${CLAUDE_SKILL_DIR}/scripts/plan/process.py *)
 
 The P rules printed above bind this session. After a handoff, a compaction or a RUN line, re-read the file with `python3 -I ${CLAUDE_SKILL_DIR}/scripts/plan/process.py <release>` before any other step.
 
-A release is one plan folder, `.ai/plans/v0.<n>.x/<owner>/`, and one version: `plan/` (specs, epics), `queue.md` (every item raised, a kanban board), `run/` (trackers, handoffs), `status/` (generated, never edited by hand; `index.html` and `data/` are `sprints/swimlanes.py` renders, git-ignored, never committed). `<owner>` is the folder name earlier releases use. A release has specs, one file each (`plan/specs/NN-<slug>.md`): a spec is one planned unit of work. A spec has milestones: a schedulable chunk with one branch, one worktree, one tracker, one merge; the rows of `status/sprints.md`. A milestone has tasks: ordered steps, each with its checks. An epic (`E<n>`) is the decisions planned and run together, named by the owner; it may span sprints. A sprint (`S<n>`) is the milestones that run together, computed by `lib/ownership.py`; the columns of `status/sprints.md`. Each stage below writes fixed files and ends at a fixed point.
+A release is one plan folder, `.ai/plans/v0.<n>.x/<owner>/`, and one version: `plan/` (specs, epics), `queue.md` (every item raised, a kanban board), `run/` (trackers, handoffs), `status/` (generated, never edited by hand; `index.html` and `data/` are `sprints/swimlanes.py` renders, git-ignored, never committed). `<owner>` is the folder name earlier releases use. A release has specs, one folder each (`plan/specs/NN-<slug>/NN-<slug>.md`, with `tasks/` for its task files): a spec is one planned unit of work, `structured` (a scoped piece of work planned in full) or `iterative` (one area the owner gives feedback on, item after item, open until the owner closes it). A spec has milestones: a schedulable chunk with one branch, one worktree, one tracker, one merge; the rows of `status/sprints.md`. A milestone has tasks: ordered steps, each with its checks. An epic (`E<n>`) is the decisions planned and run together, named by the owner; it may span sprints. A sprint (`S<n>`) is the milestones that run together, computed by `lib/ownership.py`; the columns of `status/sprints.md`. Each stage below writes fixed files and ends at a fixed point.
 
 The core loop: two sessions on one checkout. The lead (this session) discusses with the owner and records decisions; the runner (a second session, `scripts/run/runner.sh`) runs epics. An epic is every decided item that is ready when the owner says `epic`: no tag, dependencies in epics running or done, no overlap with the owned files of a running epic (`epics/overlap.py`). No upper count. One "go" per epic: each go starts that epic's run in the same turn, and discussion goes on while epics run. The owner's attention is spent in discussion only. Decisions are the work. An epic is only a grouping of decided items for planning and running. Discussion means taking items from the queue and deciding them.
 
@@ -23,7 +23,7 @@ Arguments: `$ARGUMENTS`. Stage missing: run `python3 -I ${CLAUDE_SKILL_DIR}/scri
 Mechanical steps use the scripts, never hand-written files. The scripts sit in `scripts/` by subject, one job each: `plan/`, `epics/`, `sprints/`, `queue/`, `decisions/`, `status/`, `run/`, `migrate/`, and the shared code in `lib/`. The scripts find the release folder from the cwd or one level below it, so sessions never `cd` for them and use `git -C <repo>` for git. The main agent calls scripts, never does a script's job by hand, never spawns an agent only to call one (the spec writer, a forked session, calls `plan/new_spec.py` as part of its work):
 
 - `plan/new_cycle.py v0.<n>.x`: a new release folder.
-- `plan/new_spec.py <release> NN <slug> "<Title>" "<scope>"`: a new spec or follow-up spec, with its tracker and its plan row.
+- `plan/new_spec.py <release> NN <slug> "<Title>" "<scope>" [--type iterative]`: a new spec folder, with its tracker and its plan row.
 - `sprints/check.py <release>`: the ownership check, after each spec is written; writes nothing.
 - `epics/table.py <release> E<n> [<spec numbers>]`: the epic table, the pre-go preview; commits nothing.
 - `epics/overlap.py <release> <spec numbers or D ids>`: overlap with running epics; writes nothing.
@@ -32,7 +32,10 @@ Mechanical steps use the scripts, never hand-written files. The scripts sit in `
 - `sprints/refresh.py <release>`: the grid refresh; run by `run/go.py` and `sprints/mark.py`, by hand in Changing a decision and after a migration.
 - `run/runner.sh start|list|stop|send|fork|resume|adopt <release>`: the runner and spec fork windows.
 - `sprints/mark.py <release> <milestone> launch|wait|resume|merge|stop`: the only writer of the cells of `status/sprints.md`.
-- `plan/new_fix.py <release> <slug> "<Title>" <spec> --files a,b --checks "<checks>"`: a mid-run fix.
+- `plan/milestone.py add <release> <spec> "<Name>" [--decision D<n>] [--checks "<checks>"] [--files a,b]`: a new milestone of a spec: a mid-run fix, follow-up work, a new round of an iterative spec.
+- `plan/task.py add <release> <spec> "<Title>" [--decision D<n>] [--remark "<words>"]`: a new task in a spec's open milestone, with its task file.
+- `plan/task.py status <release> <spec> <task id> "<status>" [--reason "<text>"]` (short forms `start`, `done`): the only writer of task status.
+- `plan/close_spec.py <release> <spec>`: closes an iterative spec, on the owner's word.
 - `queue/item.py <release> D|Q "<title>"`, `--move Q<n> <lane>`, `--fact Q<n> "<text>"`: every new decision and card, every card move and fact.
 - `queue/next.py <release>`: the first card in Open, or `none`. `queue/list.py <release> [lane] [--facts]`: the cards of a lane.
 - `decisions/close.py <release> D<n>`: a decision with nothing to run.
@@ -110,6 +113,7 @@ Interactive. You research and propose; the owner gives feedback and accepts.
 - The lead never invents an item number: every item carries the Q id `queue/item.py` printed, a settled item also its D id.
 - An item that needs a lookup: start the lookup agent and give it the Q id and the `queue.md` path. The agent adds its facts with `queue/item.py <release> --fact Q<n> "<text>"` and reports one line. The lead skips that card while its lookup runs. A lookup that returns while another item is open gets exactly one line in chat, `Q15 ready`, never a full item.
 - Next item: `queue/next.py <release>` prints the first card in Open with its facts, or `none`. The open item's card is also in Open, so the lead asks for the next item only after the explicit word on the open one. No session reads the whole file to find what is next.
+- **Route.** A remark on an area the owner watches, when an iterative spec runs for that area, becomes a task of that spec. Anything that spans areas, needs an order between parts, or runs unwatched goes the epic way (Epics). The lead says which in one line when it posts the item: `Task of spec 27.` or `Goes to an epic.` For a task of an iterative spec the explicit word does both steps in one turn, because the spec is already running: it records the decision, then `plan/task.py add <release> <spec> "<Title>" --decision D<n> --remark "<the owner's words>"` and `run/runner.sh send <release> "TASK <spec> <task id>"`. No epic step, no go. With no open milestone in the spec, `plan/milestone.py add <release> <spec> "<Name>"` opens the next round first.
 - **Screen.** Before it posts a card, the lead runs three checks on it, in order:
   1. Already decided or rejected: `grep -n -i '<key word>' .ai/plans/v*.x/<owner>/decisions.md` from the repo root, for this release and the earlier ones, and `queue/list.py <release> Dropped --facts`.
   2. A duplicate of another open card: `queue/list.py <release> Open --facts`.
@@ -146,7 +150,7 @@ Epics:
 - On `epic`: one recheck message listing the epic's decisions as a set; `epics/new.py <release> E<n> <D ids>` (the `Decisions:` line and one Ownership row per decision, committed). Then `run/runner.sh fork <release> E<n> "<D ids>" --from <lead>`: a forked session of the lead, in window `<release> specs E<n>`, fills the Files column, cuts the epic into specs by the three aims, writes them with `plan/new_spec.py`, completes the table with `epics/table.py`, checks the plan, and sends `SPECS` (stage 2). Discussion continues.
 - `epic go` (or `epic` and `go` in one message): the go is given in advance. The recheck message is still posted, the fork writes the specs, and on the `SPECS` message the lead does its check and then runs `run/go.py` at once; no ready line, no wait. A check that finds a spec contradicting a decision stops there and posts the ready line instead.
 - On the `SPECS E<n> <spec numbers>` message: compare each spec with its decisions and fix inline. Check the plan by judgment, reading the epic file only and running no script for it: the same file under two specs, or a long run of different sprints, is a question, not an error. Send the fork back (type into its window) when a clearly better cut exists. Then post one line: `Epic E12 ready: specs 39 to 49, sprints S17 to S18. Changed: <what or nothing>. Say go.`
-- On `go`: `run/go.py <release> E<n> --from <lead>` (`<lead>` is this session's name, from `ListAgents`: "This session is <name>"), then post the next item. Its steps, in order: `epics/tag.py` (tags the specs, adds `#E<n>` to the decisions and moves them to In progress, writes `Starts:`, ticks the epic's cards in `queue.md` and tags them `#E<n>`); commit specs, tags, plan rows and `queue.md`; `sprints/refresh.py`; `Specs:` and the final Sprint column in the epic file, committed; `run/runner.sh stop "<release> specs E<n>"` (closes the writer window); `run/runner.sh start <release>` when `run/runner.sh list` shows no runner, then the RUN line `run/runner.sh send <release> "RUN E<n> <release folder> epic <release folder>/plan/epics/E<n>.md from <lead>"`; the next epic's stub. A failed step stops it with one line naming the step: fix the cause and run `run/go.py` again. An epic never gains a decision after go.
+- On `go`: `run/go.py <release> E<n> --from <lead>` (`<lead>` is this session's name, from `ListAgents`: "This session is <name>"), then post the next item. Its steps, in order: `epics/tag.py` (tags the specs, adds `#E<n>` to the decisions and moves them to In progress, writes `Starts:`, ticks the epic's cards in `queue.md` and tags them `#E<n>`); commit specs, tags, plan rows and `queue.md`; `sprints/refresh.py`; `Specs:` and the final Sprint column in the epic file, committed; `run/runner.sh stop "<release> specs E<n>"` (closes the writer window); `run/runner.sh start <release>` when `run/runner.sh list` shows no runner, then the RUN line `run/runner.sh send <release> "RUN E<n> <release folder> epic <release folder>/plan/epics/E<n>.md from <lead>"`; the next epic's stub. A failed step stops it with one line naming the step: fix the cause and run `run/go.py` again. An epic never gains a decision after go, with one exception: a decision recorded for an iterative spec joins that spec's epic (`plan/task.py add --decision`, `plan/milestone.py add --decision`).
 - On `DONE` or `BLOCKED` from the runner: read `status/sprints.md`, the tracker and `queue/next.py <release>`, and write nothing to the grid; the run's cards are queue cards like any other. The lead runs `sprints/refresh.py` only through `run/go.py`, or in Changing a decision.
 - Release is a spec. The owner decides which epic it joins.
 
@@ -182,10 +186,10 @@ These are aims, not rules. They pull against each other, and the right cut depen
 3. Create each spec with `plan/new_spec.py`. If it printed project planning rules, it wrote a contract stub. Read the rules, then write the spec by hand in the project's template. The rules override the bundled guidelines completely. Otherwise follow [reference/planning-guidelines.md](reference/planning-guidelines.md), which say how to write one plan file and do not mention expedition. Either way, keep the contract below and add expedition's own lines ([reference/specs.md](reference/specs.md)). Specs implement decisions and never re-decide.
    - Before a spec is written, the spec writer (the forked session) maps every site the change touches (file:line table); the spec lists those files, not guesses.
    - A ride-along item (a timeout bump, a glob fix) joins the nearest spec as a named ride-along, never its own spec.
-4. Each spec says what must be proven (its `Acceptance:` line), not how it is run; the runner picks the orchestration per column ([reference/run.md](reference/run.md), Orchestration). The spec holds one `### Milestone: <name>` block per milestone; the lines of the block are in the contract below. Merge adjacent small tasks. Each milestone block gets its tracker, `run/trackers/NN-<slug>-tracker.md` from `templates/tracker.md` with `Status: planned`, in the same step.
+4. Each spec says what must be proven (its `Acceptance:` line), not how it is run; the runner picks the orchestration per column ([reference/run.md](reference/run.md), Orchestration). The spec holds its tasks in section 2.1 and one `#### 2.2.N Milestone: <name>` block per milestone in section 2.2; their lines are in the contract below. Merge adjacent small tasks. Each milestone block gets its tracker, `run/trackers/NN-<slug>-tracker.md` from `templates/tracker.md` with `Status: planned`, in the same step.
 5. After each spec file, run `sprints/check.py`: it computes, in memory, each milestone's column and each epic's critical path from the milestone blocks, and writes nothing. A file shared by two milestones of the same column, or a dependency cycle, is a script error naming the file and the two milestones: fix it in the spec and run `sprints/check.py` again. When the epic's specs are written, `epics/table.py E<n>` completes the epic file's table. On go, `run/go.py` runs `sprints/refresh.py` then `sprints/swimlanes.py`: they write the `status/sprints.md` grid, one column per sprint, and the swimlane data for `status/index.html` (see [reference/files.md](reference/files.md)). Checks sit in each task's `Checks:` and `process.md`, Acceptance in each spec's line, the release in the release spec, sandbox rules in `process.md` P5. `status/report.py` flags a missing or extra piece.
    - The run unit is the milestone: one team, its own branch, worktree, tracker and merge. Usually one milestone per spec; a spec may yield several (file groups, or a read-only side job like captures). Every changed file is owned by exactly one milestone while it runs; two milestones that share a file sit in different columns (`lib/ownership.py` orders them, lower spec number first), or the two merge.
-   - Sprints are computed across every epic: `lib/ownership.py` puts each milestone in the first column at or after its epic's start sprint (`Starts:` in the epic file, the current sprint at go) whose dependencies and file owners are satisfied. A milestone with a running or finished grid row keeps its column. A new epic never lands in a finished column, and a milestone added after go (`plan/new_fix.py`) starts at the current sprint ([reference/files.md](reference/files.md), Ownership).
+   - Sprints are computed across every epic: `lib/ownership.py` puts each milestone in the first column at or after its epic's start sprint (`Starts:` in the epic file, the current sprint at go) whose dependencies and file owners are satisfied. A milestone with a running or finished grid row keeps its column. A new epic never lands in a finished column, and a milestone added after go (`plan/milestone.py add`) starts at the current sprint ([reference/files.md](reference/files.md), Ownership).
    - What two or more milestones need (dependency adds, lockfile, lint or tsconfig config, CI edits, shared new helpers, baseline captures) is the shared milestone of the first sprint; later milestones never touch `package.json`, the lockfile, ESLint or CI config.
 6. A decision changed after specs exist: Changing a decision (stage 1).
 7. Readiness check before go: run `status/report.py` and fix every gap it reports (missing checks or trackers, open questions, a grid out of step with the specs, an epic table out of step with its specs or the grid). No readiness review agent for epics: the lead's check on the `SPECS` message replaces it.
@@ -197,23 +201,30 @@ The contract. It applies inside any template, and it is stated here only. Under 
 Part 1, what the plan file must carry. A plan written by the bundled guidelines already has all of it but the file name, which `plan/new_spec.py` sets:
 
 - Hard, a script stops or schedules wrong without it:
-  - The file name `NN-<slug>.md` (a follow-up spec `NN.M-<slug>.md`) in `plan/specs/`. `lib/ownership.py` does not see a file with another name.
-  - One `### Milestone: <name>` block per milestone. Milestone names are unique across the release and hold no `|`; a repeat is a `sprints/check.py` error.
-  - `- Files owned: a, b` in each block. A block without the line is a `sprints/check.py` error.
-  - `- Depends on:` in each block: exact milestone names, spec numbers, or `none`. An unknown name is a `sprints/check.py` error; a missing line schedules the milestone as if it depended on nothing.
+  - The spec is a folder with a file of the same name, `plan/specs/NN-<slug>/NN-<slug>.md`. `lib/ownership.py` does not see a file with another name.
+  - Section 2.1, Tasks: one `#### 2.1.N Task: <title>` entry per task. The section number is the task's id; `plan/task.py` and the status page find a task by it.
+  - Section 2.2, Milestones: one `#### 2.2.N Milestone: <name>` block per milestone, with `- Tasks: 2.1.1, 2.1.2`. Milestone names are unique across the release and hold no `|`; a repeat is a `sprints/check.py` error. The section number is the id; trackers, the grid and `Depends on` use the name.
+  - A name on a `- Depends on:` line exists: exact milestone names, spec numbers, or `none`. An unknown name is a `sprints/check.py` error.
+- Suggestions, in both types. A script reads the line when it is there and reports nothing when it is not:
+  - Front matter `type: structured | iterative`. No front matter means `structured`.
+  - `- Files owned: a, b` in a milestone block, when it could clash with other running work. A milestone without the line is not part of the overlap check.
+  - `- Depends on:` in a milestone block, when the order matters. With no line, the milestones of a spec run in the order listed.
+  - A pointer in a task entry: `- Detail: 1.6.1`, a section of the same file, or `- Plan: tasks/NN-<slug>.md`, a task file. The sections of a task file.
 - Shown only as `status/report.py` warnings, fixed in the readiness check (step 7):
-  - `- Task N: ... Checks: ...` lines, each task with its checks.
+  - A `- Checks:` bullet in each task entry.
   - One `- Acceptance:` line per spec.
   - No open question in a plan file. The report flags each line that ends in `?`.
+- Status is never written into a spec by hand. Milestone status is in the sprint grid (`sprints/mark.py`). Task status is in the task file's front matter, or in the tracker's task list for a task with no file, written only by `plan/task.py` ([reference/formats.md](reference/formats.md), Task status). The `closed:` line of an iterative spec is written by `plan/close_spec.py`.
+- Specs of earlier releases keep their form and are read unchanged: one flat file `plan/specs/NN-<slug>.md` (follow-up specs `NN.M-<slug>.md`), `### Milestone: <name>` blocks with `- Task N: ... Checks: ...` lines, `- Files owned:` required in each block, a missing `- Depends on:` read as none. No release is converted.
 
 Part 2, what the spec writer adds on top. No planning guidelines need to mention these:
 
-- Hard: `(D7)` at the end of each line that implements decision D7, outside code fences. `epics/tag.py`, `epics/table.py` and `run/go.py` find an epic's specs by these cites.
+- Hard: `(D7)` at the end of each line that implements decision D7, outside code fences, and always on the heading of the task that builds it (`#### 2.1.3 Task: <title> (D7)`). `epics/tag.py`, `epics/table.py` and `run/go.py` find an epic's specs by these cites; the Done rule finds a decision's milestones by the task headings.
 - `(Q3)` for a queue card, `(v0.4.x D9)` for a decision of another release.
 - `- Review: none | fable` in each milestone block. No script acts on it; the runner reads it when it writes the workflow script.
 - `- Local CI:` in each milestone block (Process notes).
 - The reference and the judges on the `- Acceptance:` line, when the Acceptance is judged ([reference/run.md](reference/run.md), Milestones and sprints, the Acceptance bullet).
-- `- Epic: E<n>` and `- Starts: S<n>` are written by `epics/tag.py` and `plan/new_fix.py`, never by hand.
+- `- Epic: E<n>` and `- Starts: S<n>` are written by `epics/tag.py` and `plan/milestone.py`, never by hand.
 
 When to use each line of part 2, with an example block: [reference/specs.md](reference/specs.md).
 
@@ -225,6 +236,7 @@ Unattended, in the runner session (`run/runner.sh start`, brief `templates/runne
 
 - On go it types `RUN E<n> <release folder> epic <epic file> from <lead>` into the runner window with `run/runner.sh send` (typed text opts the turn in to `ultracode`; a `SendMessage` does not).
 - It reads `DONE` or `BLOCKED` back by `SendMessage` (stage 1, On `DONE` or `BLOCKED`).
+- `TASK <spec> <task id>`, typed the same way, starts one task of an iterative spec; `MERGE <milestone>` closes a round of it ([reference/run.md](reference/run.md), Iterative specs). On the owner's word that the area is finished: `plan/close_spec.py <release> <spec>`.
 - `HOLD <target>` and `RESUME <target>`, typed the same way, hold and resume an epic, a spec or one milestone. These and every other line between lead and runner: [reference/run.md](reference/run.md), Epics.
 - A dead runner: `run/runner.sh start` resumes it.
 
@@ -234,7 +246,7 @@ Folded into stage 1: the run's cards are queue cards and come up through `queue/
 
 - First pass, no owner: the screen (stage 1) on every card; every card that is not a real choice (see Owner input) gets its decision written at once with `--source Q<n>` and its follow-up routed, or the Lead-side close. Then the settled list, then the real choices, one per message, among the other items.
 - For a real choice, the explicit word moves the card (Explicit word): to Decided through `queue/item.py D --source Q<n>`, to Later or Dropped through `queue/item.py --move`.
-- Minor follow-up: a follow-up spec `NN.1`, `NN.2` (`plan/new_spec.py`); its decisions join the next epic. A fix with no decision during a run: `plan/new_fix.py`. Major follow-up: a new release folder.
+- Minor follow-up: a new milestone in the spec it follows, `plan/milestone.py add <release> <spec> "<Name>" --decision D<n>`, also when every milestone of that spec is merged; no follow-up spec file. A fix with no decision during a run: the same command without `--decision`. Major follow-up: a new release folder.
 - Handoff: only when the owner asks.
 
 ## Agents or Workflow

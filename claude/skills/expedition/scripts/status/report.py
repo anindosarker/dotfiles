@@ -5,7 +5,7 @@ Usage: python3 -I status/report.py <release> [--owner X] [--root PATH]
 
 The next queue card: queue/next.py. The owner's progress reply: status/progress.py.
 
-Layout: <release>-plan.md (## Goals and ## Deliverables only), plan/specs/NN-<slug>.md,
+Layout: <release>-plan.md (## Goals and ## Deliverables only), plan/specs/NN-<slug>/NN-<slug>.md (or the flat NN-<slug>.md of an earlier release),
 plan/epics/E<n>.md, queue.md, status/index.html, status/sprints.md (sprints/refresh.py), run/trackers/
 (one per milestone, NN-<slug>-tracker.md). The ownership facts come from
 lib/ownership.py compute, in memory.

@@ -14,13 +14,13 @@ Release 0.8.0 (D32). Decisions: [decisions.md](decisions.md) D1 to D40. Queue: [
 
 | # | Spec | Epic | Scope |
 |---|---|---|---|
-| 01 | [shared surface](plan/specs/01-shared-surface.md) | E1 | Types, options, icon keys, strings, state slices and drag helpers every milestone builds on; no default flips. |
-| 02 | [frame and body](plan/specs/02-frame-body.md) | E1 | Toolbar above the frame, row metrics, tokens, width rule, scroll cues, overflow text, pending-view script. |
-| 03 | [header, column menu and dragging](plan/specs/03-header-menu-drag.md) | E1 | Quiet header, Notion column menu, hairline resize, header drag with animation and locked columns. |
-| 04 | [toolbar chrome](plan/specs/04-toolbar-chrome.md) | E1 | Button group, filter chips, sort editor, view settings with pinned items, one search X, real triggers. |
-| 05 | [defaults and stories](plan/specs/05-defaults-stories.md) | E1 | Stock defaults flipped to the new look; every story and play test follows; changelog lists each way back. |
-| 06 | [docs](plan/specs/06-docs.md) | E1 | Guides rewritten for the new look and added for each new surface; ship with 0.8.0. |
-| 07 | [release 0.8.0](plan/specs/07-release.md) | E1 | Checks rerun in throwaway apps per base; 0.8.0 released. |
+| 01 | [shared surface](plan/specs/01-shared-surface/01-shared-surface.md) | E1 | Types, options, icon keys, strings, state slices and drag helpers every milestone builds on; no default flips. |
+| 02 | [frame and body](plan/specs/02-frame-body/02-frame-body.md) | E1 | Toolbar above the frame, row metrics, tokens, width rule, scroll cues, overflow text, pending-view script. |
+| 03 | [header, column menu and dragging](plan/specs/03-header-menu-drag/03-header-menu-drag.md) | E1 | Quiet header, Notion column menu, hairline resize, header drag with animation and locked columns. |
+| 04 | [toolbar chrome](plan/specs/04-toolbar-chrome/04-toolbar-chrome.md) | E1 | Button group, filter chips, sort editor, view settings with pinned items, one search X, real triggers. |
+| 05 | [defaults and stories](plan/specs/05-defaults-stories/05-defaults-stories.md) | E1 | Stock defaults flipped to the new look; every story and play test follows; changelog lists each way back. |
+| 06 | [docs](plan/specs/06-docs/06-docs.md) | E1 | Guides rewritten for the new look and added for each new surface; ship with 0.8.0. |
+| 07 | [release 0.8.0](plan/specs/07-release/07-release.md) | E1 | Checks rerun in throwaway apps per base; 0.8.0 released. |
 
 ---
 
