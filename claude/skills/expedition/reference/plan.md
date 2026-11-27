@@ -14,7 +14,7 @@ For the spec writer, and for the lead's check of the specs before go: read this 
 
 ## Writing the specs of an epic
 
-Specs per epic, written by the spec writer (the session `run/runner.sh fork` opens) after `epic`, checked by the lead before `go`. Write the plan per spec, not all at once.
+Specs per epic, written by the spec writer (the session `run/runner.sh fork` opens) after `compose`, checked by the lead before `delegate`. Write the plan per spec, not all at once.
 
 The spec writer's order: fill the Files column of the epic's Ownership table (the files each decision changes, paths as the project writes them); cut the epic into specs by the three aims below; write the specs; run `epics/table.py <release> E<n>` to complete the table; check the plan with that output and its own judgment, and regroup when a clearly better cut exists; send `SPECS`.
 

@@ -52,7 +52,7 @@
       "Q60: adds the next module, task file and milestone to spec 27 with plan/milestone.py add, fills them, and tells the runner with one NOTE line",
       "Q61: does not add it to the finished spec 12; starts an epic of this one decision with epics/new.py, has its spec written by the regular steps, and runs run/go.py at once after the SPECS check",
       "Says in one line per item which case it is, and asks the owner nothing about it",
-      "Does not wait for other ready decisions and does not post an Epic ready line for these items",
+      "Does not wait for other ready decisions and does not post an Epic ready message for these items",
       "Skips no plan file: decision, spec or module, task file, milestone, epic file"
     ]
   }

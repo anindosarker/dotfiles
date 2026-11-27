@@ -228,7 +228,7 @@ Starts: S17
 - SKIP 41: D82 superseded by D95, rebuilt next epic.
 ```
 
-- `Decisions:` and the Decision cells (`D<n> <decision title>`): `epics/new.py`, on `epic`. One row per decision until the specs exist.
+- `Decisions:` and the Decision cells (`D<n> <decision title>`): `epics/new.py`, on `compose`. One row per decision until the specs exist.
 - Files: the spec writer, before it writes specs: the files the decision changes, paths as the project writes them, several separated by `, `.
 - Spec, Milestone and Sprint: `epics/table.py <release> E<n>`, from the specs. One row per decision and spec of the epic citing it (`(D82)`); a spec of the epic citing none of its decisions gets a row with an empty Decision cell. Milestone is the spec's milestone name, several joined by `; `. Sprint is that milestone's sprint, a range `S17 to S19` when the spec's milestones span several. Before go the sprints are provisional (the current sprint as the epic's start); go writes the real ones, and every later `sprints/refresh.py` run keeps the Sprint column of an unfinished epic in step with the grid. Rows are ordered by sprint, then spec number, then decision number.
 - `Specs:` and `Starts:`: `run/go.py`, on go. `Starts: S<n>` is the epic's start sprint, written once and never changed: no milestone of the epic sits in an earlier sprint.

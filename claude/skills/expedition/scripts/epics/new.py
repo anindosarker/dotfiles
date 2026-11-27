@@ -10,7 +10,7 @@ Stub (no D ids): writes "# E<n>", empty "Decisions:", "Specs:" and "Starts:" lin
 "## Ownership" table, no "## Notes" heading. Refuses when the file exists. run/go.py runs it for the
 next epic the moment the previous epic's RUN is sent.
 
-Start the epic (D ids, on the owner's "epic"): creates the file when it does not exist, writes
+Start the epic (D ids, on the owner's "compose"): creates the file when it does not exist, writes
 the "Decisions:" line (the ids already there plus the new ones, in number order) and one table
 row per decision, "| D<n> <title from decisions.md> |  |  |  |  |"; on a rerun only the missing
 rows are added, every other row kept as it is. Refuses, writing nothing, a decision that is

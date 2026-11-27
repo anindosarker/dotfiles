@@ -13,7 +13,9 @@
 2..N. <another option>                      optional
    - <bullet>
 
-Say "record it" to record it, or add to it.
+**Say:**
+- A. `record it`: record.
+- B. `iterate`: record and start now.
 ```
 
 ## Example: when it is relevant to show the current behavior
@@ -31,5 +33,7 @@ Say "record it" to record it, or add to it.
 2..N. <another option>                      optional
    - <bullet>
 
-Say "record it" to record it, or add to it.
+**Say:**
+- A. `record it`: record.
+- B. `iterate`: record and start now.
 ```

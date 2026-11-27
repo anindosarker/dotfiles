@@ -88,7 +88,7 @@ For any session that is about to run a command of the skill: how to run them, th
 - No D ids: the stub (`# E<n>`, empty `Decisions:`, `Specs:` and `Starts:`, the empty Ownership table, no Notes heading); refuses an existing file.
 - `--note`: appends `- <text>` to `## Notes`, creating the section at the end.
 - Each commits the file
-- When: D ids on `epic`; the stub from run/go.py; `--note` whenever a note is written
+- When: D ids on `compose`; the stub from run/go.py; `--note` whenever a note is written
 
 ### run/go.py
 

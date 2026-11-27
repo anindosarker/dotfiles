@@ -17,7 +17,9 @@ One real item, written in each variant of [../templates/item.md](../templates/it
    - Update set-up request: first account gets Super admin.
    - After merge, the lead deletes the owner's local database of this project and creates it again.
 
-Say "record it" to record it, or add to it.
+**Say:**
+- A. `record it`: record.
+- B. `iterate`: record and start now.
 ```
 
 ## With a `Now` group: the current behavior matters for the decision
@@ -38,7 +40,9 @@ Say "record it" to record it, or add to it.
    - Update set-up request: first account gets Super admin.
    - After merge, the lead deletes the owner's local database of this project and creates it again.
 
-Say "record it" to record it, or add to it.
+**Say:**
+- A. `record it`: record.
+- B. `iterate`: record and start now.
 ```
 
 ## With two options
@@ -59,5 +63,7 @@ Say "record it" to record it, or add to it.
      - Admin role: rank 0 to 1.
      - Owner's dev account: Admin to Super admin.
 
-Say "record it" to record it, or add to it.
+**Say:**
+- A. `record it`: record.
+- B. `iterate`: record and start now.
 ```
