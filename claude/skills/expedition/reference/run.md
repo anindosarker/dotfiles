@@ -110,13 +110,20 @@ The run follows `status/sprints.md` and the specs' milestone blocks ([files.md](
 
 ## Orchestration
 
-The spec says what must be proven (`Acceptance:`); the runner decides how, per sprint, by cost: fewest main-session wakes, fewest agents that still prove every Acceptance. No lane line in specs. The runner launches milestones, reads reports and trackers, marks `status/sprints.md` through `sprints/mark.py`, files queue cards and merges on green.
+The spec says what must be proven (`Acceptance:`); the runner decides how, per milestone, by what the milestone needs: the smallest set of agents that still proves every Acceptance. No lane line in specs. The runner launches milestones, reads reports and trackers, marks `status/sprints.md` through `sprints/mark.py`, files queue cards and merges on green.
 
-- The orchestration per sprint is the runner's judgment: one Workflow per milestone, several per milestone, or one for several, whatever proves the Acceptance with the fewest wakes and agents.
-  - A stage rerun: edit the script, resume with `resumeFromRunId`; never loose Agent calls.
+- The runner judges every milestone before it launches it. A Workflow only when the milestone needs what one agent cannot do:
+  - several builders at the same time (more than one file set);
+  - a second opinion: the milestone says `Review: fable`, or its `Acceptance:` names a judged check;
+  - it is the release milestone;
+  - the lead or the owner asked for one for this milestone, in the epic file, the spec or a `NOTE` line. Such a word, for a Workflow or against one, is one more fact for the judgment, whatever way it arrives.
+- Every other milestone: one `opus` agent, given the build prompt of [../templates/workflow.js](../templates/workflow.js), builds in the milestone worktree, runs the checks, fills the tracker and commits; the runner merges on green and runs `sprints/mark.py <release> <milestone> merge --commit <sha>`. No separate verifier: the builder's checks are the first run, CI the second.
+- `ultracode` in a prompt permits a Workflow and never asks for one: this judgment decides.
+- A Workflow, when the judgment gives one: one per milestone, or one for several milestones of a sprint.
+  - A failed stage of a Workflow: edit the script and resume with `resumeFromRunId` when that is possible, so the finished stages come from the cache. When it is not possible or costs more, a plain agent does the stage.
   - Composed from the stage library in [../templates/workflow.js](../templates/workflow.js): build, spec check, review bounce (only when the milestone says `Review: fable`), verify, judges, check, merge on green, release steps; run through the Workflow tool (invoking this skill is the multi-agent opt-in).
   - The main session wakes at each milestone's end, or at a `needs-decision`.
-- A single Agent for one bounded task with nothing after it; inline for mechanical edits (a rename, a version bump, a changelog line).
+- Inline for mechanical edits (a rename, a version bump, a changelog line).
 - The milestones of a sprint with no dependency between them run at the same time, each in its own worktree.
 - Review depth matches risk: a review only where the milestone asks for one (public API, shared state, a cross-spec change); mechanical changes get the checks only.
   - A review is one review on the whole diff, round 2 on `git diff <round 1 head>..HEAD` only, two rounds at most; majors still open after round 2 return `review-open` and the milestone does not merge.

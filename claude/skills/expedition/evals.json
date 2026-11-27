@@ -32,5 +32,16 @@
       "Reports that the task waits for the owner's look, with what the owner should look at",
       "Leaves the last step to the lead: after the owner's word the lead ticks the box and sets the task done"
     ]
+  },
+  {
+    "skills": ["expedition"],
+    "query": "(runner of a format 2.0 release, ultracode on) RUN arrives for an epic with one milestone: a fix from plan/new_fix.py with one task, one file set, no `Review: fable` line and no judged check in its Acceptance. No word from the lead or the owner about how to run it. Launch it.",
+    "expected_behavior": [
+      "Judges the milestone before launch and says in one line why no Workflow is needed",
+      "Starts one opus agent in the milestone worktree to build, run the checks, fill the tracker and commit",
+      "Does not call the Workflow tool and does not copy templates/workflow.js",
+      "After a green report merges the milestone itself and runs sprints/mark.py <release> <milestone> merge --commit <sha>",
+      "Starts no separate verifier agent"
+    ]
   }
 ]

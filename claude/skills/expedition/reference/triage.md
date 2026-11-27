@@ -24,4 +24,4 @@ Folded into stage 1: the run's cards in `queue.md` are queue cards like any othe
 - In doubt: a new release. Follow-up work that grows past the current decisions blocks the release.
 - A decision moved to another release gets the bullet `- Deferred to v0.<n>.x`. That release's specs cite it as `(v0.<m>.x D<n>)`.
 - `plan/milestone.py add` writes the module, the task files and the milestone into the spec, with the current sprint as its start; its grid row comes from the same call. A fix found while an epic runs needs no decision and goes through the same command without `--decision` ([run.md](run.md), Milestones and sprints); on a done spec that makes the follow-up spec `NN.M` in a running epic.
-- A follow-up milestone runs as its own milestone in the sprint `lib/ownership.py` gives it, with its own Workflow, or as a single Agent when nothing follows ([run.md](run.md), Orchestration).
+- A follow-up milestone runs as its own milestone in the sprint `lib/ownership.py` gives it, as one agent or as a Workflow, by the runner's judgment ([run.md](run.md), Orchestration).

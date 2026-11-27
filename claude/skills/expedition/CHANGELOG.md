@@ -28,6 +28,13 @@ What stops working:
 - Nothing that a 1.0 release used is removed.
 - In a migrated or new release, a status is no longer written into a tracker or the grid by hand or by a prompt: `sprints/mark.py` needs `--reason` for a wait or a stop and `--commit` for a merge.
 
+Changed after the tag `expedition-v2.0`, same format:
+
+- The runner no longer starts a Workflow for every milestone. It judges each one: a Workflow only for several builders at the same time, a second opinion, the release milestone, or a word from the lead or the owner. Every other milestone is built by one agent and merged by the runner.
+- A failed Workflow stage is resumed when that is possible; a plain agent may do it otherwise.
+- In discuss, the lead fills the module and the task file of a milestone it adds to a spec in progress.
+- `queue/item.py` refuses a second `--bullet`.
+
 Migration: [scripts/migrate/v1.0-v2.0/README.md](scripts/migrate/v1.0-v2.0/README.md).
 
 ## 1.0

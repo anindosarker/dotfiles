@@ -164,7 +164,8 @@ Only when the project has no `.ai/plans/` folder, in the repo or in the root, an
 
 ## Agents or Workflow
 
-- Judgment, by cost.
-- A Workflow when a milestone has more than one stage or any parallel step, so the main session wakes once; a single Agent for one bounded task; inline for mechanical edits.
+- The runner judges every milestone by what it needs ([reference/run.md](reference/run.md), Orchestration).
+- A Workflow only for several builders at the same time, a second opinion (`Review: fable`, a judged check), the release milestone, or a word from the lead or the owner. Every other milestone: one agent builds, checks and commits, and the runner merges. Inline for mechanical edits.
+- `ultracode` permits a Workflow and never asks for one.
 - The next step needs a decision: end the Workflow at that boundary (`needs-decision`).
 - `opus` for the shared milestone, build, fix, verify, check, baselines and lookups; `fable` for review, judges and plan writing.
