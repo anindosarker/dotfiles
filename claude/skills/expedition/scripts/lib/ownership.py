@@ -5,7 +5,7 @@ Library, no CLI. No file holds the facts: every script that needs them calls com
 Reads every plan/specs/NN-<slug>.md for "### Milestone: <name>" blocks ("#### Milestone:"
 is accepted too) with the lines "- Files owned: a, b", "- Depends on: <milestone names,
 spec numbers or none>" and "- Review: none | fable", and the optional "- Starts: S<n>" (a
-milestone added after its epic's go, by plan/new_fix.py: its own start sprint).
+milestone added after its epic's go, by plan/milestone.py: its own start sprint).
 
 Edges: A to B when B lists A (or A's spec number) under Depends on, or when A and B
 share a file (lower spec number first). Two milestones of one spec that share a file
