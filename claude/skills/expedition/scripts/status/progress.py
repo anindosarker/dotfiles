@@ -7,11 +7,11 @@ Usage: python3 -I status/progress.py <release> [--owner X] [--root PATH]
 One block per epic with an unfinished milestone: "**E<n>** · Specs d/t" (t the epic's specs in
 the grid, d those whose milestones are all done or stopped by a decision, "stopped (D<n>)"), then "- **Running**" (specs with a running
 milestone) and "- **Blocked**" (specs with a waiting milestone or one stopped for a reason other than a decision, each with its reason),
-each spec as its number and its Deliverables title. A new-form milestone that is not finished
-that runs, or has a task started, adds " · <milestone> d/t" to its spec's line, its tasks done of total (lib/specs.py task_status),
-with "(<task id> blocked: <reason>)" for a blocked task. An iterative spec that is not closed
-(plan/close_spec.py) is never counted in d, keeps its epic's block, and is listed under
-"- **Open**" when none of its milestones runs or is blocked. With nothing unfinished: the last epic's
+each spec as its number and its Deliverables title. In a release with status/data/status.json
+every status comes from that file, never from a tracker: a blocked milestone is listed with its
+reason, and an unfinished milestone with a task started adds " · <milestone> d/t" to its spec's
+line, its tasks done of total with skipped tasks left out of both, and
+"(<task number> blocked: <reason>)" for a blocked task. With nothing unfinished: the last epic's
 line, then "Nothing running." and the unticked Decided cards of queue.md as
 "Ready for an epic: **Q<n>**, ...".
 
@@ -152,14 +152,20 @@ def print_progress(root, folder, plan, own, bd, q_text):
     blocks = own.new_collect(folder, plan)["blocks"]
     trackers = {(num, b["name"]): b["tracker"] for num, bl in blocks.items() for b in bl}
     by_name = {(num, b["name"]): b for num, bl in blocks.items() for b in bl}
-    sp = C.load("lib/specs")
-    open_specs = {num for num, p in own.spec_files(folder)
-                  if (d := own.read_spec(p))["type"] == "iterative" and not d["closed"]}
+    st = C.load("lib/status")
+    stored_m, stored_t = st.entries(folder) if st.active(folder) else (None, {})
+    KIND = {"not started": "planned", "in progress": "running", "blocked": "waiting",
+            "done": "done", "skipped": "skipped"}
     wts = None
     for e in sorted(epics):
         for num in sorted(epics[e], key=num_key):
             for row in epics[e][num]:
                 path = trackers.get((num, row["name"]))
+                if stored_m is not None:
+                    m = stored_m.get(path.name.removesuffix("-tracker.md"), {}) if path else {}
+                    kind = KIND[m.get("status", "not started")]
+                    row.update(kind=kind, path=path, reason=(m.get("reason") or "waits") if kind == "waiting" else None)
+                    continue
                 if row["cell"] == "[x]":
                     row.update(kind="done", reason=None, path=path)
                     continue
@@ -172,21 +178,20 @@ def print_progress(root, folder, plan, own, bd, q_text):
                     print(f"warning: {num} {row['name']}: {warn}", file=sys.stderr)
 
     def counts(specs):
-        return sum(1 for n, rows in specs.items()
-                   if n not in open_specs and all(r["kind"] in CLOSED for r in rows)), len(specs)
+        return sum(1 for rows in specs.values() if all(r["kind"] in CLOSED for r in rows)), len(specs)
 
     def tasks(num, rows):
-        """" · <milestone> d/t" for each unfinished new-form milestone of the spec."""
+        """" · <milestone> d/t" for each unfinished milestone of the spec with a task started."""
         out = ""
         for r in rows:
             b = by_name.get((num, r["name"]))
-            if r["kind"] in CLOSED or not b or b["id"] is None or not b["tasks"]:
-                continue
-            states = [(t["id"],) + sp.task_status(t, r["path"]) for t in b["tasks"]]
-            if r["kind"] == "planned" and all(s[1] == sp.STATUSES[0] for s in states):
+            states = [stored_t.get(f"{num}-{t['id']}", {}) for t in (b["tasks"] if b else [])]
+            states = [(s.get("number"), s.get("status"), s.get("reason")) for s in states
+                      if s and s.get("status") != "skipped"]
+            if r["kind"] in CLOSED or all(s[1] == "not started" for s in states):
                 continue
             out += f" · {r['name']} {sum(1 for s in states if s[1] == 'done')}/{len(states)}"
-            stuck = [f"{i} blocked: {why}" for i, s, why in states if s == "blocked"]
+            stuck = [f"{n} blocked: {why}" for n, s, why in states if s == "blocked"]
             out += f" ({'; '.join(stuck)})" if stuck else ""
         return out
 
@@ -199,7 +204,7 @@ def print_progress(root, folder, plan, own, bd, q_text):
     blocks = []
     for e in sorted(epics):
         specs = epics[e]
-        if all(r["kind"] in CLOSED for rows in specs.values() for r in rows) and not open_specs & set(specs):
+        if all(r["kind"] in CLOSED for rows in specs.values() for r in rows):
             continue
         d, t = counts(specs)
         lines = [f"**E{e}** · Specs {d}/{t}"]
@@ -214,10 +219,6 @@ def print_progress(root, folder, plan, own, bd, q_text):
             for n in blocked:
                 reason = why([r for r in specs[n] if r["kind"] in ("stopped", "waiting")])
                 lines.append(f"  - {n} {title(n, specs[n])}" + (f": {reason}" if reason else ""))
-        idle = [n for n in nums if n in open_specs and n not in running and n not in blocked]
-        if idle:
-            lines.append("- **Open**")
-            lines += [f"  - {n} {title(n, specs[n])}{tasks(n, specs[n])}" for n in idle]
         blocks.append("\n".join(lines))
     if blocks:
         print("\n\n".join(blocks))

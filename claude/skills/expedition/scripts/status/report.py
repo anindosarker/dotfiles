@@ -327,7 +327,7 @@ def new_print(folder, plan, d, own):
             end = start
             while end < len(lines) and lines[end].strip().startswith("|"):
                 end += 1
-            if any(l.strip() for l in lines[end:]):
+            if any(l.strip() and not l.startswith("Marks:") for l in lines[end:]):
                 print("  status/sprints.md has text under the grid: grid only")
             for r in data:
                 for c in r[1:]:
@@ -356,8 +356,15 @@ def new_print(folder, plan, d, own):
         for b in d["blocks"][num]:
             for t in b["tasks"]:
                 tasks += 1
-                if not t["checks"]:
-                    print(f"  {name}:{t['line']}: Task line without Checks")
+                if t["path"] is None:
+                    if not t["checks"]:
+                        print(f"  {name}:{t['line']}: Task line without Checks")
+                        quiet = False
+                elif not t["path"].is_file():
+                    print(f"  {name}:{t['line']}: task {t['id']}: no file {t['plan']}")
+                    quiet = False
+                elif not re.search(r"^\s*-\s*\[[ xX]\]", read(t["path"]), re.M):
+                    print(f"  {t['path'].relative_to(folder)}: no Verification box")
                     quiet = False
         if not tasks and not any(GATES_LINE_RE.match(l) for _, l in outside_fences(text)):
             print(f"  {name}: no checks")
@@ -369,6 +376,10 @@ def new_print(folder, plan, d, own):
             if line.rstrip().endswith("?"):
                 print(f"  {name}:{i}: open question? {line.strip()[:80]}")
                 quiet = False
+    for f, have, want in C.load("lib/status").differences(folder):
+        print(f"  {f.relative_to(folder)}: status line says {have or 'nothing'}, status.json says {want}: "
+              "a status is set with status/status.py, never by hand")
+        quiet = False
     if quiet:
         print("  ok")
 

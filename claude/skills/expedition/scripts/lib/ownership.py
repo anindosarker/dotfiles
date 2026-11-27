@@ -66,17 +66,16 @@ outside_fences, table_rows, insert_row = C.outside_fences, C.table_rows, C.inser
 SPEC_FILE_RE = re.compile(r"^(\d{2}(?:\.\d+)?)-([a-z0-9]+(?:-[a-z0-9]+)*)\.md$")
 SPEC_NUM_RE = re.compile(r"^\d{2}(?:\.\d+)?$")
 # Two spec forms, told apart per heading. Old: "### Milestone: <name>" with "- Task N:" lines in
-# the block. New: "#### 2.1.3 Task: <title> (D58)" entries, then "#### 2.2.1 Milestone: <name>"
-# blocks with a "- Tasks: 2.1.1, 2.1.2" line; the section number is the id.
+# the block. New: modules "#### 1.6.2 <title> (D58)", task pointers
+# "- 03 <title> · module 1.6.2 · tasks/03-<slug>.md" in 2.1, then "#### 2.2.1 Milestone: <name>"
+# blocks with a "- Tasks: 01, 02" line.
 MILESTONE_RE = re.compile(r"^#{3,4}\s+(?:(?P<id>\d+(?:\.\d+)+)\s+)?Milestone:\s*(?P<name>.+?)\s*$")
-TASK_HEAD_RE = re.compile(r"^#{3,5}\s+(\d+(?:\.\d+)+)\s+Task:\s*(.+?)\s*$")
+MODULE_RE = re.compile(r"^#{3,5}\s+(\d+\.\d+\.\d+)\s+(.+?)\s*$")
+POINTER_RE = re.compile(r"^\s*-\s*(\d{2,})\s+(.+?)(?:\s+·\s+module\s+(\d+(?:\.\d+)+))?\s+·\s+(\S+\.md)\s*$")
 HEADING_RE = re.compile(r"^#{1,6}\s")
 FIELD_RE = re.compile(r"^\s*(?:-\s*)?(Files owned|Depends on|Review|Starts|Tasks):\s*(.*?)\s*$")
 TASK_RE = re.compile(r"^\s*-\s*Task\s+(\d+):\s*(.*)$")
-TASK_FIELD_RE = re.compile(r"^\s*-\s*(Checks|Detail|Plan):\s*(.*?)\s*$")
-TAIL_CITE_RE = re.compile(r"\s*\(((?:D|Q)\d+[^)]*)\)\s*$")
 FRONT_RE = re.compile(r"\A---\n(.*?)\n---\n", re.S)
-SPEC_TYPES = ("structured", "iterative")
 D_CITE_RE = re.compile(r"\((D\d+[^)]*)\)")
 D_ID_RE = re.compile(r"^D(\d+)$")
 EPIC_LINE_RE = re.compile(r"^\s*-\s*Epic:\s*E(\d+)\s*$")
@@ -103,9 +102,9 @@ def front_matter(text):
     return out
 
 
-def set_front(text, key, value):
+def set_front(text, key, value, first=False):
     """The text with front matter line key set to value (None removes it); a file with no front
-    matter gets one."""
+    matter gets one. first=True puts a new line at the top of the front matter."""
     m = FRONT_RE.match(text)
     lines = m.group(1).splitlines() if m else []
     body = text[m.end():] if m else text
@@ -118,63 +117,54 @@ def set_front(text, key, value):
         else:
             kept.append(line)
     if value is not None and not done:
-        kept.append(f"{key}: {value}")
+        kept.insert(0 if first else len(kept), f"{key}: {value}")
     return ("---\n" + "\n".join(kept) + "\n---\n" + body) if kept else body
 
 
-def task_title(text):
-    """(title without its trailing cite, the D numbers cited there)."""
-    m = TAIL_CITE_RE.search(text)
-    return ((text[:m.start()] if m else text).strip().rstrip("."),
-            [int(n) for n in re.findall(r"\bD(\d+)\b", m.group(1))] if m else [])
+def cited(text):
+    """The D numbers cited in text: (D7), (D6, D7), (D10 addendum)."""
+    return [int(n) for c in D_CITE_RE.findall(text) for n in re.findall(r"\bD(\d+)\b", c)]
 
 
 def read_spec(path):
-    """One spec file, either form: {"type": structured or iterative, "closed": the front matter
-    value or None, "blocks": the milestone blocks in order, "tasks": {id: task} of the numbered
-    task entries}.
+    """One spec file, either form: {"front": its front matter, "blocks": the milestone blocks in
+    order, "tasks": {number: task} of the task pointers of a new-form spec, "modules": {section
+    number: D numbers its heading cites}}.
 
     A block: dict id (the section number, None in the old form), name, line, files (list or None
     when the line is missing), deps (raw text or None), review (text or None), starts (column
     number or None), tasks (list of task dicts, in the order the milestone lists them).
-    A task: dict id, line, title, cites (the D numbers on its heading), decision (the first of
-    them as "D<n>", or None), checks (True
-    when it names checks), detail and plan (its pointers or None), path (the task file or None).
+    A task: dict id (its number in the spec, "03"), line, title, module (section number or
+    None), cites (the D numbers of its module), decision (the first of them as "D<n>", or None),
+    plan (the pointer's path) and path (the task file); an old-form "- Task N:" line gives id N,
+    its own cites, checks (True when it names checks) and no file.
+    A numbered milestone whose name is a template placeholder ("[Name]") is left out.
     """
     text = read(path)
-    front = front_matter(text)
-    blocks, tasks = [], {}
-    cur = task = level = None
+    blocks, tasks, modules = [], {}, {}
+    cur = level = None
     for i, line in outside_fences(text):
         m = MILESTONE_RE.match(line)
-        th = None if m else TASK_HEAD_RE.match(line)
         if m:
             cur = {"id": m.group("id"), "name": m.group("name"), "line": i, "files": None, "deps": None,
                    "review": None, "starts": None, "tasks": [], "task_ids": []}
-            task, level = None, len(line) - len(line.lstrip("#"))
-            blocks.append(cur)
+            level = len(line) - len(line.lstrip("#"))
+            if not (cur["id"] and PLACEHOLDER_RE.match(cur["name"])):
+                blocks.append(cur)
             continue
-        if th:
-            title, ds = task_title(th.group(2))
-            task = {"id": th.group(1), "line": i, "title": title, "cites": ds,
-                    "decision": f"D{ds[0]}" if ds else None, "checks": False,
-                    "detail": None, "plan": None, "path": None}
-            tasks[task["id"]] = task
-            cur, level = None, len(line) - len(line.lstrip("#"))
+        if HEADING_RE.match(line):
+            mod = MODULE_RE.match(line)
+            if mod:
+                modules[mod.group(1)] = cited(mod.group(2))
+            if cur is not None and len(line) - len(line.lstrip("#")) <= level:
+                cur = None
             continue
-        if cur is None and task is None:
-            continue
-        if HEADING_RE.match(line) and len(line) - len(line.lstrip("#")) <= level:
-            cur = task = None
-            continue
-        if task is not None:
-            f = TASK_FIELD_RE.match(line)
-            if f and f.group(1) == "Checks":
-                task["checks"] = True
-            elif f:
-                task[f.group(1).lower()] = f.group(2).strip("`")
-                if f.group(1) == "Plan":
-                    task["path"] = path.parent / task["plan"]
+        if cur is None:
+            ptr = POINTER_RE.match(line)
+            if ptr and not ptr.group(2).startswith("["):
+                tasks[ptr.group(1)] = {"id": ptr.group(1), "line": i, "title": ptr.group(2),
+                                       "module": ptr.group(3), "plan": ptr.group(4),
+                                       "path": path.parent / ptr.group(4)}
             continue
         f = FIELD_RE.match(line)
         old = None if f else TASK_RE.match(line)
@@ -192,15 +182,16 @@ def read_spec(path):
             else:
                 cur["review"] = val
         elif old:
-            ds = [int(n) for c in D_CITE_RE.findall(old.group(2)) for n in re.findall(r"\bD(\d+)\b", c)]
-            cur["tasks"].append({"id": old.group(1), "line": i, "title": line.strip(), "cites": ds,
-                                 "decision": f"D{ds[0]}" if ds else None, "checks": "Checks:" in line,
-                                 "detail": None, "plan": None, "path": None})
+            ds = cited(old.group(2))
+            cur["tasks"].append({"id": old.group(1), "line": i, "title": line.strip(), "module": None,
+                                 "cites": ds, "decision": f"D{ds[0]}" if ds else None,
+                                 "checks": "Checks:" in line, "plan": None, "path": None})
+    for t in tasks.values():
+        t["cites"] = modules.get(t["module"], [])
+        t["decision"] = f"D{t['cites'][0]}" if t["cites"] else None
     for b in blocks:
         b["tasks"] += [tasks[x] for x in b.pop("task_ids") if x in tasks]
-    kind = front.get("type")
-    return {"type": kind if kind in SPEC_TYPES else "structured", "closed": front.get("closed") or None,
-            "blocks": blocks, "tasks": tasks}
+    return {"front": front_matter(text), "blocks": blocks, "tasks": tasks, "modules": modules}
 
 
 def parse_spec(path):
@@ -281,12 +272,11 @@ def collect(folder):
                 errors.append(f"{where}: file '{f}' contains '|'")
         deps, unknown = resolve_deps(b["deps"], [n for n in names if n != b["name"]], specs)
         deps = [d for d in deps if d != b["name"]]
-        if b["deps"] is None and b["id"] is not None and i and raw[i - 1]["spec"] == b["spec"]:
-            deps = [raw[i - 1]["name"]]  # new form: with no Depends on line, the listed order
         for u in unknown:
             errors.append(f"{where}: milestone '{b['name']}' depends on unknown '{u}'")
         out.append({"name": b["name"], "spec": b["spec"], "order": i, "deps": deps,
-                    "files": b["files"] or [], "review": b.get("review"), "starts": b.get("starts")})
+                    "files": b["files"] or [], "review": b.get("review"), "starts": b.get("starts"),
+                    "new": b["id"] is not None, "cites": sorted({d for t in b["tasks"] for d in t["cites"]})})
     return out, errors
 
 
@@ -419,7 +409,7 @@ def epic_of_milestones(folder, milestones, assume=None):
     return {m["name"]: assume.get(m["spec"]) or epics.get(m["spec"]) for m in milestones}
 
 
-STARTS_RE = re.compile(r"^Starts:[ \t]*(.*?)\s*$", re.M)
+STARTS_RE = re.compile(r"^[Ss]tarts:[ \t]*(.*?)\s*$", re.M)
 SPRINT_VALUE_RE = re.compile(r"^S(\d+)$")
 
 
@@ -555,14 +545,15 @@ def set_starts(path, value):
     if m and m.group(1):
         return m.group(1)
     lines = text.split("\n")
+    low = lines[0] == "---"
     if m:
         i = text[:m.start()].count("\n")
-        lines[i] = f"Starts: {value}"
+        lines[i] = f"{lines[i].split(':')[0]}: {value}"
     else:
-        i = next((k for k, l in enumerate(lines) if l.startswith("Specs:")), None)
+        i = next((k for k, l in enumerate(lines) if l.lower().startswith("specs:")), None)
         if i is None:
-            i = next((k for k, l in enumerate(lines) if l.startswith("Decisions:")), 0)
-        lines.insert(i + 1, f"Starts: {value}")
+            i = next((k for k, l in enumerate(lines) if l.lower().startswith("decisions:")), 0)
+        lines.insert(i + 1, f"{'starts' if low else 'Starts'}: {value}")
     path.write_text("\n".join(lines), encoding="utf-8")
     return None
 
@@ -679,8 +670,8 @@ def grid_epics(folder):
 OWN_HEAD = "## Ownership"
 NOTES_HEAD = "## Notes"
 TABLE_COLS = ["Decision", "Files", "Spec", "Milestone", "Sprint"]
-DECISIONS_LINE_RE = re.compile(r"^Decisions:[ \t]*(.*?)[ \t]*$", re.M)
-SPECS_LINE_RE = re.compile(r"^Specs:[ \t]*(.*?)[ \t]*$", re.M)
+DECISIONS_LINE_RE = re.compile(r"^[Dd]ecisions:[ \t]*(.*?)[ \t]*$", re.M)
+SPECS_LINE_RE = re.compile(r"^[Ss]pecs:[ \t]*(.*?)[ \t]*$", re.M)
 ROW_DECISION_RE = re.compile(r"^D(\d+)\b\s*(.*)$")
 
 
@@ -788,13 +779,13 @@ def set_field(text, key, value):
     """text with the line "<key>: <value>"; a missing line goes under the last of the
     Decisions, Specs and Starts lines (else under the title)."""
     lines = text.rstrip("\n").split("\n")
-    i = next((k for k, l in enumerate(lines) if re.match(rf"^{key}:", l)), None)
-    line = f"{key}: {value}".rstrip()
+    i = next((k for k, l in enumerate(lines) if re.match(rf"^{key}:", l, re.I)), None)
+    low = lines[0] == "---"
     if i is not None:
-        lines[i] = line
+        lines[i] = f"{lines[i].split(':')[0]}: {value}".rstrip()
     else:
-        at = [k for k, l in enumerate(lines) if re.match(r"^(Decisions|Specs|Starts):", l)]
-        lines.insert((at[-1] if at else 0) + 1, line)
+        at = [k for k, l in enumerate(lines) if re.match(r"^(Decisions|Specs|Starts|Status):", l, re.I)]
+        lines.insert((at[-1] if at else 0) + 1, f"{key.lower() if low else key}: {value}".rstrip())
     return "\n".join(lines) + "\n"
 
 
@@ -837,6 +828,13 @@ def spec_milestones(comp):
     return out
 
 
+def row_milestones(ms, d):
+    """The milestones of a spec an Ownership row of decision d names: in a new-form spec those
+    that hold a task of a module citing d; else, and for a row with no decision, all of them."""
+    mine = [m for m in ms if m["new"] and d in m["cites"]] if d is not None else []
+    return mine or ms
+
+
 def owned_files(ms):
     return list(dict.fromkeys(f for m in ms for f in m["files"]))
 
@@ -868,8 +866,8 @@ def build_table(folder, decisions, specs, old_rows, comp, gcols, from_specs=Fals
     def add(d, files, s):
         rows.append({"decision": d, "title": (titles.get(d) or old_title.get(d, "")) if d is not None else "",
                      "files": files, "spec": s or "",
-                     "milestone": "; ".join(m["name"] for m in by_spec[s]) if s else "",
-                     "sprint": spec_sprint(by_spec[s], comp, gcols) if s else ""})
+                     "milestone": "; ".join(m["name"] for m in row_milestones(by_spec[s], d)) if s else "",
+                     "sprint": spec_sprint(row_milestones(by_spec[s], d), comp, gcols) if s else ""})
 
     for d in decisions:
         citing = [s for s in specs if d in cites[s]]
@@ -929,7 +927,8 @@ def table_facts(folder, rows, comp):
     by_spec = spec_milestones(comp)
     missing = [(r, f) for r in rows for f in r["files"] if not path_exists(root, f)]
     unowned = [(r, f) for r in rows if r["spec"] for f in r["files"]
-               if f not in owned_files(by_spec.get(r["spec"], []))]
+               if f not in owned_files(by_spec.get(r["spec"], []))
+               and not any(m["new"] for m in by_spec.get(r["spec"], []))]
     return missing, unowned
 
 
@@ -1048,7 +1047,7 @@ def sync_sprint_columns(folder, comp):
         for r in rows:
             if not r["spec"]:
                 continue
-            want = spec_sprint(by_spec.get(r["spec"], []), comp, gcols)
+            want = spec_sprint(row_milestones(by_spec.get(r["spec"], []), r["decision"]), comp, gcols)
             if want != r["sprint"]:
                 cells = lines[r["line"]].rstrip().split("|")
                 cells[-2] = f" {want} "
@@ -1098,7 +1097,7 @@ def epic_gaps(folder, comp):
         if n in with_rows:
             for r in rows:
                 if r["spec"]:
-                    want = spec_sprint(by_spec.get(r["spec"], []), comp, gcols)
+                    want = spec_sprint(row_milestones(by_spec.get(r["spec"], []), r["decision"]), comp, gcols)
                     if want != r["sprint"]:
                         out.append(f"{rel}: {row_label(r)}: Sprint '{r['sprint']}' disagrees with "
                                    f"the grid ('{want}')" + ("" if finished else ": sprints/refresh.py rewrites it"))
@@ -1155,6 +1154,9 @@ def tracker_status(folder, num, p=None):
     """Return (state, sha) from the tracker's Status line, or None. A waiting tracker counts as
     running for the decision and spec states."""
     p = p or tracker_path(folder, num)
+    st = C.load("lib/status")
+    if st.active(folder):
+        return st.old_state(folder, p.name.removesuffix("-tracker.md"))
     if not p.is_file():
         return None
     v = status_value(read(p))

@@ -32,6 +32,7 @@ import contextlib
 import fcntl
 import importlib.util
 import io
+import re
 import sys
 from pathlib import Path
 
@@ -60,12 +61,34 @@ def milestone_of(own, folder, release, key):
     return None
 
 
+def mark_status(a, st, root, folder, key, num, name):
+    """A release with status/data/status.json: the verb is a status of that file (lib/status.py).
+    launch and resume: in progress. merge: done, with --commit. wait and stop: blocked, with
+    --reason; a stop whose reason starts with a decision id ("D15 ...") is skipped."""
+    word = {"launch": "in progress", "resume": "in progress", "merge": "done"}.get(a.action, "blocked")
+    if a.action == "stop" and re.match(r"^D\d+\b", a.reason.strip()):
+        word = "skipped"
+    if a.action == "merge" and not a.commit:
+        C.die("merge needs --commit <sha>, the merge commit")
+    with open(C.lock_file(folder), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        with contextlib.redirect_stdout(io.StringIO()):
+            _, e, stored = st.set_status(folder, a.release, key, word, a.reason, a.commit, locked=True)
+        paths = st.changed() + [folder / C.SPRINTS_MD, folder / "decisions.md", folder / C.QUEUE_MD]
+        paths += sorted((folder / C.EPICS_DIR).glob("E*.md"))
+        C.commit(root, paths, f"docs(plan): {a.release} {key} {a.action}")
+        fcntl.flock(lock, fcntl.LOCK_UN)
+    print(f"{key}: {stored} ({num} {name}); committed")
+
+
 def main():
     ap = argparse.ArgumentParser(
         usage="sprints/mark.py <release> <milestone> launch|wait|resume|merge|stop [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("milestone")
     ap.add_argument("action", choices=C.load("lib/grid").ACTIONS)
+    ap.add_argument("--reason", default="", help="wait, stop: a few words (status.json releases)")
+    ap.add_argument("--commit", default="", help="merge: the merge commit (status.json releases)")
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: found from the cwd)")
     a = ap.parse_args()
@@ -78,6 +101,9 @@ def main():
     if hit is None:
         C.die(f"no milestone has the tracker {C.TRACKERS_DIR}/{key}-tracker.md")
     num, name, _ = hit
+    st = C.load("lib/status")
+    if st.active(folder):
+        return mark_status(a, st, root, folder, key, num, name)
     mark = g.resume_mark(folder, key) if a.action == "resume" else g.MARKS[a.action]
     grid = folder / C.SPRINTS_MD
     with open(C.lock_file(folder), "a") as lock:

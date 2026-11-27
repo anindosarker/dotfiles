@@ -19,9 +19,9 @@ The lane is the state, from the Done rule (rule_lanes):
    Spec cell: its own specs are the row specs that cite it "(D<n>)" in a heading line (the title
    line, a "### Milestone:" heading or any "#" heading); none, then every row spec. Done when
    every milestone tracker of every own spec is done or stopped, else In progress. In a
-   new-form spec (numbered Task and Milestone sections) only the milestones that cite it, or
-   hold a task that cites it, count; a citing task in no milestone keeps it In progress. An
-   iterative spec that is not closed never counts as a whole.
+   new-form spec (modules, task pointers, numbered milestones) only the milestones count that
+   hold a task of a module citing it; a citing module with no task in a milestone keeps it In
+   progress.
 3. No such row: Done when it is closed by hand (a ticked card in Done: decisions/close.py writes
    it for a decision with nothing to run, migrate/decisions.py for an old "[Done]" tag line) or
    when any spec citing it has merged; In progress when it carries "#E<n>"; else To do.
@@ -198,11 +198,10 @@ def started_rows(folder):
 
 
 def spec_state(folder, num, path):
-    """(merged, {D number: done}): merged is True when every milestone tracker of the spec is
-    done or stopped, and never for an iterative spec that is not closed; the second holds, for a new-form
-    spec, each decision cited by a milestone heading or a task heading: True when every
-    milestone that cites it or holds a task citing it is done or stopped, and no task citing it
-    is outside a milestone."""
+    """(merged, {D number: done}): merged is True when every milestone of the spec is done or
+    stopped; the second holds, for a new-form spec, each decision a module heading cites: True
+    when every milestone that holds a task of such a module is done or stopped, and each such
+    module has a task in a milestone."""
     o = own()
     m = re.match(r"^\d{2}(?:\.\d+)?-(.+)\.md$", path.name)
     slug = m.group(1) if m else ""
@@ -214,22 +213,17 @@ def spec_state(folder, num, path):
         trackers = [folder / o.TRACKERS_DIR / f"{num}-tracker.md"]
     states = [o.tracker_status(folder, num, t) for t in trackers]
     ok = [s is not None and s[0] in MERGED for s in states]
-    per = {}
-    placed = set()
+    per, placed = {}, set()
     for b, done in zip(blocks, ok):
-        if b["id"] is None:
-            continue
-        cites = {int(n) for c in D_CITE_RE.findall(b["name"]) for n in re.findall(r"\bD(\d+)\b", c)}
-        for t in b["tasks"]:
-            placed.add(t["id"])
-            cites |= set(t["cites"])
-        for d in cites:
-            per[d] = per.get(d, True) and done
-    for t in doc["tasks"].values():
-        if t["id"] not in placed:
+        for t in b["tasks"] if b["id"] is not None else []:
+            placed.add(t["module"])
             for d in t["cites"]:
+                per[d] = per.get(d, True) and done
+    for mod, cites in (doc["modules"].items() if doc["tasks"] else ()):
+        if mod not in placed:
+            for d in cites:
                 per[d] = False
-    return all(ok) and not (doc["type"] == "iterative" and not doc["closed"]), per
+    return all(ok), per
 
 
 def spec_facts(folder):

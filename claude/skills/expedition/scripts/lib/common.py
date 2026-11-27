@@ -32,7 +32,9 @@ INDEX_HTML = "status/index.html"
 LEGACY_OWNERSHIP_MD = "status/ownership.md"
 LEGACY_FIX_GLOB = "fix-*-tracker.md"
 ROW_RE = re.compile(r"^\|\s*(\d{2}(?:\.\d+)?)\s*\|")
-RENDER_IGNORES = (".ai/plans/*/*/status/index.html", ".ai/plans/*/*/status/data/")
+# status/data/ holds renders and the lock, never committed, apart from status.json, the status store.
+RENDER_IGNORES = (".ai/plans/*/*/status/index.html", ".ai/plans/*/*/status/data/*",
+                  "!.ai/plans/*/*/status/data/status.json")
 
 
 def load(rel):
@@ -131,6 +133,7 @@ def ignore_renders(folder):
         print(f"warning: {folder} is not in a git repo; .gitignore not touched", file=sys.stderr)
         return
     path = Path(r.stdout.strip()) / ".gitignore"
+    upgrade_ignore(path, render_ignores(folder, r.stdout.strip()))
     text = path.read_text(encoding="utf-8") if path.is_file() else ""
     have = {l.strip() for l in text.splitlines()}
     missing = [l for l in render_ignores(folder, r.stdout.strip()) if l not in have]
@@ -138,6 +141,15 @@ def ignore_renders(folder):
         sep = "" if not text or text.endswith("\n") else "\n"
         path.write_text(text + sep + "".join(l + "\n" for l in missing), encoding="utf-8")
         print(f"{path}: added {', '.join(missing)}")
+
+
+def upgrade_ignore(path, lines):
+    """Replace the earlier ignore of the whole status/data/ folder by the lines that keep
+    status.json in git: a file inside an ignored folder cannot be un-ignored."""
+    old = lines[1].removesuffix("*")
+    if path.is_file() and old in path.read_text(encoding="utf-8").splitlines():
+        kept = [l for l in path.read_text(encoding="utf-8").splitlines() if l != old]
+        path.write_text("".join(l + "\n" for l in kept), encoding="utf-8")
 
 
 def render_ignores(folder, top):
@@ -158,6 +170,7 @@ def ensure_gitignore(folder):
         return
     gi = Path(root) / ".gitignore"
     lines = render_ignores(folder, root)
+    upgrade_ignore(gi, lines)
     have = gi.read_text().splitlines() if gi.is_file() else []
     missing = [l for l in lines if l not in have]
     if missing:
@@ -333,22 +346,37 @@ def commit(root, paths, message):
     return True
 
 
-def tracker_text(num, title):
-    """templates/tracker.md with the header filled in and Status: planned.
-
-    The optional Attention and Notes sections are left out; empty is normal.
-    """
-    path = TEMPLATES / "tracker.md"
+def template(name):
+    """templates/<name> as a script writes it into a release: without its "<!-- ... -->" note,
+    and for a board without the placeholder cards ("**D[n]**", "**Q[n]**") and their bullets."""
+    path = TEMPLATES / name
     if not path.is_file():
         die(f"bundled template missing: {path}")
+    text = re.sub(r"<!--.*?-->\n?", "", path.read_text(encoding="utf-8"), flags=re.S)
+    out, card = [], False
+    for line in text.splitlines():
+        if re.match(r"^- \[[ x]\] \*\*[DQ]\[n\]\*\*", line):
+            card = True
+            continue
+        if card and line.startswith("\t"):
+            continue
+        card = False
+        out.append(line)
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).rstrip("\n") + "\n"
+
+
+def tracker_text(num, title, status_line=False):
+    """templates/tracker.md with the header filled in, up to its first "## " section (Attention
+    and Notes are optional; empty is normal). status_line=True adds "Status: planned" for a
+    release made before status/data/status.json, where the tracker holds the milestone status."""
     out = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in template("tracker.md").splitlines():
         if line.startswith("## "):
             break
         if line.startswith("# "):
             line = f"# {num}: {title}, tracker"
-        elif line.startswith("Status:"):
-            line = "Status: planned"
+            if status_line:
+                line += "\n\nStatus: planned"
         out.append(line)
     return "\n".join(out).rstrip() + "\n"
 
