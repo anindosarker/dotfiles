@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Create a spec file (plan/specs/NN-<slug>.md) and the tracker of its first milestone
-(run/trackers/NN-<slug>-tracker.md) in a release, and add the row
-"| NN | [Title](plan/specs/NN-<slug>.md) |  | scope |" (Epic cell empty) to the Deliverables table of
-<release>-plan.md.
+"""Create a spec in a release: its folder and file (plan/specs/NN-<slug>/NN-<slug>.md), the
+tracker of its first milestone (run/trackers/NN-<slug>-tracker.md), and the row
+"| NN | [Title](plan/specs/NN-<slug>/NN-<slug>.md) |  | scope |" (Epic cell empty) in the
+Deliverables table of <release>-plan.md.
 
 Usage: python3 -I plan/new_spec.py <release> <num> <slug> "<Title>" "<scope>"
-       [--owner X] [--template PATH] [--root PATH]
+       [--type structured|iterative] [--owner X] [--template PATH] [--root PATH]
 
-Template: --template PATH, else a contract stub when the project has planning
-rules (plan/find_rules.py), else the bundled templates/spec.md. Section 2.1 holds one "### Milestone: [name]" block with
-the lines Files owned, Depends on, Review, Local CI and its Task lines; write one block per
-milestone, then run sprints/check.py and sprints/refresh.py. A later milestone's tracker is
-run/trackers/NN-<milestone-slug>-tracker.md.
+Template: --template PATH; else, for --type iterative, the bundled templates/spec-iterative.md
+(a short scope and the open milestone "<Title> round 1"); else a contract stub when the project
+has planning rules (plan/find_rules.py); else the bundled templates/spec.md. Section 2.1 holds
+the task entries, 2.2 one "#### 2.2.N Milestone: [name]" block per milestone with its Tasks
+line; fill them, then run sprints/check.py and sprints/refresh.py. A later milestone's tracker
+is run/trackers/NN-<milestone-slug>-tracker.md. Later milestones and tasks: plan/milestone.py
+and plan/task.py.
 
 The epic tags on go are epics/tag.py.
 
@@ -41,35 +43,42 @@ SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 die = C.die
 
 
-STUB = """# {heading}
+STUB = """---
+type: structured
+---
+# {heading}
 
 Follow the project planning rules: {paths}. Keep the contract in the expedition skill's SKILL.md, Stage 2, The contract.
 
 ## 2. Instructions for AI
 
-### 2.1 Milestones
+### 2.1 Tasks
 
-### Milestone: [name]
+#### 2.1.1 Task: [step]
+- Checks: `[command]`
+- Detail: [section of this file]
 
+### 2.2 Milestones
+
+#### 2.2.1 Milestone: [name]
+- Tasks: 2.1.1
 - Files owned: `[path]`, `[path]`
-- Depends on: none
 - Review: none
 - Local CI: none
-- Task 1: [step] Checks: `[command]`
-- Task 2: [step] Checks: `[command]`
 """
 
 
-def load_template(root, flag, rules):
-    """Return template text: --template, else contract stub, else bundled."""
+def load_template(root, flag, rules, kind="structured"):
+    """Return template text: --template, else the bundled iterative template for that type,
+    else contract stub, else bundled."""
     if flag:
         p = Path(flag)
         if not p.is_file():
             die(f"template not found: {p}")
         return p.read_text(encoding="utf-8")
-    if rules:
+    if rules and kind == "structured":
         return STUB.format(heading="[title]", paths=", ".join(rules))
-    bundled = C.TEMPLATES / "spec.md"
+    bundled = C.TEMPLATES / ("spec-iterative.md" if kind == "iterative" else "spec.md")
     if not bundled.is_file():
         die(f"bundled template missing: {bundled}")
     return bundled.read_text(encoding="utf-8")
@@ -89,8 +98,9 @@ def set_heading(text, heading):
 def main():
     ap = argparse.ArgumentParser(
         usage='plan/new_spec.py <release> <num> <slug> "<Title>" "<scope>" '
-              "[--owner X] [--template PATH] [--root PATH]"
+              "[--type structured|iterative] [--owner X] [--template PATH] [--root PATH]"
     )
+    ap.add_argument("--type", choices=("structured", "iterative"), default="structured")
     ap.add_argument("release")
     ap.add_argument("rest", nargs="*")
     ap.add_argument("--owner")
@@ -124,31 +134,35 @@ def main():
     trackers_dir = folder / own.TRACKERS_DIR
     for d in (specs_dir, trackers_dir):
         d.mkdir(parents=True, exist_ok=True)
-    spec = specs_dir / spec_name
+    spec = specs_dir / f"{a.num}-{a.slug}" / spec_name
     tracker = trackers_dir / f"{a.num}-{a.slug}-tracker.md"
     for p in (spec, tracker):
         if p.exists():
             die(f"refusing to overwrite {p}")
-    clash = [p.name for p in specs_dir.glob(f"{a.num}-*.md")]
+    clash = [p.name for p in specs_dir.glob(f"{a.num}-*")]
     if clash:
         die(f"spec {a.num} already has a file: {clash[0]}")
 
-    row = f"| {a.num} | [{a.title}](plan/specs/{spec_name}) |  | {a.scope} |"
+    row = f"| {a.num} | [{a.title}](plan/specs/{a.num}-{a.slug}/{spec_name}) |  | {a.scope} |"
     new_plan = C.insert_row(plan.read_text(encoding="utf-8"), a.num, row)
     rules = [] if a.template else C.find_rules(root)
-    template = load_template(root, a.template, rules)
+    template = load_template(root, a.template, rules, a.type).replace("[Spec name] round 1", f"{a.title} round 1")
     cited = set()
     for text in (a.title, a.scope, template):
         for m in re.finditer(r"\((D\d+[^)]*)\)", text):
             cited |= {int(n) for n in re.findall(r"\bD(\d+)\b", m.group(1))}
     own.refuse_superseded(folder, cited, f"spec {spec_name}")
 
+    spec.parent.mkdir()
     spec.write_text(set_heading(template, f"# {a.num}: {a.title}"), encoding="utf-8")
     print(spec)
     tracker.write_text(C.tracker_text(a.num, a.title), encoding="utf-8")
     print(tracker)
     plan.write_text(new_plan, encoding="utf-8")
-    print("next: fill the ### Milestone: blocks, then sprints/check.py and sprints/refresh.py")
+    if a.type == "iterative":
+        print("next: write the scope, then plan/task.py add for each feedback item")
+    else:
+        print("next: fill 2.1 Tasks and 2.2 Milestones, then sprints/check.py and sprints/refresh.py")
     for r in rules:
         print(f"Project planning rules: {r}")
 

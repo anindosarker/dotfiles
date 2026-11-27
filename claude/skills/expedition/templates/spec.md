@@ -1,3 +1,6 @@
+---
+type: structured
+---
 # [Spec name]
 
 ## 1. Architecture
@@ -86,20 +89,33 @@ New packages, env vars (name, default, purpose), reused infrastructure.
 
 ## 2. Instructions for AI
 
-### 2.1 Milestones
+### 2.1 Tasks
+
+One entry per task, each defined once. The section number is the task's id. A task points to
+its detail: `Detail:` a section of this file, or `Plan:` a task file in `tasks/`.
+
+#### 2.1.1 Task: [what] (D<n>)
+- [One line of what it is.]
+- Checks: [commands]
+- Detail: 1.6.2
+
+#### 2.1.2 Task: Cleanup, delete old code, update references
+- Checks: the project's checks
+
+### 2.2 Milestones
 
 One block per milestone. A milestone is one branch, one worktree, one tracker and one merge.
+`Tasks` is required. Write the other lines when they help: `Files owned` when the milestone
+could clash with other running work, `Depends on` when the order matters (with no line, the
+milestones of a spec run in the order listed).
 
-### Milestone: [Name]
-
+#### 2.2.1 Milestone: [Name]
+- Tasks: 2.1.1, 2.1.2
 - Files owned: [a, b]
 - Depends on: [milestone names or spec numbers, or none]
 - Review: [none | fable]
 - Local CI: [none | `pnpm test --changed` | `act pull_request -j <job>`] (what runs on the merged tree before the merge, beyond the task checks)
-- Task 1: [what]. Checks: [commands]
-- Task 2: [what]. Checks: [commands]
-- Task N: Cleanup, delete old code, update references. Checks: the project's checks
 
-### 2.2 Checks
+### 2.3 Checks
 
 - `command` per base, what green means
