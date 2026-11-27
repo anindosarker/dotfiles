@@ -5,7 +5,8 @@ Branch `[branch]`, worktree [name]
 Checks:
 - Check: [name], `[command]` at [commit]: [pass | fail]
 
-- Task 1 [name]: [planned | running | done (<commit>, <workflow run id>)]
+Tasks:
+- [task id] [title]: [not started | in progress | blocked (<reason>) | done] (written by `plan/task.py`, only for a task with no task file)
 
 ## Attention
 

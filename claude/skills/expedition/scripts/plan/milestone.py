@@ -126,12 +126,7 @@ def run(a, own, root, folder, ids, decision, lock):
         die(f"spec {a.spec} is closed ({doc['closed']}): new work needs a new spec")
     epic = own.spec_epic(path)
     if decision is not None:
-        tag = own.read_tags(folder).get(decision)
-        if tag is None:
-            die(f"D{decision} is not in decisions.md")
-        own.refuse_superseded(folder, {decision}, "--decision")
-        if tag["epic"] and tag["epic"] != epic:
-            die(f"D{decision} is in E{tag['epic']} already")
+        sp.check_decision(folder, decision, epic)
     cites = ([f"D{decision}"] if decision is not None else []) + ids
     new = sp.new_form(text)
     if not new and not (a.files and a.checks):
