@@ -210,7 +210,9 @@ class Go:
         # The epic files by number (this epic, the next stub, and every epic whose Sprint column the
         # grid refresh rewrote), never a sweep of the folder: an unrelated file there stays out.
         epics = [own.epic_path(self.folder, k) for k in own.epic_numbers(self.folder)]
-        return self.commit([*epics, self.folder / own.SPRINTS_MD,
+        # status.json and the "status:" lines the refresh mirrored into this epic's spec folders.
+        mirrored = [p for s in specs for p in sorted((self.folder / own.SPECS_DIR).glob(f"{s}-*"))]
+        return self.commit([*epics, *mirrored, self.folder / C.load("lib/status").FILE, self.folder / own.SPRINTS_MD,
                             self.folder / "decisions.md", self.folder / own.QUEUE_MD],
                            f"docs(plan): {self.release} E{self.n} go: grid and epic file")
 
