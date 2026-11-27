@@ -2,13 +2,16 @@
 """The only writer of the run marks in status/sprints.md: set one milestone's cell, then run the
 refresh chain and commit, as one command per event.
 
-Usage: python3 -I sprints/mark.py <release> <milestone> launch|wait|resume|merge|stop [--owner X] [--root PATH]
+Usage: python3 -I sprints/mark.py <release> <milestone> launch|wait|resume|merge|stop [--reason "<text>"] [--commit <sha>] [--owner X] [--root PATH]
 
 <milestone> is the milestone's tracker file name without "-tracker.md", for example
 47-comparison-page for run/trackers/47-comparison-page-tracker.md (a path or the full file name
 is accepted too). The runner and the workflow know it: the tracker path is in the MILESTONES
 entry and in every prompt.
 
+In a release with status/data/status.json the verb sets the milestone's status in that file
+(mark_status below): wait and stop need --reason "<text>", merge needs --commit <sha>. In an
+earlier release, which this paragraph describes, the two flags are accepted and not used:
 launch sets the milestone's cell to "[ ]", wait to "[~]", merge to "[x]", stop to "[!]", in the
 column its row has now (reference/formats.md, Milestone status). launch on a "[~]" cell resumes
 the milestone. wait takes no reason: the reason stays in the tracker's Status line. wait is
@@ -63,12 +66,19 @@ def milestone_of(own, folder, release, key):
 
 def mark_status(a, st, root, folder, key, num, name):
     """A release with status/data/status.json: the verb is a status of that file (lib/status.py).
-    launch and resume: in progress. merge: done, with --commit (a commit hash), refused while a
+    launch: in progress. resume, on a blocked milestone only: in progress when it was launched
+    before (a launch commit of this script is in the history of status/sprints.md), not started
+    when it never was. merge: done, with --commit (a commit hash), refused while a
     task of the milestone is not done, skipped or waiting for the owner's look. wait and stop:
     blocked, with --reason; a stop whose reason starts with a decision id ("D15 ...") is
     skipped. It writes the one release folder the scripts keep their lock in, also when run from
     a milestone worktree that holds a copy of the plan folder."""
-    word = {"launch": "in progress", "resume": "in progress", "merge": "done"}.get(a.action, "blocked")
+    word = {"launch": "in progress", "merge": "done"}.get(a.action, "blocked")
+    if a.action == "resume":
+        now = st.entries(folder)[0].get(key, {}).get("status", "not started")
+        if now != "blocked":
+            C.die(f"{key}: {now}, not blocked: nothing to resume")
+        word = "in progress" if C.load("lib/grid").resume_mark(folder, key) == "[ ]" else "not started"
     if a.action == "stop" and re.match(r"^D\d+\b", a.reason.strip()):
         word = "skipped"
     with open(C.lock_file(folder), "a") as lock:
@@ -76,7 +86,8 @@ def mark_status(a, st, root, folder, key, num, name):
         with contextlib.redirect_stdout(io.StringIO()):
             _, e, stored = st.set_status(folder, a.release, key, word, a.reason, a.commit, locked=True)
         if stored is None:
-            print(f"{key}: already {e['status']}, nothing changed")
+            late = st.pending(folder) and st.commit(root, folder, [], f"docs(plan): {a.release} {key} {a.action}")
+            print(f"{key}: already {e['status']}, nothing changed" + ("; an earlier failed commit is made now" if late else ""))
             return
         paths = [folder / C.SPRINTS_MD, folder / "decisions.md", folder / C.QUEUE_MD]
         paths += sorted((folder / C.EPICS_DIR).glob("E*.md"))
@@ -87,7 +98,8 @@ def mark_status(a, st, root, folder, key, num, name):
 
 def main():
     ap = argparse.ArgumentParser(
-        usage="sprints/mark.py <release> <milestone> launch|wait|resume|merge|stop [--owner X] [--root PATH]")
+        usage="sprints/mark.py <release> <milestone> launch|wait|resume|merge|stop [--reason \"<text>\"] "
+              "[--commit <sha>] [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("milestone")
     ap.add_argument("action", choices=C.load("lib/grid").ACTIONS)
@@ -100,8 +112,6 @@ def main():
         C.die(f"bad release '{a.release}', expected like v0.9.x")
     key = Path(a.milestone).name.removesuffix(".md").removesuffix("-tracker")
     root, folder = C.find_folder(a.release, a.owner, a.root)
-    if C.load("lib/status").active(folder):
-        root, folder = C.load("lib/status").home(root, folder)
     own, g = C.load("lib/ownership"), C.load("lib/grid")
     hit = milestone_of(own, folder, a.release, key)
     if hit is None:

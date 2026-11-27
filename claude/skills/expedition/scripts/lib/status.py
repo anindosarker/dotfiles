@@ -78,9 +78,12 @@ def load(folder):
     if not active(folder):
         return None
     try:
-        return json.loads(C.read(path(folder)))
+        data = json.loads(C.read(path(folder)))
     except ValueError as e:
-        C.die(f"{path(folder)} is not valid JSON ({e}): restore it from git; nothing was changed")
+        C.die(f"{path(folder)} is not valid JSON ({e}): restore it from git; no status was changed")
+    if not (isinstance(data, dict) and isinstance(data.get("milestones"), list) and isinstance(data.get("tasks"), list)):
+        C.die(f"{path(folder)} has no milestone and task lists: restore it from git; no status was changed")
+    return data
 
 
 def write_json(p, text):
@@ -89,24 +92,6 @@ def write_json(p, text):
     tmp = p.with_name(p.name + ".tmp")
     tmp.write_text(text, encoding="utf-8")
     os.replace(tmp, p)
-
-
-def home(root, folder):
-    """(root, folder) of the one copy of the release folder the scripts write in, for a command
-    run from a milestone worktree that holds its own copy of the plan folder: the copy that
-    holds the scripts' lock file (plan/new_cycle.py creates it); with no lock anywhere, the main
-    checkout's copy; else this one."""
-    rel = folder.relative_to(root)
-    lock = Path(C.STATUS_DIR) / "data" / ".ids.lock"
-    if (folder / lock).is_file():
-        return root, folder
-    wts = [wt for wt, _ in C.load("status/progress").worktrees(root)]
-    held = [wt for wt in wts if (wt / rel / lock).is_file()]
-    if len(held) == 1:
-        return held[0], held[0] / rel
-    if not held and wts and wts[0] != root and (wts[0] / rel).is_dir():
-        return wts[0], wts[0] / rel
-    return root, folder
 
 
 def release_format(folder):
@@ -323,13 +308,20 @@ def commit(root, folder, extra, message):
     still commits every mirrored file. Returns what lib/common.py commit returns."""
     pend = folder / PENDING
     kept = [folder / l for l in C.read(pend).splitlines() if l.strip()] if pend.is_file() else []
-    paths = list(dict.fromkeys(kept + CHANGED))
+    paths = list(dict.fromkeys(kept + CHANGED + [Path(p) for p in extra]))
     CHANGED.clear()
+    if not paths:
+        return False
     pend.parent.mkdir(parents=True, exist_ok=True)
     pend.write_text("".join(f"{p.relative_to(folder).as_posix()}\n" for p in paths), encoding="utf-8")
-    done = C.commit(root, [str(p) for p in paths] + [str(p) for p in extra], message)
+    done = C.commit(root, [str(p) for p in paths], message)
     pend.unlink()
     return done
+
+
+def pending(folder):
+    """True when a commit failed before: its paths wait in status/data/.pending."""
+    return (folder / PENDING).is_file()
 
 
 def drop(folder, ident):
@@ -355,7 +347,7 @@ def find(data, ident):
     return None, None
 
 
-def set_status(folder, release, ident, status, reason="", commit="", locked=False):
+def set_status(folder, release, ident, status, reason="", commit="", locked=False, boxes_in=None):
     """Set one milestone or task and run the chain. Returns (kind, entry, the word stored), the
     word None when nothing changed (then nothing is written). Dies on an unknown id, a spec or
     an epic, a word that is not one of the five, a missing reason, a task set to done with an
@@ -371,7 +363,8 @@ def set_status(folder, release, ident, status, reason="", commit="", locked=Fals
         C.die(f"the status of {kind} {ident} is counted from what is inside it, never set")
     reason = reason.strip()
     if kind == "task" and status == "done" and e["file"]:
-        owner, other = boxes(folder / e["file"])
+        mine_copy = (boxes_in or folder) / e["file"]  # the builder ticks the boxes in its own copy
+        owner, other = boxes(mine_copy if mine_copy.is_file() else folder / e["file"])
         if other:
             C.die(f"task {ident} has {other} open Verification box(es): tick them first")
         if owner:

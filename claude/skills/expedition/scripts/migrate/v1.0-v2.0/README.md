@@ -26,10 +26,12 @@ The dry run prints one line per spec and the counts, and writes nothing. `--forc
 ## What it changes
 
 - Each spec `plan/specs/NN-<slug>.md` moves to `plan/specs/NN-<slug>/NN-<slug>.md`; every link to it in the release folder follows.
-- In each spec, the old milestone blocks become a task list, numbered milestones and one task file per old task line, with its checks as a Verification list.
-- `status/data/status.json` is written from the sprint grid and the trackers; the trackers lose their `Status:` line and task lines.
+- In each spec, the old milestone blocks become a task list, numbered milestones and one task file per old task line, with its checks as a Verification list. The heading `1.6 Components` becomes `1.6 Modules`, so the spec can take new work.
+- `status/data/status.json` is written from the sprint grid and the trackers. A tracker loses its `Status:` line; its task lines, and a Status text that says more than a hash, stay under `## Before migration`. No line is dropped.
 - Epic files get front matter; `process.md` gets `updated`; `.gitignore` keeps `status.json` in git.
 - Everything is one commit.
+
+If the command is interrupted, run it again: it finds its marker file, `status/data/.migrating`, finishes the work and commits. The result is the same as an uninterrupted run.
 
 ## How to check it worked
 

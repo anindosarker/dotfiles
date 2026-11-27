@@ -55,6 +55,7 @@ def main():
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: found from the cwd)")
     a = ap.parse_args()
+    a.title = a.title.strip()
     if not C.RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
     if not NUM_RE.fullmatch(a.spec):
@@ -64,42 +65,43 @@ def main():
     own, sp, st = load("lib/ownership"), load("lib/specs"), load("lib/status")
     sp.check_title("title", a.title)
     root, folder = C.find_folder(a.release, a.owner, a.root)
-    path = dict(own.spec_files(folder)).get(a.spec)
-    if path is None:
-        die(f"spec {a.spec} has no file in {own.SPECS_DIR}")
-    text = own.read(path)
-    if not sp.new_form(text) or path.parent.name != path.stem:
-        die(f"spec {a.spec} is in the old form: write its Task line by hand")
-    doc = own.read_spec(path)
-    stored = st.active(folder)
-    data = st.build(folder, a.release) if stored else None
-    if stored and st.find(data, a.spec)[1]["status"] == "done":
-        die(f"spec {a.spec} is done and takes nothing: the work is a new spec")
-    block = None
-    if a.milestone:
-        block = next((b for b in doc["blocks"] if b["name"] == a.milestone), None)
-        if block is None:
-            die(f"spec {a.spec} has no milestone '{a.milestone}'")
-        if stored:
-            state = next((m["status"] for m in data["milestones"]
-                          if m["spec"] == a.spec and m["name"] == a.milestone), "not started")
-        else:
-            state = "not started" if sp.grid_cells(folder, a.spec).get(a.milestone, "·") == "·" else "started"
-        if state != "not started":
-            die(f"milestone '{a.milestone}' is {state}: a task joins a milestone only while it is "
-                "not started; add the work as its own milestone (plan/milestone.py add)")
-    module = a.module or (block["tasks"][0]["module"] if block and block["tasks"] else None) \
-        or (list(doc["modules"])[-1] if doc["modules"] else None)
-    if module not in doc["modules"]:
-        die(f"spec {a.spec} has no module {module}: name one with --module")
-    number = sp.next_task(doc, path)
-    rel = f"tasks/{number}-{sp.file_slug(a.title)}.md"
-    text = sp.add_pointer(text, number, a.title, module, rel)
-    if block:
-        text = sp.link_task(text, a.milestone, number)
-    out = path.parent / rel
+    # The lock is taken before the spec is read: two adds at once must not number the same task.
     with open(C.lock_file(folder), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
+        path = dict(own.spec_files(folder)).get(a.spec)
+        if path is None:
+            die(f"spec {a.spec} has no file in {own.SPECS_DIR}")
+        text = own.read(path)
+        if not sp.new_form(text) or path.parent.name != path.stem:
+            die(f"spec {a.spec} is in the old form: write its Task line by hand")
+        doc = own.read_spec(path)
+        stored = st.active(folder)
+        data = st.build(folder, a.release) if stored else None
+        if stored and st.find(data, a.spec)[1]["status"] == "done":
+            die(f"spec {a.spec} is done and takes nothing: the work is a new spec")
+        block = None
+        if a.milestone:
+            block = next((b for b in doc["blocks"] if b["name"] == a.milestone), None)
+            if block is None:
+                die(f"spec {a.spec} has no milestone '{a.milestone}'")
+            if stored:
+                state = next((m["status"] for m in data["milestones"]
+                              if m["spec"] == a.spec and m["name"] == a.milestone), "not started")
+            else:
+                state = "not started" if sp.grid_cells(folder, a.spec).get(a.milestone, "·") == "·" else "started"
+            if state != "not started":
+                die(f"milestone '{a.milestone}' is {state}: a task joins a milestone only while it is "
+                    "not started; add the work as its own milestone (plan/milestone.py add)")
+        module = a.module or (block["tasks"][0]["module"] if block and block["tasks"] else None) \
+            or (list(doc["modules"])[-1] if doc["modules"] else None)
+        if module not in doc["modules"]:
+            die(f"spec {a.spec} has no module {module}: name one with --module")
+        number = sp.next_task(doc, path)
+        rel = f"tasks/{number}-{sp.file_slug(a.title)}.md"
+        text = sp.add_pointer(text, number, a.title, module, rel)
+        if block:
+            text = sp.link_task(text, a.milestone, number)
+        out = path.parent / rel
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(sp.task_file_text(a.title, a.type), encoding="utf-8")
         path.write_text(text, encoding="utf-8")
@@ -107,7 +109,6 @@ def main():
             with contextlib.redirect_stdout(io.StringIO()):
                 st.sync(folder, a.release)
         st.commit(root, folder, [path, out], f"docs(plan): {a.release} task {a.spec} {number} {a.title}")
-        fcntl.flock(lock, fcntl.LOCK_UN)
     where = f"in milestone '{a.milestone}'" if block else "in no milestone yet"
     print(f"task {number} of spec {a.spec}: '{a.title}' {where}, module {module}, file {out.relative_to(folder).as_posix()}")
 

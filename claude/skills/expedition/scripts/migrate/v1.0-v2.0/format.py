@@ -13,8 +13,9 @@ In the release folder:
 - Inside a spec with a "### 2.1 Milestones" section of "### Milestone: <Name>" blocks: the
   section becomes "### 2.1 Tasks" (one pointer line per old "- Task N:" line, numbered across
   the spec) and "### 2.2 Milestones" ("#### 2.2.N Milestone: <Name>" with "- Tasks:" and the
-  block's other lines as they were); "### 2.2 Checks" becomes "### 2.3 Checks". Section 1 is
-  not rewritten.
+  block's other lines as they were); "### 2.2 Checks" becomes "### 2.3 Checks". In section 1
+  only one heading changes: "### 1.6 Components" becomes "### 1.6 Modules" (added when the spec
+  has no 1.6), so the spec takes new work with plan/milestone.py and plan/task.py.
 - Each old task line becomes tasks/NN-<slug>.md from templates/task.md: its title from the task
   text, "## Goals" with the whole task text, "## Verification" with one box per check of its
   "Checks:" part, ticked when the milestone is done. A decision cite of a task line that names
@@ -30,8 +31,9 @@ In the release folder:
   with the tracker's reason, or skipped when that reason starts with a decision id. A milestone
   with no grid row takes its tracker's word. The tasks of a done milestone are done, of a
   skipped one skipped, every other task not started.
-- Trackers of milestones lose the "Status:" line and their "- Task N" lines; the rest stays. A
-  tracker no milestone owns is left as it is and named.
+- Trackers of milestones lose the "Status:" line. Nothing else is dropped: their "- Task N"
+  lines, and a Status text that says more than a hash, are kept word for word under
+  "## Before migration" at the end. A tracker no milestone owns is left as it is and named.
 - process.md gets "updated:" in its front matter; the repo's .gitignore gets the pair that
   keeps status.json in git.
 Then the chain every status change runs (the roll-up, the "status:" lines, status/sprints.md
@@ -40,6 +42,12 @@ drawn from the file, the page data) and one commit of the release folder, never 
 Prints one line per spec and the counts before and after (specs, milestones, tasks, done
 milestones); they must be equal, else nothing is committed. --dry-run prints the same and
 writes nothing. A second run finds status.json and changes nothing.
+
+An interrupted run is finished by running the command again: the first thing written is the
+marker status/data/.migrating, which holds what was read from the grid and the trackers. With
+the marker the command skips the check for uncommitted changes, moves and converts the specs
+that are not done yet, repairs the links, writes status.json last, commits and removes the
+marker. The result equals an uninterrupted run.
 
 Refuses: a release that has status.json already (nothing to do); a release folder with
 uncommitted changes; free-standing fix trackers (migrate/pre-v1.0/fixes.py first); milestones that do
@@ -147,6 +155,15 @@ def convert(own, sp, text, done_names):
                 cur["lines"].append(lines[i])
     if not blocks:
         return None
+    # Growth needs a section named Modules: an old "1.6 Components" is renamed, a missing one added.
+    six = next((i for i in sorted(fenced) if re.match(r"^###\s+1\.6\s+\S", lines[i])), None)
+    if six is not None:
+        lines[six] = "### 1.6 Modules"
+    else:
+        at = max((i for i in sorted(fenced) if i < start and re.match(r"^##\s", lines[i])), default=start)
+        lines[at:at] = ["### 1.6 Modules", ""]
+        fenced = {i if i < at else i + 2 for i in fenced} | {at}
+        start, end = start + 2, end + 2
     modules = {m.group(1): i for i in sorted(fenced) if (m := own.MODULE_RE.match(lines[i]))}
     pointers, files, out_blocks, n = [], {}, [], 0
     for k, b in enumerate(blocks, 1):
@@ -185,7 +202,8 @@ def convert(own, sp, text, done_names):
 
 
 def milestone_status(own, cell, tracker, path=None):
-    """(status, reason, commit) of one milestone from its grid cell and its tracker text."""
+    """(status, reason, commit, note) of one milestone from its grid cell and its tracker text;
+    note is the tracker's whole Status value when it says more than a state and a hash."""
     v = own.status_value(tracker) if tracker else None
     state, inner = (v[0], v[1]) if v else (None, "")
     if cell is None:
@@ -202,7 +220,42 @@ def milestone_status(own, cell, tracker, path=None):
         if state == "stopped" and re.match(r"^D\d+\b", inner):
             word = "skipped"
         reason = (word == "blocked" and own.attention_reason(path)) or (inner if state == "stopped" else "") or "stopped"
-    return word, reason, commit
+    raw = own.STATUS_RE.search(tracker or "")
+    note = raw.group(1) if raw and inner and not SHA_RE.fullmatch(inner) else ""
+    return word, reason, commit, note
+
+
+BEFORE_HEAD = "## Before migration"
+
+
+def clean_tracker(own, text, note):
+    """A milestone tracker without its "Status:" line; its "- Task N" lines (with the lines
+    indented under them) and a Status text that says more than a hash are kept, word for word,
+    under BEFORE_HEAD at the end. Running it again changes nothing."""
+    lines, kept, moved, inside, task = text.rstrip("\n").split("\n"), [], [], False, False
+    for l in lines:
+        if l.strip() == BEFORE_HEAD:
+            inside, task = True, False
+            continue
+        if inside and l.startswith("## "):
+            inside = False
+        if inside:
+            moved += [l] if l.strip() else []
+        elif own.STATUS_RE.match(l):
+            task = False
+        elif TRACKER_TASK_RE.match(l):
+            moved.append(l)
+            task = True
+        elif task and l[:1] in (" ", "\t") and l.strip():
+            moved.append(l)
+        else:
+            task = False
+            kept.append(l)
+    first = f"- Status: {note}"
+    if note and first not in moved:
+        moved.insert(0, first)
+    out = re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).rstrip("\n")
+    return out + (f"\n\n{BEFORE_HEAD}\n\n" + "\n".join(moved) if moved else "") + "\n"
 
 
 def epic_front(own, text):
@@ -231,6 +284,44 @@ def counts(own, st, folder):
     return len(own.spec_files(folder)), len(ms), sum(len(b["tasks"]) for b in blocks), done
 
 
+MARKER = "status/data/.migrating"
+
+
+def plan_of(own, st, folder, release, force):
+    """What the migration needs to know before it changes a file, kept in the marker file so an
+    interrupted run can be finished: the counts, each milestone's status, the specs to move, the
+    trackers of milestones with their Status note."""
+    comp = own.compute(folder)
+    if comp["errors"]:
+        own.print_errors(comp["errors"], "nothing written")
+    cells = {}
+    for label, cs in own.grid(folder)[1]:
+        m = re.match(r"^E\d+\s+(\d{2}(?:\.\d+)?)\s+(.*)$", label)
+        if m:
+            cells[(m.group(1), m.group(2))] = (next((c for c in cs if c), ""), next((i + 1 for i, c in enumerate(cs) if c), 0))
+    running = [name for (_, name), (c, _) in cells.items() if c == "[ ]"]
+    if running and not force:
+        C.die(f"{len(running)} milestone(s) are running ({', '.join(running[:3])}{', ...' if len(running) > 3 else ''}): "
+              "a builder in the middle of a milestone holds the earlier text. Let them merge, or pass --force")
+    milestones, trackers = [], {}
+    for num, p in own.spec_files(folder):
+        slug = p.stem.split("-", 1)[1]
+        for i, b in enumerate(own.parse_spec(p)):
+            t = own.milestone_tracker(folder, num, slug, i, b["name"])
+            text = own.read(t) if t.is_file() else None
+            cell, col = cells.get((num, b["name"]), (None, 0))
+            word, reason, commit, note = milestone_status(own, cell, text, t)
+            milestones.append({"id": t.name.removesuffix("-tracker.md"), "name": b["name"], "spec": num,
+                               "sprint": f"S{col}" if col else "", "status": word, "reason": reason,
+                               "changed": "", "commit": commit})
+            if text is not None:
+                trackers[t.name] = note
+    names = {m["name"] for m in milestones}
+    return {"before": list(counts(own, st, folder)), "milestones": milestones, "trackers": trackers,
+            "stems": [p.stem for _, p in own.spec_files(folder) if p.parent.name != p.stem],
+            "orphans": [f"{n} {name}" for (n, name) in cells if name not in names]}
+
+
 def main():
     ap = argparse.ArgumentParser(usage="migrate/v1.0-v2.0/format.py <release> [--dry-run] [--force] [--owner X] [--root PATH]")
     ap.add_argument("release")
@@ -243,135 +334,119 @@ def main():
         C.die(f"bad release '{a.release}', expected like v0.9.x")
     root, folder = C.find_folder(a.release, a.owner, a.root)
     own, sp, st = C.load("lib/ownership"), C.load("lib/specs"), C.load("lib/status")
-    if st.active(folder):
+    marker = folder / MARKER
+    resumed = marker.is_file()
+    if st.active(folder) and not resumed:
         print(f"{folder / st.FILE} exists: the release has the present form, nothing to change")
         return
-    if C.legacy_fixes(folder):
-        C.die(f"{folder} has free-standing fix trackers: run migrate/pre-v1.0/fixes.py first")
     real = folder.resolve()
     git = lambda *args: subprocess.run(["git", "-C", str(real), *args], capture_output=True, text=True)
-    if git("status", "--porcelain", "--", ".").stdout.strip():
-        C.die(f"{folder} has uncommitted changes: commit them first")
-    comp = own.compute(folder)
-    if comp["errors"]:
-        own.print_errors(comp["errors"], "nothing written")
-    plan = folder / f"{a.release}-plan.md"
-    coll = own.new_collect(folder, plan)
-    cells = {}
-    for label, cs in own.grid(folder)[1]:
-        m = re.match(r"^E\d+\s+(\d{2}(?:\.\d+)?)\s+(.*)$", label)
-        if m:
-            cells[(m.group(1), m.group(2))] = (next((c for c in cs if c), ""), next((i + 1 for i, c in enumerate(cs) if c), 0))
-    running = [name for (_, name), (c, _) in cells.items() if c == "[ ]"]
-    if running and not a.force:
-        C.die(f"{len(running)} milestone(s) are running ({', '.join(running[:3])}{', ...' if len(running) > 3 else ''}): "
-              "a builder in the middle of a milestone holds the earlier text. Let them merge, or pass --force")
-    before = counts(own, st, folder)
-
-    # What each milestone and tracker becomes.
-    stored_m, trackers, done_names = [], {}, set()
-    linked = {num for num, _ in coll["docs"]}
-    for num, p in own.spec_files(folder):
-        slug = p.stem.split("-", 1)[1]
-        for i, b in enumerate(own.parse_spec(p)):
-            t = own.milestone_tracker(folder, num, slug, i, b["name"])
-            text = own.read(t) if t.is_file() else None
-            cell, col = cells.get((num, b["name"]), (None, 0))
-            word, reason, commit = milestone_status(own, cell, text, t)
-            stored_m.append({"id": t.name.removesuffix("-tracker.md"), "name": b["name"], "spec": num,
-                             "sprint": f"S{col}" if col else "", "status": word, "reason": reason,
-                             "changed": "", "commit": commit})
-            if word == "done":
-                done_names.add(b["name"])
-            if text is not None:
-                kept = [l for l in text.split("\n") if not own.STATUS_RE.match(l) and not TRACKER_TASK_RE.match(l)]
-                trackers[t] = re.sub(r"\n{3,}", "\n\n", "\n".join(kept))
-    extra = [p for p in sorted((folder / C.TRACKERS_DIR).glob("*-tracker.md")) if p not in trackers]
-
-    # What each spec becomes.
-    moves, writes, plain, tasks_new, stored_t = [], {}, [], 0, []
-    status_of = {m["id"]: m["status"] for m in stored_m}
-    for num, p in own.spec_files(folder):
-        if p.parent.name == p.stem:
-            continue
-        new_path = p.with_suffix("") / p.name
-        moves.append((p, new_path))
-        text = own.read(p)
-        res = convert(own, sp, text, done_names)
-        if res is None:
-            plain.append(p.name)
-            n = sum(len(b["tasks"]) for b in own.parse_spec(p))
-        else:
-            text, files, n = res
-            for name, body in files.items():
-                writes[new_path.parent / "tasks" / name] = body
-        tasks_new += n
-        text = re.sub(r"\]\((\.\./)", r"](../\1", text)
-        # "migrated": the modules of this spec were written before tasks pointed at modules
-        writes[new_path] = own.set_front(own.set_front(text, "migrated", "true"), "status", "not started", first=True)
-        print(f"{p.relative_to(folder)}: to {new_path.parent.relative_to(folder)}/, "
-              + (f"{n} task files" if res else "body kept (no '### 2.1 Milestones' section with blocks)"))
-    stems = {old.stem for old, _ in moves}
-    link_re = re.compile(r"specs/(" + "|".join(sorted(map(re.escape, stems), key=len, reverse=True)) + r")\.md") if stems else None
-    for f in sorted(folder.rglob("*.md")):
-        if "status" in f.relative_to(folder).parts[:1] or f in dict(moves):
-            continue
-        text = trackers.get(f, None)
-        text = own.read(f) if text is None else text
-        new = link_re.sub(r"specs/\1/\1.md", text) if link_re else text
-        if f.parent == folder / C.EPICS_DIR and re.match(r"^E\d+\.md$", f.name):
-            new = epic_front(own, new)
-        if f == folder / "process.md":
-            new = own.set_front(new, "updated", f"{datetime.datetime.now():%Y-%m-%d %H:%M}")
-        if new != own.read(f):
-            writes[f] = new
-    for p, new_path in moves:
-        writes[new_path] = link_re.sub(r"specs/\1/\1.md", writes[new_path])
-    print(f"{len(moves)} specs moved ({len(plain)} with the body kept), {tasks_new} tasks, "
-          f"{len(stored_m)} milestones, {len(trackers)} trackers cleaned, {len(extra)} trackers no milestone owns left as they are")
-    for p in extra:
-        print(f"left as it is: {p.relative_to(folder)}")
-    orphan = [f"{n} {name}" for (n, name) in cells if name not in {m["name"] for m in stored_m}]
-    for o in orphan:
-        print(f"grid row with no milestone, not carried over: {o}")
+    if resumed:
+        plan = json.loads(C.read(marker))
+        print(f"{MARKER} found: finishing a migration that was interrupted")
+    else:
+        if C.legacy_fixes(folder):
+            C.die(f"{folder} has free-standing fix trackers: run migrate/pre-v1.0/fixes.py first")
+        if git("status", "--porcelain", "--", ".").stdout.strip():
+            C.die(f"{folder} has uncommitted changes: commit them first")
+        plan = plan_of(own, st, folder, a.release, a.force)
+    done_names = {m["name"] for m in plan["milestones"] if m["status"] == "done"}
+    specs_dir = folder / own.SPECS_DIR
     if a.dry_run:
-        print(f"before: specs {before[0]}, milestones {before[1]}, tasks {before[2]}, done milestones {before[3]}")
+        tasks = 0
+        for stem in plan["stems"]:
+            flat = specs_dir / f"{stem}.md"
+            res = convert(own, sp, own.read(flat), done_names) if flat.is_file() else None
+            n = res[2] if res else 0
+            tasks += n
+            print(f"plan/specs/{stem}.md: to plan/specs/{stem}/, "
+                  + (f"{n} task files" if res else "body kept (no '### 2.1 Milestones' section with blocks)"))
+        b = plan["before"]
+        print(f"{len(plan['stems'])} specs to move, {tasks} task files, {len(plan['milestones'])} milestones, "
+              f"{len(plan['trackers'])} trackers")
+        print(f"before: specs {b[0]}, milestones {b[1]}, tasks {b[2]}, done milestones {b[3]}")
         print("dry run; nothing written")
         return
 
     with open(C.lock_file(folder), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        for old, new in moves:
-            new.parent.mkdir(parents=True)
-            r = git("mv", str(old.resolve()), str(new.resolve().parent / new.name))
-            if r.returncode:
-                C.die(f"git mv failed: {(r.stderr or r.stdout).strip()}")
-        for p, text in writes.items():
-            p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text(text if text.endswith("\n") else text + "\n", encoding="utf-8")
+        st.write_json(marker, json.dumps(plan, indent=1) + "\n")  # first: from here a rerun finishes the work
+        stems = plan["stems"]
+        link_re = re.compile(r"specs/(" + "|".join(sorted(map(re.escape, stems), key=len, reverse=True)) + r")\.md") if stems else None
+        fix_links = lambda s: link_re.sub(r"specs/\1/\1.md", s) if link_re else s
+        plain = []
+        for stem in stems:
+            flat, new = specs_dir / f"{stem}.md", specs_dir / stem / f"{stem}.md"
+            if flat.is_file():
+                new.parent.mkdir(parents=True, exist_ok=True)
+                r = git("mv", str(flat.resolve()), str(new.resolve().parent / new.name))
+                if r.returncode:
+                    C.die(f"git mv failed: {(r.stderr or r.stdout).strip()}; run the command again to go on")
+            text = own.read(new)
+            if "migrated" in own.front_matter(text):
+                continue
+            res = convert(own, sp, text, done_names)
+            if res is None:
+                plain.append(new.name)
+            else:
+                text = res[0]
+                for name, body in res[1].items():
+                    (new.parent / "tasks").mkdir(exist_ok=True)
+                    (new.parent / "tasks" / name).write_text(body, encoding="utf-8")
+            text = fix_links(re.sub(r"\]\((\.\./)", r"](../\1", text))
+            # written last, with "migrated": the modules of this spec are older than its task pointers
+            text = own.set_front(own.set_front(text, "migrated", "true"), "status", "not started", first=True)
+            new.write_text(text if text.endswith("\n") else text + "\n", encoding="utf-8")
+            print(f"plan/specs/{stem}/: " + ("converted" if res else "body kept (no '### 2.1 Milestones' section with blocks)"))
+        moved = {specs_dir / s / f"{s}.md" for s in stems}
+        for f in sorted(folder.rglob("*.md")):
+            rel = f.relative_to(folder).parts
+            if rel[0] == "status" or f in moved or (len(rel) > 3 and rel[:2] == ("plan", "specs") and rel[3] == "tasks"):
+                continue
+            text = own.read(f)
+            new = fix_links(text)
+            if f.parent == folder / C.TRACKERS_DIR and f.name in plan["trackers"]:
+                new = clean_tracker(own, new, plan["trackers"][f.name])
+            if f.parent == folder / C.EPICS_DIR and re.match(r"^E\d+\.md$", f.name):
+                new = epic_front(own, new)
+            if f == folder / "process.md" and "updated" not in own.front_matter(new):
+                new = own.set_front(new, "updated", f"{datetime.datetime.now():%Y-%m-%d %H:%M}")
+            if new != text:
+                f.write_text(new if new.endswith("\n") else new + "\n", encoding="utf-8")
+        extra = [p.name for p in sorted((folder / C.TRACKERS_DIR).glob("*-tracker.md")) if p.name not in plan["trackers"]]
+        for name in extra:
+            print(f"left as it is, no milestone owns it: {C.TRACKERS_DIR}/{name}")
+        for o in plan["orphans"]:
+            print(f"grid row with no milestone, not carried over: {o}")
         C.ensure_gitignore(folder)
         # Tasks follow their milestone: done with it, skipped with it, else not started.
+        by_id = {m["id"]: m for m in plan["milestones"]}
+        stored_t = []
         for num, p in own.spec_files(folder):
             slug = p.stem.split("-", 1)[1]
             for i, b in enumerate(own.parse_spec(p)):
-                mid = own.milestone_tracker(folder, num, slug, i, b["name"]).name.removesuffix("-tracker.md")
-                word = status_of.get(mid)
+                m = by_id.get(own.milestone_tracker(folder, num, slug, i, b["name"]).name.removesuffix("-tracker.md"), {})
+                word = m.get("status")
                 for t in b["tasks"]:
                     stored_t.append({"id": f"{num}-{t['id']}", "status": word if word in st.CLOSED else st.STATUSES[0],
-                                     "reason": next(m["reason"] for m in stored_m if m["id"] == mid) if word == "skipped" else "",
-                                     "changed": ""})
-        st.write_json(st.path(folder), json.dumps({"release": a.release, "format": C.skill_version(), "milestones": stored_m, "tasks": stored_t}, indent=2) + "\n")
+                                     "reason": m.get("reason", "") if word == "skipped" else "", "changed": ""})
+        # the status file last: with it the release is in the new form
+        st.write_json(st.path(folder), json.dumps({"release": a.release, "format": C.skill_version(),
+                                                   "milestones": plan["milestones"], "tasks": stored_t}, indent=2) + "\n")
         with contextlib.redirect_stdout(io.StringIO()):
             C.load("lib/grid").refresh(folder, a.release, quiet=True, locked=True)
             C.load("sprints/swimlanes").write(folder, a.release, quiet=True)
         st.CHANGED.clear()
-        after = counts(own, st, folder)
+        before, after = tuple(plan["before"]), counts(own, st, folder)
+        print(f"{len(stems)} specs moved ({len(plain)} with the body kept), {len(stored_t)} tasks, "
+              f"{len(plan['milestones'])} milestones, {len(plan['trackers'])} trackers cleaned")
         print(f"before: specs {before[0]}, milestones {before[1]}, tasks {before[2]}, done milestones {before[3]}")
         print(f"after:  specs {after[0]}, milestones {after[1]}, tasks {after[2]}, done milestones {after[3]}")
         if before != after:
             C.die("the counts differ: nothing committed; look at the files, then `git checkout` and `git clean` the release folder")
         top = Path(git("rev-parse", "--show-toplevel").stdout.strip())
         C.commit(root, [folder, top / ".gitignore"], f"docs(plan): {a.release} moved to spec folders, task files and status.json")
+        marker.unlink()
         fcntl.flock(lock, fcntl.LOCK_UN)
     print("committed")
 

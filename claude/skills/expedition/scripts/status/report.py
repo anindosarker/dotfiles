@@ -451,7 +451,8 @@ def main():
     decisions = folder / "decisions.md"
     print("Files:")
     for p in (plan, folder / SPRINTS_MD, folder / INDEX_HTML, decisions, queue):
-        render = p.name == "index.html" and not p.is_file()  # git-ignored: a fresh clone has none
+        # git-ignored: a fresh clone has none. An earlier release keeps its line, "missing".
+        render = p.name == "index.html" and not p.is_file() and C.load("lib/status").active(folder)
         print(f"  {p.relative_to(folder)}: "
               + ("not rendered yet (sprints/swimlanes.py writes it)" if render else 'present' if p.is_file() else 'missing'))
 

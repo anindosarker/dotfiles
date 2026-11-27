@@ -48,4 +48,4 @@ Only when plans are in the root, one more line:
 
 ## process.md
 
-With plans in the repo, `plan/new_cycle.py` fills `[repo]`, `[plan folder]` and `[plan repo]` in the new `process.md`. With plans in the root it leaves them, and the lead fills them: `[repo]` is the project repo's folder name, `[plan folder]` is `.ai/plans/` in the root folder, and `[plan repo]` is the git repo that holds that folder, never `<repo>`.
+`plan/new_cycle.py` writes the new `process.md` from the short template, or copies the one of the newest earlier release, and sets `updated`. The lead writes the folder facts as a topic of that file: the project repo's folder name, where the plan folder is (`.ai/plans/` in the repo, or `.ai/plans/` in the root folder), and the repository that holds the plans (the project repo, or the root folder's own repo).

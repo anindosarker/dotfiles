@@ -27,8 +27,10 @@ drop removes one stored milestone or task entry that no spec has any more (a ren
 milestone or task). The other commands stop, naming such entries, until they are restored or
 dropped: a stored status is never thrown away by itself.
 
-It writes in the release folder where the scripts keep their lock (status/data/.ids.lock), also
-when it is run from a milestone worktree that holds its own copy of the plan folder.
+It writes in the one release folder every script writes in (lib/common.py one_copy: the main
+checkout's copy), also when it is run from a milestone worktree that holds its own copy of the
+plan folder; the Verification boxes of a task are read from the caller's copy, where the
+builder ticked them.
 
 get prints "<id>: <status>", with the reason in brackets. list prints one line per item,
 "<kind> <id>: <status> (<reason>) <name>", filtered by --status and --kind.
@@ -41,6 +43,7 @@ import contextlib
 import fcntl
 import importlib.util
 import io
+import subprocess
 import sys
 from pathlib import Path
 
@@ -82,7 +85,11 @@ def main():
     if not C.RELEASE_RE.match(a.release):
         C.die(f"bad release '{a.release}', expected like v0.9.x")
     st = C.load("lib/status")
-    root, folder = st.home(*C.find_folder(a.release, a.owner, a.root))
+    root, folder = C.find_folder(a.release, a.owner, a.root)
+    # The caller's own copy of the release folder (a milestone worktree): the builder ticks the
+    # Verification boxes there. Every write goes to the one folder find_folder gives.
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
+    mine = Path(top) / folder.relative_to(root) if top and not a.root else None
     if not st.active(folder):
         C.die(f"{folder} has no {st.FILE}: a release made before this format keeps its statuses "
               "in the grid and the trackers (sprints/mark.py)")
@@ -121,9 +128,11 @@ def main():
     with open(C.lock_file(folder), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         with contextlib.redirect_stdout(io.StringIO()):
-            kind, e, stored = st.set_status(folder, a.release, ident, word, a.reason, a.commit, locked=True)
+            kind, e, stored = st.set_status(folder, a.release, ident, word, a.reason, a.commit, locked=True,
+                                            boxes_in=mine if mine and mine.is_dir() else None)
         if stored is None:
-            print(f"{kind} {ident}: already {e['status']}, nothing changed")
+            late = st.pending(folder) and st.commit(root, folder, [], f"docs(plan): {a.release} {kind} {ident} {e['status']}")
+            print(f"{kind} {ident}: already {e['status']}, nothing changed" + ("; an earlier failed commit is made now" if late else ""))
             return
         paths = [folder / C.SPRINTS_MD, folder / "decisions.md", folder / C.QUEUE_MD]
         paths += sorted((folder / C.EPICS_DIR).glob("E*.md"))

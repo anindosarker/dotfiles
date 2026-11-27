@@ -86,6 +86,8 @@ SLUG_MAX = 60
 def check_title(what, title):
     """Die unless title can be a heading and a file name: no "[" at the start (a template
     placeholder), no control character or line break, and something left for the file name."""
+    if "Milestone:" in title or "Task:" in title:
+        C.die(f"{what} '{title}' holds 'Milestone:' or 'Task:': the scripts read those as headings")
     if title.startswith("["):
         C.die(f"{what} '{title}' starts with '[': that is a template placeholder, write the real title")
     if any(ord(c) < 32 or ord(c) == 127 for c in title):

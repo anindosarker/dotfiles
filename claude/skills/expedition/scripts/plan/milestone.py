@@ -114,6 +114,7 @@ def main():
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: found from the cwd)")
     a = ap.parse_args()
+    a.name, a.task = a.name.strip(), [x.strip() for x in a.task]
     if not C.RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
     if not NUM_RE.fullmatch(a.spec):

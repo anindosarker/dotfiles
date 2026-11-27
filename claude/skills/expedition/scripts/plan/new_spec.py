@@ -182,18 +182,11 @@ def main():
     if not st.active(folder):
         return old_spec(a, root, own, folder, plan)
 
+    st.load(folder)  # a store that cannot be read stops here, before anything is written
     spec_name = f"{a.num}-{a.slug}.md"
     specs_dir = folder / own.SPECS_DIR
     specs_dir.mkdir(parents=True, exist_ok=True)
     spec = specs_dir / f"{a.num}-{a.slug}" / spec_name
-    if spec.exists():
-        die(f"refusing to overwrite {spec}")
-    clash = [p.name for p in specs_dir.glob(f"{a.num}-*")]
-    if clash:
-        die(f"spec {a.num} already has a file: {clash[0]}")
-
-    row = f"| {a.num} | [{a.title}](plan/specs/{a.num}-{a.slug}/{spec_name}) |  | {a.scope} |"
-    new_plan = C.insert_row(plan.read_text(encoding="utf-8"), a.num, row)
     rules = [] if a.template else C.find_rules(root)
     template = load_template(root, a.template, rules)
     cited = set()
@@ -201,9 +194,15 @@ def main():
         for m in re.finditer(r"\((D\d+[^)]*)\)", text):
             cited |= {int(n) for n in re.findall(r"\bD(\d+)\b", m.group(1))}
     own.refuse_superseded(folder, cited, f"spec {spec_name}")
-
     with open(C.lock_file(folder), "a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+        fcntl.flock(lock, fcntl.LOCK_EX)  # before the plan file is read: two new specs at once
+        if spec.exists():
+            die(f"refusing to overwrite {spec}")
+        clash = [p.name for p in specs_dir.glob(f"{a.num}-*")]
+        if clash:
+            die(f"spec {a.num} already has a file: {clash[0]}")
+        row = f"| {a.num} | [{a.title}](plan/specs/{a.num}-{a.slug}/{spec_name}) |  | {a.scope} |"
+        new_plan = C.insert_row(plan.read_text(encoding="utf-8"), a.num, row)
         (spec.parent / "tasks").mkdir(parents=True)
         spec.write_text(set_heading(template, f"# {a.num}: {a.title}"), encoding="utf-8")
         print(spec)

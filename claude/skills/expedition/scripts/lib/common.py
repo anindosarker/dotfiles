@@ -91,7 +91,7 @@ def repo_root(flag, release, new=False):
     except FileNotFoundError:
         top = None
     if top and (top / mark).is_dir():
-        return top
+        return top if new else one_copy(top, mark)
     found = []
     for base in (Path.cwd(), top):
         try:
@@ -105,6 +105,9 @@ def repo_root(flag, release, new=False):
                 hit = False
             if hit and d.resolve() not in found:
                 found.append(d.resolve())
+    if not found and top:
+        # plans in a root folder: a project repo or one of its worktrees sits one or two levels below it
+        found = [p for p in list(top.parents)[:2] if (p / mark).is_dir()]
     if len(found) == 1:
         return found[0]
     if found:
@@ -113,6 +116,24 @@ def repo_root(flag, release, new=False):
     if top is None:
         die("not inside a git repository")
     return top
+
+
+def one_copy(top, mark):
+    """The checkout whose copy of a release folder the scripts write in, for a release with
+    status/data/status.json: every writer must use one copy, also when it is run from a
+    milestone worktree that holds a copy of the plan folder. The main checkout's copy when it
+    has one; else the copy of the one worktree that holds the scripts' lock file; else top.
+    A release made before status.json is read where it is found, as before."""
+    if not any((top / mark).glob("*/status/data/status.json")):
+        return top
+    r = subprocess.run(["git", "-C", str(top), "worktree", "list", "--porcelain"], capture_output=True, text=True)
+    wts = [Path(l[len("worktree "):]) for l in r.stdout.splitlines() if l.startswith("worktree ")] if r.returncode == 0 else []
+    if not wts or wts[0] == top:
+        return top
+    if any((wts[0] / mark).glob("*/status/data/status.json")):
+        return wts[0]
+    held = [w for w in wts if any((w / mark).glob("*/status/data/.ids.lock"))]
+    return held[0] if len(held) == 1 else top
 
 
 def check_name(value, what):
