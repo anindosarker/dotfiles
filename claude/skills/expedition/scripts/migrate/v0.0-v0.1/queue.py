@@ -3,7 +3,7 @@
 has the format: tags #D<n> and #E<n> only, the tick in Decided mirrors the lane of the decision
 in decisions.md).
 
-Usage: python3 -I migrate/queue.py <release> [--dry-run] [--owner X] [--root PATH]
+Usage: python3 -I migrate/v0.0-v0.1/queue.py <release> [--dry-run] [--owner X] [--root PATH]
 
 Three inputs, one output:
 
@@ -49,7 +49,7 @@ heading format below, then converted as in (b):
 - Prints the old-id to Q-id mapping, the entries left untagged, and every bare F<digits> or
   A<digits> token it did not rewrite as "path:line: text", for a person to settle.
 
-Refuses a folder whose decisions.md is still in the heading format (migrate/decisions.py first).
+Refuses a folder whose decisions.md is still in the heading format (migrate/v0.0-v0.1/decisions.py first).
 Prints the count of cards per lane and any entry it could not place. --dry-run prints the same
 and writes nothing. Commits nothing. Refuses a folder that has both queue.md and an old file.
 
@@ -70,7 +70,7 @@ def _common():
     name = "expedition_lib_common"
     if name not in sys.modules:
         sys.dont_write_bytecode = True
-        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent.parent / "lib" / "common.py")
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent.parent.parent / "lib" / "common.py")
         sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sys.modules[name])
     return sys.modules[name]
@@ -520,7 +520,7 @@ def git_rm(root, path, dry_run=False):
 
 
 def main():
-    ap = argparse.ArgumentParser(usage="migrate/queue.py <release> [--dry-run] [--owner X] [--root PATH]")
+    ap = argparse.ArgumentParser(usage="migrate/v0.0-v0.1/queue.py <release> [--dry-run] [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--owner")
@@ -534,7 +534,7 @@ def main():
     folder = root / ".ai" / "plans" / a.release / owner
     if not folder.is_dir():
         die(f"release folder missing: {folder}")
-    old_d = C.load("migrate/decisions").refusal(folder, a.release)
+    old_d = C.load("migrate/v0.0-v0.1/decisions").refusal(folder, a.release)
     if old_d:
         die(old_d)
     old = old_files(folder)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Move a release folder to the five milestone statuses (reference/formats.md, Milestone status).
 
-Usage: python3 -I migrate/statuses.py <release> [--dry-run] [--owner X] [--root PATH]
+Usage: python3 -I migrate/v0.0-v0.1/statuses.py <release> [--dry-run] [--owner X] [--root PATH]
 
 In the release folder of the main checkout: every tracker "Status: merged (...)" becomes
 "Status: done (...)" and every "Status: skipped (...)" becomes "Status: stopped (...)"; every
@@ -29,7 +29,7 @@ def _common():
     name = "expedition_lib_common"
     if name not in sys.modules:
         sys.dont_write_bytecode = True
-        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent.parent / "lib" / "common.py")
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent.parent.parent / "lib" / "common.py")
         sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sys.modules[name])
     return sys.modules[name]
@@ -67,7 +67,7 @@ def waiting_rows(own, root, folder, release):
 
 
 def main():
-    ap = argparse.ArgumentParser(usage="migrate/statuses.py <release> [--dry-run] [--owner X] [--root PATH]")
+    ap = argparse.ArgumentParser(usage="migrate/v0.0-v0.1/statuses.py <release> [--dry-run] [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--owner")

@@ -2,7 +2,7 @@
 """Write "Starts: S<n>" into the epic file of every epic that has rows in status/sprints.md and
 no Starts value, once per release whose epics predate the Starts line.
 
-Usage: python3 -I sprints/backfill_starts.py <release> [--dry-run] [--owner X] [--root PATH]
+Usage: python3 -I migrate/v0.0-v0.1/backfill_starts.py <release> [--dry-run] [--owner X] [--root PATH]
 
 The value is the lowest column among the epic's finished rows ("[x]", "[!]"), else the current
 sprint (that epic's own rows ignored). It commits nothing and prints the value per epic and
@@ -22,7 +22,7 @@ def _common():
     name = "expedition_lib_common"
     if name not in sys.modules:
         sys.dont_write_bytecode = True
-        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent.parent / "lib" / "common.py")
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent.parent.parent / "lib" / "common.py")
         sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sys.modules[name])
     return sys.modules[name]
@@ -92,7 +92,7 @@ def backfill_starts(own, folder, dry_run=False):
 
 
 def main():
-    ap = argparse.ArgumentParser(usage="sprints/backfill_starts.py <release> [--dry-run] [--owner X] [--root PATH]")
+    ap = argparse.ArgumentParser(usage="migrate/v0.0-v0.1/backfill_starts.py <release> [--dry-run] [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("--dry-run", action="store_true", help="write nothing")
     ap.add_argument("--owner")

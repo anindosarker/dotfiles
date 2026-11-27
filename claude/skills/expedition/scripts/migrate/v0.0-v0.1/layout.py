@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """Move a release folder from the flat layout to plan/, run/ and status/.
 
-Usage: python3 -I migrate/layout.py <release> [--owner X] [--root PATH]
+Usage: python3 -I migrate/v0.0-v0.1/layout.py <release> [--owner X] [--root PATH]
 
 git mv: specs/ and epics/ into plan/; trackers/ and handoffs/ into run/; sprints.md into
 status/ (a plain move when a path is untracked); the old ownership.md is git rm'ed (the
-ownership facts are computed in memory; migrate/epics.py fills the epic files' tables). Copies
+ownership facts are computed in memory; migrate/v0.0-v0.1/epics.py fills the epic files' tables). Copies
 templates/swimlanes.html to status/index.html. Rewrites links: specs/ to plan/specs/ (and the
 sprints.md link) in <release>-plan.md; specs/, epics/, trackers/, handoffs/,
 sprints.md paths of this release inside the handoffs and the epic files.
-A decisions.md in the old heading format then goes through migrate/decisions.py, a folder
+A decisions.md in the old heading format then goes through migrate/v0.0-v0.1/decisions.py, a folder
 without a kanban-board queue.md, or with a board in the old card format, through
-migrate/queue.py, and every folder through migrate/epics.py, before the reruns. A folder
-with run/trackers/fix-*-tracker.md stops there after the migrate/fixes.py dry run, with one line
+migrate/v0.0-v0.1/queue.py, and every folder through migrate/v0.0-v0.1/epics.py, before the reruns. A folder
+with run/trackers/fix-*-tracker.md stops there after the migrate/v0.0-v0.1/fixes.py dry run, with one line
 naming the remaining steps.
 Appends the status/index.html and status/data/ render lines to the repo's .gitignore when
 missing (renders, never committed). Then reruns sprints/check.py, sprints/refresh.py and status/report.py. Commits nothing. Refuses a
@@ -33,7 +33,7 @@ def _common():
     name = "expedition_lib_common"
     if name not in sys.modules:
         sys.dont_write_bytecode = True
-        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent.parent / "lib" / "common.py")
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent.parent.parent / "lib" / "common.py")
         sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sys.modules[name])
     return sys.modules[name]
@@ -91,7 +91,7 @@ def edit(path, fn):
 
 
 def main():
-    ap = argparse.ArgumentParser(usage="migrate/layout.py <release> [--owner X] [--root PATH]")
+    ap = argparse.ArgumentParser(usage="migrate/v0.0-v0.1/layout.py <release> [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: found from the cwd)")
@@ -151,25 +151,25 @@ def main():
         edit(path, lambda t: rewrite_paths(t, prefix))
 
     args = [a.release, "--owner", owner, "--root", str(root)]
-    if C.load("migrate/decisions").refusal(folder, a.release):
-        print("== migrate/decisions.py")
+    if C.load("migrate/v0.0-v0.1/decisions").refusal(folder, a.release):
+        print("== migrate/v0.0-v0.1/decisions.py")
         r = subprocess.run([sys.executable, "-I", str(HERE / "decisions.py")] + args, cwd=str(root))
         if r.returncode:
-            die(f"migrate/decisions.py failed (exit {r.returncode}); the moves stay, fix and rerun it")
+            die(f"migrate/v0.0-v0.1/decisions.py failed (exit {r.returncode}); the moves stay, fix and rerun it")
     queue = folder / "queue.md"
-    if not queue.is_file() or C.load("migrate/queue").refusal(folder, a.release):
-        print("== migrate/queue.py")
+    if not queue.is_file() or C.load("migrate/v0.0-v0.1/queue").refusal(folder, a.release):
+        print("== migrate/v0.0-v0.1/queue.py")
         r = subprocess.run([sys.executable, "-I", str(HERE / "queue.py")] + args, cwd=str(root))
         if r.returncode:
-            die(f"migrate/queue.py failed (exit {r.returncode}); the moves stay, fix and rerun it")
-    print("== migrate/epics.py")
+            die(f"migrate/v0.0-v0.1/queue.py failed (exit {r.returncode}); the moves stay, fix and rerun it")
+    print("== migrate/v0.0-v0.1/epics.py")
     r = subprocess.run([sys.executable, "-I", str(HERE / "epics.py")] + args, cwd=str(root))
     if r.returncode:
-        die(f"migrate/epics.py failed (exit {r.returncode}); the moves stay, fix and rerun it")
+        die(f"migrate/v0.0-v0.1/epics.py failed (exit {r.returncode}); the moves stay, fix and rerun it")
     if load_ownership().legacy_fixes(folder):
-        print("== migrate/fixes.py --dry-run")
+        print("== migrate/v0.0-v0.1/fixes.py --dry-run")
         subprocess.run([sys.executable, "-I", str(HERE / "fixes.py")] + args + ["--dry-run"], cwd=str(root))
-        die(f"free-standing fix trackers left: check the table above, run migrate/fixes.py {a.release} "
+        die(f"free-standing fix trackers left: check the table above, run migrate/v0.0-v0.1/fixes.py {a.release} "
             f"(with --map <slug>=E<n>:<NN> where a choice is wrong), then sprints/check.py, "
             f"sprints/refresh.py, status/report.py")
     for script in ("sprints/check.py", "sprints/refresh.py", "status/report.py"):

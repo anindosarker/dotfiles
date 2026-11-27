@@ -3,7 +3,7 @@
 items, a tag line "[E<n>]", "[Done]  [E<n>]" or "[Done]" under a heading) in place into the
 kanban board of lib/decisions.py.
 
-Usage: python3 -I migrate/decisions.py <release> [--dry-run] [--owner X] [--root PATH]
+Usage: python3 -I migrate/v0.0-v0.1/decisions.py <release> [--dry-run] [--owner X] [--root PATH]
 
 Lossless: every decision becomes one card "- [ ] **D<n>** <title> <tags>" with its title (a
 "(superseded by D<n>)" mark moved to the end of the title) and every non-blank line of its body,
@@ -31,7 +31,7 @@ def _common():
     name = "expedition_lib_common"
     if name not in sys.modules:
         sys.dont_write_bytecode = True
-        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent.parent / "lib" / "common.py")
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent.parent.parent / "lib" / "common.py")
         sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sys.modules[name])
     return sys.modules[name]
@@ -149,7 +149,7 @@ def convert(folder, release, text):
 
 
 def main():
-    ap = argparse.ArgumentParser(usage="migrate/decisions.py <release> [--dry-run] [--owner X] [--root PATH]")
+    ap = argparse.ArgumentParser(usage="migrate/v0.0-v0.1/decisions.py <release> [--dry-run] [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--owner")

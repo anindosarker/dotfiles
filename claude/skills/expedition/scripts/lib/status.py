@@ -109,6 +109,11 @@ def home(root, folder):
     return root, folder
 
 
+def release_format(folder):
+    """The format a release is in: the "format" key of its status file; "0.1" with no file."""
+    return (load(folder) or {}).get("format") or "0.1"
+
+
 def entries(folder):
     """({milestone id: entry}, {task id: entry}) of the stored file."""
     data = load(folder) or {}
@@ -248,7 +253,8 @@ def build(folder, release, stored=None):
         inside = [m["status"] for m in milestones if m["sprint"] == f"S{c}"]
         sprints.append({"id": f"S{c}", "status": rollup(inside),
                         "done": sum(1 for w in inside if w in CLOSED), "total": len(inside)})
-    return {"release": release, "updated": now(), "statuses": list(STATUSES),
+    return {"release": release, "format": (load(folder) or {}).get("format") or C.skill_version(),
+            "updated": now(), "statuses": list(STATUSES),
             "sprints": sprints, "epics": epics, "specs": specs, "milestones": milestones, "tasks": tasks}
 
 
@@ -262,7 +268,7 @@ def save(folder, data):
     else:
         write_json(p, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
         CHANGED.append(p)
-    page = {k: v for k, v in data.items() if k in ("release", "updated")}
+    page = {k: v for k, v in data.items() if k in ("release", "format", "updated")}
     page.update(root=str(folder), **{k: v for k, v in data.items() if k not in page})
     write_json(folder / SCRIPT, f"window.STATUS_DATA = {json.dumps(page, indent=2, ensure_ascii=False)};\n")
 

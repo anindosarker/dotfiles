@@ -15,7 +15,7 @@ its first ## Attention bullet, else the detail of its tracker's Status line, fro
 tracker copies status/progress.py reads (the milestone's own worktree included); empty when none
 is found.
 Refreshes status/index.html from templates/swimlanes.html when the template is newer or the
-page is missing. Both are renders, ignored by git (plan/new_cycle.py and migrate/layout.py add
+page is missing. Both are renders, ignored by git (plan/new_cycle.py and migrate/v0.0-v0.1/layout.py add
 the .gitignore lines), never committed. Writes nothing else. sprints/refresh.py runs it last, after
 the grid chain.
 """

@@ -51,6 +51,18 @@ def load(rel):
     return mod
 
 
+def skill_version():
+    """The skill's version, from the one place that holds it: "version" in the "metadata" block
+    of the front matter of SKILL.md."""
+    text = (SCRIPTS.parent / "SKILL.md").read_text(encoding="utf-8")
+    front = re.match(r"\A---\n(.*?)\n---\n", text, re.S)
+    m = re.search(r"^metadata:\n(?:[ \t]+.*\n)*?[ \t]+version:[ \t]*\"?([0-9][0-9.]*)\"?[ \t]*$",
+                  (front.group(1) + "\n") if front else "", re.M)
+    if not m:
+        die("SKILL.md has no metadata version in its front matter")
+    return m.group(1)
+
+
 def script(rel):
     """The path of scripts/<rel>, as messages name it."""
     return SCRIPTS / rel
@@ -170,7 +182,7 @@ def render_ignores(folder, top):
 
 def ensure_gitignore(folder):
     """Append the status render ignores to the repo's .gitignore when missing. plan/new_cycle.py
-    and migrate/layout.py run it before ignore_renders, which then finds nothing missing; the two
+    and migrate/v0.0-v0.1/layout.py run it before ignore_renders, which then finds nothing missing; the two
     differ in the blank line they leave before the lines and in what they print, so each keeps
     its own behaviour."""
     try:
@@ -197,17 +209,17 @@ def release_folder(root, owner, release):
         die(f"release folder missing: {folder}")
     if not (folder / "plan").is_dir():
         die(f"{folder} has the old layout (no plan/): run python3 -I "
-            f"{script('migrate/layout.py')} {release}")
-    old = load("migrate/queue").refusal(folder, release) or load("migrate/decisions").refusal(folder, release)
+            f"{script('migrate/v0.0-v0.1/layout.py')} {release}")
+    old = load("migrate/v0.0-v0.1/queue").refusal(folder, release) or load("migrate/v0.0-v0.1/decisions").refusal(folder, release)
     if old:
         die(old)
     if (folder / LEGACY_OWNERSHIP_MD).is_file():
         die(f"{folder} still has {LEGACY_OWNERSHIP_MD}: run python3 -I "
-            f"{script('migrate/epics.py')} {release}")
+            f"{script('migrate/v0.0-v0.1/epics.py')} {release}")
     fixes = legacy_fixes(folder)
     if fixes:
         die(f"{folder} still has {len(fixes)} free-standing fix trackers ({fixes[0].name}): run python3 -I "
-            f"{script('migrate/fixes.py')} {release} --dry-run, then without --dry-run")
+            f"{script('migrate/v0.0-v0.1/fixes.py')} {release} --dry-run, then without --dry-run")
     return folder
 
 

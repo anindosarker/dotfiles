@@ -3,6 +3,8 @@ name: expedition
 description: Runs long, multi-part work as a release of four stages (discuss, plan, run, triage) in a versioned plan folder, in epics of decisions run by a separate runner session, with a decisions file, one queue file for every item not yet decided, spec folders with modules, task files and milestones, and one status file. Use when the user runs /expedition. Not for small or single-session tasks.
 argument-hint: "<discuss|plan|run|triage> [release, e.g. v0.5.x]"
 disable-model-invocation: true
+metadata:
+  version: "0.2"
 allowed-tools: Bash(python3 -I ${CLAUDE_SKILL_DIR}/scripts/plan/process.py *)
 ---
 
@@ -43,7 +45,7 @@ Mechanical steps use the scripts, never hand-written files. The scripts sit in `
 - `status/progress.py <release>`: the progress reply for the owner (Owner input).
 - The runner's own: `run/runs.py` (the run id record) and `run/check.py` (the wake check).
 
-Each runs as `python3 -I ${CLAUDE_SKILL_DIR}/scripts/<command>`; `run/runner.sh` runs as `${CLAUDE_SKILL_DIR}/scripts/run/runner.sh`. Arguments, what each script writes and what it refuses: [reference/files.md](reference/files.md), Scripts. A script that refuses an old release folder names a `migrate/` script: read [reference/migrate.md](reference/migrate.md) then. Also read it for a release started under an older form of this skill: trackers that say `merged` or `skipped`, or an epic with grid rows and no `Starts:`; no script refuses those.
+Each runs as `python3 -I ${CLAUDE_SKILL_DIR}/scripts/<command>`; `run/runner.sh` runs as `${CLAUDE_SKILL_DIR}/scripts/run/runner.sh`. Arguments, what each script writes and what it refuses: [reference/files.md](reference/files.md), Scripts. A script that refuses an old release folder names a `migrate/` script: read [reference/migrate.md](reference/migrate.md) then. The skill's version is `metadata.version` in this file's front matter, and a release states the format it has in its status file; what each version changed and what a release in work has to do: [CHANGELOG.md](CHANGELOG.md). Also read it for a release started under an older form of this skill: trackers that say `merged` or `skipped`, or an epic with grid rows and no `Starts:`; no script refuses those.
 
 The shape of each authored file: [templates/](templates/). One small release with every kind of file filled in, to read before writing a file of that kind: [example/](example/README.md). File layout, scripts and conventions: [reference/files.md](reference/files.md). What expedition adds to a plan file: [reference/specs.md](reference/specs.md). File formats (decisions, queue, epic file, tracker, handoff): [reference/formats.md](reference/formats.md).
 
