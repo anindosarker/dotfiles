@@ -286,7 +286,7 @@ def new_print(folder, plan, d, own):
         if not bl:
             print(f"  {p.relative_to(folder)}: no '### Milestone:' block")
         for b in bl:
-            if b["files"] is None:
+            if b["files"] is None and b["id"] is None:
                 print(f"  {p.relative_to(folder)}:{b['line']}: milestone {b['name']}: no Files owned line")
     for line in d["missing"]:
         print(f"  {line}")
@@ -354,10 +354,10 @@ def new_print(folder, plan, d, own):
         name = p.relative_to(folder)
         tasks = 0
         for b in d["blocks"][num]:
-            for i, t in b["tasks"]:
+            for t in b["tasks"]:
                 tasks += 1
-                if "Checks:" not in t:
-                    print(f"  {name}:{i}: Task line without Checks")
+                if not t["checks"]:
+                    print(f"  {name}:{t['line']}: Task line without Checks")
                     quiet = False
         if not tasks and not any(GATES_LINE_RE.match(l) for _, l in outside_fences(text)):
             print(f"  {name}: no checks")

@@ -65,10 +65,18 @@ outside_fences, table_rows, insert_row = C.outside_fences, C.table_rows, C.inser
 
 SPEC_FILE_RE = re.compile(r"^(\d{2}(?:\.\d+)?)-([a-z0-9]+(?:-[a-z0-9]+)*)\.md$")
 SPEC_NUM_RE = re.compile(r"^\d{2}(?:\.\d+)?$")
-MILESTONE_RE = re.compile(r"^#{3,4}\s+Milestone:\s*(.+?)\s*$")
+# Two spec forms, told apart per heading. Old: "### Milestone: <name>" with "- Task N:" lines in
+# the block. New: "#### 2.1.3 Task: <title> (D58)" entries, then "#### 2.2.1 Milestone: <name>"
+# blocks with a "- Tasks: 2.1.1, 2.1.2" line; the section number is the id.
+MILESTONE_RE = re.compile(r"^#{3,4}\s+(?:(?P<id>\d+(?:\.\d+)+)\s+)?Milestone:\s*(?P<name>.+?)\s*$")
+TASK_HEAD_RE = re.compile(r"^#{3,5}\s+(\d+(?:\.\d+)+)\s+Task:\s*(.+?)\s*$")
 HEADING_RE = re.compile(r"^#{1,6}\s")
-FIELD_RE = re.compile(r"^\s*(?:-\s*)?(Files owned|Depends on|Review|Starts):\s*(.*?)\s*$")
-TASK_RE = re.compile(r"^\s*-\s*Task\s+\d+:")
+FIELD_RE = re.compile(r"^\s*(?:-\s*)?(Files owned|Depends on|Review|Starts|Tasks):\s*(.*?)\s*$")
+TASK_RE = re.compile(r"^\s*-\s*Task\s+(\d+):\s*(.*)$")
+TASK_FIELD_RE = re.compile(r"^\s*-\s*(Checks|Detail|Plan):\s*(.*?)\s*$")
+TAIL_CITE_RE = re.compile(r"\s*\(((?:D|Q)\d+[^)]*)\)\s*$")
+FRONT_RE = re.compile(r"\A---\n(.*?)\n---\n", re.S)
+SPEC_TYPES = ("structured", "iterative")
 D_CITE_RE = re.compile(r"\((D\d+[^)]*)\)")
 D_ID_RE = re.compile(r"^D(\d+)$")
 EPIC_LINE_RE = re.compile(r"^\s*-\s*Epic:\s*E(\d+)\s*$")
@@ -84,30 +92,90 @@ def split_files(value):
     return [s.strip() for s in value.split(",") if s.strip()]
 
 
-def parse_spec(path):
-    """Milestone blocks of one spec file, in order.
+def front_matter(text):
+    """{key: value} of the "---" block at the top of a file; empty when there is none."""
+    m = FRONT_RE.match(text)
+    out = {}
+    for line in (m.group(1).splitlines() if m else []):
+        k, sep, v = line.partition(":")
+        if sep and k.strip():
+            out[k.strip()] = v.strip()
+    return out
 
-    Each block: dict name, line, files (list or None when the line is missing),
-    deps (raw text or None), review (text or None), starts (column number or None),
-    tasks (list of (line, text)).
+
+def set_front(text, key, value):
+    """The text with front matter line key set to value (None removes it); a file with no front
+    matter gets one."""
+    m = FRONT_RE.match(text)
+    lines = m.group(1).splitlines() if m else []
+    body = text[m.end():] if m else text
+    kept, done = [], False
+    for line in lines:
+        if line.partition(":")[0].strip() == key:
+            if value is not None and not done:
+                kept.append(f"{key}: {value}")
+            done = True
+        else:
+            kept.append(line)
+    if value is not None and not done:
+        kept.append(f"{key}: {value}")
+    return ("---\n" + "\n".join(kept) + "\n---\n" + body) if kept else body
+
+
+def task_title(text):
+    """(title without its trailing cite, the first D id cited there or None)."""
+    m = TAIL_CITE_RE.search(text)
+    d = re.search(r"\bD\d+\b", m.group(1)) if m else None
+    return (text[:m.start()] if m else text).strip().rstrip("."), d.group(0) if d else None
+
+
+def read_spec(path):
+    """One spec file, either form: {"type": structured or iterative, "closed": the front matter
+    value or None, "blocks": the milestone blocks in order, "tasks": {id: task} of the numbered
+    task entries}.
+
+    A block: dict id (the section number, None in the old form), name, line, files (list or None
+    when the line is missing), deps (raw text or None), review (text or None), starts (column
+    number or None), tasks (list of task dicts, in the order the milestone lists them).
+    A task: dict id, line, title, decision (the first D id on its heading or None), checks (True
+    when it names checks), detail and plan (its pointers or None), path (the task file or None).
     """
-    blocks = []
-    cur = None
-    level = None
-    for i, line in outside_fences(read(path)):
+    text = read(path)
+    front = front_matter(text)
+    blocks, tasks = [], {}
+    cur = task = level = None
+    for i, line in outside_fences(text):
         m = MILESTONE_RE.match(line)
+        th = None if m else TASK_HEAD_RE.match(line)
         if m:
-            cur = {"name": m.group(1), "line": i, "files": None, "deps": None,
-                   "review": None, "starts": None, "tasks": []}
-            level = len(line) - len(line.lstrip("#"))
+            cur = {"id": m.group("id"), "name": m.group("name"), "line": i, "files": None, "deps": None,
+                   "review": None, "starts": None, "tasks": [], "task_ids": []}
+            task, level = None, len(line) - len(line.lstrip("#"))
             blocks.append(cur)
             continue
-        if cur is None:
+        if th:
+            title, d = task_title(th.group(2))
+            task = {"id": th.group(1), "line": i, "title": title, "decision": d, "checks": False,
+                    "detail": None, "plan": None, "path": None}
+            tasks[task["id"]] = task
+            cur, level = None, len(line) - len(line.lstrip("#"))
+            continue
+        if cur is None and task is None:
             continue
         if HEADING_RE.match(line) and len(line) - len(line.lstrip("#")) <= level:
-            cur = None
+            cur = task = None
+            continue
+        if task is not None:
+            f = TASK_FIELD_RE.match(line)
+            if f and f.group(1) == "Checks":
+                task["checks"] = True
+            elif f:
+                task[f.group(1).lower()] = f.group(2).strip("`")
+                if f.group(1) == "Plan":
+                    task["path"] = path.parent / task["plan"]
             continue
         f = FIELD_RE.match(line)
+        old = None if f else TASK_RE.match(line)
         if f:
             key, val = f.group(1), f.group(2)
             if key == "Files owned":
@@ -117,11 +185,25 @@ def parse_spec(path):
             elif key == "Starts":
                 s = SPRINT_VALUE_RE.match(val)
                 cur["starts"] = int(s.group(1)) if s else None
+            elif key == "Tasks":
+                cur["task_ids"] = [x.strip() for x in val.split(",") if x.strip()]
             else:
                 cur["review"] = val
-        elif TASK_RE.match(line):
-            cur["tasks"].append((i, line.strip()))
-    return blocks
+        elif old:
+            d = re.search(r"\((D\d+)[^)]*\)", old.group(2))
+            cur["tasks"].append({"id": old.group(1), "line": i, "title": line.strip(),
+                                 "decision": d.group(1) if d else None, "checks": "Checks:" in line,
+                                 "detail": None, "plan": None, "path": None})
+    for b in blocks:
+        b["tasks"] += [tasks[x] for x in b.pop("task_ids") if x in tasks]
+    kind = front.get("type")
+    return {"type": kind if kind in SPEC_TYPES else "structured", "closed": front.get("closed") or None,
+            "blocks": blocks, "tasks": tasks}
+
+
+def parse_spec(path):
+    """Milestone blocks of one spec file, in order (read_spec)."""
+    return read_spec(path)["blocks"]
 
 
 def spec_files(folder):
@@ -130,9 +212,11 @@ def spec_files(folder):
         return []
     out = []
     for p in d.iterdir():
-        m = SPEC_FILE_RE.match(p.name)
-        if p.is_file() and m:
-            out.append((m.group(1), p))
+        # A spec is the file NN-<slug>.md, or the folder NN-<slug>/ holding a file of that name.
+        f = p / f"{p.name}.md" if p.is_dir() else p
+        m = SPEC_FILE_RE.match(f.name)
+        if f.is_file() and m:
+            out.append((m.group(1), f))
     return sorted(out, key=lambda x: num_key(x[0]))
 
 
@@ -188,13 +272,15 @@ def collect(folder):
         where = f"{b['path'].relative_to(folder)}:{b['line']}"
         if "|" in b["name"]:
             errors.append(f"{where}: milestone name '{b['name']}' contains '|'")
-        if b["files"] is None:
+        if b["files"] is None and b["id"] is None:
             errors.append(f"{where}: milestone '{b['name']}' has no Files owned line")
         for f in b["files"] or []:
             if "|" in f:
                 errors.append(f"{where}: file '{f}' contains '|'")
         deps, unknown = resolve_deps(b["deps"], [n for n in names if n != b["name"]], specs)
         deps = [d for d in deps if d != b["name"]]
+        if b["deps"] is None and b["id"] is not None and i and raw[i - 1]["spec"] == b["spec"]:
+            deps = [raw[i - 1]["name"]]  # new form: with no Depends on line, the listed order
         for u in unknown:
             errors.append(f"{where}: milestone '{b['name']}' depends on unknown '{u}'")
         out.append({"name": b["name"], "spec": b["spec"], "order": i, "deps": deps,

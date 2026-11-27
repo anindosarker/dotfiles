@@ -182,7 +182,7 @@ class Go:
         specs, _ = self.specs()
         paths = []
         for s in specs:
-            paths += sorted((self.folder / self.own.SPECS_DIR).glob(f"{s}-*.md"))
+            paths += sorted((self.folder / self.own.SPECS_DIR).glob(f"{s}-*"))
             paths += sorted((self.folder / self.own.TRACKERS_DIR).glob(f"{s}-*-tracker.md"))
         paths += [self.folder / "decisions.md", self.folder / self.own.QUEUE_MD,
                   self.folder / f"{self.release}-plan.md", self.path]
