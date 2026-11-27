@@ -5,7 +5,7 @@
 # (reference/run.md).
 #
 # Usage: runner.sh start <release> [--model M] [--new [--name NAME]] [--from <lead>] [--cwd PATH]   reuse the live runner, resume a dead one, or open the next number; --new opens another runner beside the live one, named NAME when given
-#        runner.sh list                          registry entries with busy or idle, release and kind
+#        runner.sh list [<release>]              registry entries with busy or idle, release and kind; of one release when named
 #        runner.sh stop <release>                close the window, mark the entry stopped
 #        runner.sh send [--from <lead>] <release> "<line>"   type "ultracode <line>" into the runner window
 #                                                and submit it (typed prompts opt the turn in to
@@ -83,7 +83,7 @@ transcript_exists() {
 die() { echo "error: $*" >&2; exit 1; }
 
 usage() {
-  echo "usage: runner.sh start <release> [--model M] [--new [--name NAME]] [--from <lead>] [--cwd PATH] | list | stop <release or window name> | send <release> \"<line>\" | resume <release or window name> | fork <release> E<n> \"<D ids>\" --from <lead> [--model M] [--cwd PATH] | adopt <release> [--uuid UUID] [--pane PANE] [--replaces <name>] | watch start|stop|status" >&2
+  echo "usage: runner.sh start <release> [--model M] [--new [--name NAME]] [--from <lead>] [--cwd PATH] | list [<release>] | stop <release or window name> | send <release> \"<line>\" | resume <release or window name> | fork <release> E<n> \"<D ids>\" --from <lead> [--model M] [--cwd PATH] | adopt <release> [--uuid UUID] [--pane PANE] [--replaces <name>] | watch start|stop|status" >&2
   exit 2
 }
 
@@ -417,6 +417,7 @@ cmd_start() {
 cmd_list() {
   local rows
   rows="$(reg all)"
+  [ -z "${1:-}" ] || rows="$(awk -F'\t' -v r="$1" '$5 == r' <<< "$rows")"
   if [ -z "$rows" ]; then
     echo "no runners"
     return 0
@@ -658,7 +659,7 @@ cmd_send() {
 sub="$1"; shift
 case "$sub" in
   start) cmd_start "$@" ;;
-  list) [ $# -eq 0 ] || usage; cmd_list ;;
+  list) [ $# -le 1 ] || usage; cmd_list "${1:-}" ;;
   stop) cmd_stop "$@" ;;
   send) cmd_send "$@" ;;
   resume) cmd_resume "$@" ;;
