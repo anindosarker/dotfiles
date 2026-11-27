@@ -46,6 +46,9 @@
     {
       "id": "27-settings-pages-in-sidebar",
       "name": "Settings pages in sidebar",
+      "number": 1,
+      "section": "2.2.1",
+      "ref": "27.1",
       "epic": "E11",
       "spec": "27",
       "sprint": "S1",
@@ -61,6 +64,9 @@
     {
       "id": "27-collapse-shortcut",
       "name": "Collapse shortcut",
+      "number": 2,
+      "section": "2.2.2",
+      "ref": "27.2",
       "epic": "E11",
       "spec": "27",
       "sprint": "S1",
@@ -76,6 +82,9 @@
     {
       "id": "27-layout-picker",
       "name": "Layout picker",
+      "number": 3,
+      "section": "2.2.3",
+      "ref": "27.3",
       "epic": "E11",
       "spec": "27",
       "sprint": "S2",
@@ -93,6 +102,9 @@
     {
       "id": "27-sidebar-menus-keep-their-blur",
       "name": "Sidebar menus keep their blur",
+      "number": 4,
+      "section": "2.2.4",
+      "ref": "27.4",
       "epic": "E11",
       "spec": "27",
       "sprint": "S2",

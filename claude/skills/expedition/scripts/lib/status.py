@@ -168,11 +168,13 @@ def build(folder, release, stored=None):
     for num, p in coll["docs"]:
         placed = set()
         epic = f"E{epic_of[num]}" if epic_of.get(num) else ""
-        for b in coll["blocks"][num]:
+        for k, b in enumerate(coll["blocks"][num], 1):
             mid = stem[b["name"]]
             m = by_name.get(b["name"], {})
             col = gcols.get(b["name"])
-            e = {"id": mid, "name": b["name"], "epic": epic, "spec": num, "sprint": f"S{col}" if col else ""}
+            n = int(b["id"].rsplit(".", 1)[1]) if b["id"] else k
+            e = {"id": mid, "name": b["name"], "number": n, "section": b["id"] or f"2.2.{n}", "ref": f"{num}.{n}",
+                 "epic": epic, "spec": num, "sprint": f"S{col}" if col else ""}
             e.update(keep(old_m.get(mid, {}), with_commit=True))
             e.update(critical=b["name"] in comp["paths"].get(epic_of.get(num), []),
                      depends=[stem[d] for d in m.get("deps", []) if d in stem],
