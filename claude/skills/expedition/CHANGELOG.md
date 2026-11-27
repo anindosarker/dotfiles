@@ -12,7 +12,9 @@ What is new:
 - A task whose only open check is the owner's own look is blocked with that reason, and shows as such.
 - A release in format 2.0 has the task board at `status/index.html`, in place of the swimlane page. It reads `status/data/status.data.js`, written from the status file on every change, and reloads every 30 seconds.
 - The process file starts from a short template and carries `updated`, the time its facts were last checked.
-- `templates/` holds the shape of every authored file, and `example/` one small release with every kind of file filled in.
+- `templates/` holds the shape of every authored file, `example/` one small release with every kind of file filled in, and `board/` the status pages.
+- `SKILL.md` is short; the detail of each stage is in its own file under `reference/` (`discuss.md`, `plan.md`, `run.md`, `triage.md`), the commands in `reference/scripts.md`. `reference/planning-guidelines.md` describes the 2.0 plan file; the 1.0 text is in `reference/old-form/`.
+- `plan/new_cycle.py` is now `plan/new_release.py`; the old name still runs it.
 - Migrations sit in `scripts/migrate/`, one folder per version step, each with a guide.
 
 What changes for a release in work:
@@ -23,7 +25,7 @@ What changes for a release in work:
 
 What stops working:
 
-- `plan/close_spec.py` and spec types never shipped; nothing is removed that a 1.0 release used.
+- Nothing that a 1.0 release used is removed.
 - In a migrated or new release, a status is no longer written into a tracker or the grid by hand or by a prompt: `sprints/mark.py` needs `--reason` for a wait or a stop and `--commit` for a merge.
 
 Migration: [scripts/migrate/v1.0-v2.0/README.md](scripts/migrate/v1.0-v2.0/README.md).

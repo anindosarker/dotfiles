@@ -1,5 +1,7 @@
 # Expedition
 
+Requires: tmux, the `claude` command, python3.
+
 Expedition is a skill for long work that does not fit one session. It keeps the plan of a release in a folder of plain files, lets the owner decide things in conversation, and has a second session build what was decided while the conversation goes on. This page explains how it fits together. The rules the agent follows are in `SKILL.md`.
 
 ## The three roles
@@ -23,8 +25,9 @@ Expedition is a skill for long work that does not fit one session. It keeps the 
 ```
 SKILL.md          the rules for the agent, and the skill's version
 CHANGELOG.md      what each version changed
-reference/        the longer rules: files, formats, the run, triage, migrations
+reference/        one file per stage (discuss, plan, run, triage), then files, formats, scripts, migrations
 templates/        the shape of each file the agent writes
+board/            the status pages
 example/          one small release with every kind of file filled in
 scripts/          the commands that do the mechanical steps
   plan/           new release, new spec, new milestone, new task
