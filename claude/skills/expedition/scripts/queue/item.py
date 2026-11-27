@@ -55,6 +55,13 @@ SOURCE_RE = re.compile(r"^Q\d+$")
 die = C.die
 
 
+
+class _Once(argparse.Action):
+    def __call__(self, parser, ns, value, option_string=None):
+        if getattr(ns, self.dest) is not None:
+            parser.error(f"{option_string} is given twice: one bullet per card, add more with --fact")
+        setattr(ns, self.dest, value)
+
 def main():
     ap = argparse.ArgumentParser(
         usage='queue/item.py <release> D|Q "<title>" [--source Q<n>] [--bullet "<text>"] [--new-round] | '
@@ -67,7 +74,7 @@ def main():
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: found from the cwd)")
     ap.add_argument("--source")
-    ap.add_argument("--bullet")
+    ap.add_argument("--bullet", action=_Once)
     ap.add_argument("--move", nargs=2, metavar=("Q<n>", "LANE"))
     ap.add_argument("--fact", nargs=2, metavar=("Q<n>", "TEXT"))
     ap.add_argument("--new-round", action="store_true")
