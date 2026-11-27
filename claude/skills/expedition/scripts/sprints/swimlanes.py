@@ -18,7 +18,7 @@ In a release with status/data/status.json none of that is written: the page is
 templates/task-board.html, which reads status/data/status.data.js (lib/status.py), and this
 script only keeps the page and that file current (refresh_board).
 Refreshes status/index.html from templates/swimlanes.html when the template is newer or the
-page is missing. Both are renders, ignored by git (plan/new_cycle.py and migrate/v0.0-v0.1/layout.py add
+page is missing. Both are renders, ignored by git (plan/new_cycle.py and migrate/pre-v1.0/layout.py add
 the .gitignore lines), never committed. Writes nothing else. sprints/refresh.py runs it last, after
 the grid chain.
 """

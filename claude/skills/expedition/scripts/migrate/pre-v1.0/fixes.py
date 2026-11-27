@@ -3,7 +3,7 @@
 run/trackers/fix-<slug>-tracker.md (a tracker and a "fix <name>" grid row, no spec, no epic)
 becomes a follow-up spec with one milestone inside an epic.
 
-Usage: python3 -I migrate/v0.0-v0.1/fixes.py <release> [--dry-run] [--map <slug>=E<n>:<NN>]...
+Usage: python3 -I migrate/pre-v1.0/fixes.py <release> [--dry-run] [--map <slug>=E<n>:<NN>]...
        [--owner X] [--root PATH]
 
 Epic and parent spec of each fix, from the first evidence that decides:
@@ -73,7 +73,7 @@ die = C.die
 
 def load(name):
     """The scripts this one used under their old names: ownership, board, migrate_queue."""
-    return C.load({"ownership": "lib/ownership", "board": "lib/board", "migrate_queue": "migrate/v0.0-v0.1/queue"}[name])
+    return C.load({"ownership": "lib/ownership", "board": "lib/board", "migrate_queue": "migrate/pre-v1.0/queue"}[name])
 
 
 def parse_tracker(own, path):
@@ -281,7 +281,7 @@ def rewrite_refs(text, old_name, new_rel, slug, num, tokens):
 
 
 def main():
-    ap = argparse.ArgumentParser(usage="migrate/v0.0-v0.1/fixes.py <release> [--dry-run] [--map <slug>=E<n>:<NN>]... "
+    ap = argparse.ArgumentParser(usage="migrate/pre-v1.0/fixes.py <release> [--dry-run] [--map <slug>=E<n>:<NN>]... "
                                        "[--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("--dry-run", action="store_true")
@@ -299,7 +299,7 @@ def main():
         die(f"release folder missing: {folder}")
     if not (folder / "plan").is_dir():
         die(f"{folder} has the old layout (no plan/): run python3 -I {HERE / 'layout.py'} {a.release}")
-    old = load("migrate_queue").refusal(folder, a.release) or C.load("migrate/v0.0-v0.1/decisions").refusal(folder, a.release)
+    old = load("migrate_queue").refusal(folder, a.release) or C.load("migrate/pre-v1.0/decisions").refusal(folder, a.release)
     if old:
         die(old)
     if (folder / own.LEGACY_OWNERSHIP_MD).is_file():

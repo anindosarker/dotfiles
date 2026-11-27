@@ -1,10 +1,10 @@
-# Migrations up to v0.1
+# Migrations before v1.0
 
 Scripts for release folders made before the skill kept versions. Each one runs once per release. A current script that refuses a folder names the script to run.
 
 ## Who needs it
 
-A release folder that a script refuses with one line naming a script of this folder, or one of the cases below. A release made with v0.1 or later needs none of them.
+A release folder that a script refuses with one line naming a script of this folder, or one of the cases below. A release made with v1.0 or later needs none of them.
 
 ## Before you start
 
@@ -17,7 +17,7 @@ A release folder that a script refuses with one line naming a script of this fol
 
 | Order | Command | For a folder that |
 |---|---|---|
-| 1 | `python3 -I <skill>/scripts/migrate/v0.0-v0.1/layout.py <release>` | has the flat layout, no `plan/` folder. It then runs steps 2 to 4 itself when they are needed |
+| 1 | `python3 -I <skill>/scripts/migrate/pre-v1.0/layout.py <release>` | has the flat layout, no `plan/` folder. It then runs steps 2 to 4 itself when they are needed |
 | 2 | `.../decisions.py <release>` | has a `decisions.md` in the heading format (`## Round`, `### D<n>`) |
 | 3 | `.../queue.py <release>` | has `findings.md` or `run/attentions/`, or a `queue.md` in the old card format |
 | 4 | `.../epics.py <release>` | still has `status/ownership.md` |
@@ -44,7 +44,7 @@ Each script writes one commit, or leaves its changes for you to commit: `git rev
 ## Prompt for a lead session
 
 ```
-Release <release> was made before the expedition skill kept versions. Read scripts/migrate/v0.0-v0.1/README.md.
+Release <release> was made before the expedition skill kept versions. Read scripts/migrate/pre-v1.0/README.md.
 Run status/report.py <release>. For each line that names a script of that folder, run the script with --dry-run, read its lines, then run it without. Follow the order of the README.
 If the sprint grid has a running milestone, do nothing and tell me which ones run.
 Do not stop, replace or restart any session or Workflow for this.

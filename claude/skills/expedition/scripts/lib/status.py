@@ -110,8 +110,8 @@ def home(root, folder):
 
 
 def release_format(folder):
-    """The format a release is in: the "format" key of its status file; "0.1" with no file."""
-    return (load(folder) or {}).get("format") or "0.1"
+    """The format a release is in: the "format" key of its status file; "1.0" with no file."""
+    return (load(folder) or {}).get("format") or "1.0"
 
 
 def entries(folder):

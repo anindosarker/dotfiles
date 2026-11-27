@@ -2,7 +2,7 @@
 """Move a release that is in work from the earlier form to the present one: spec folders with
 task files, and status/data/status.json as the store of every status.
 
-Usage: python3 -I migrate/v0.1-v0.2/format.py <release> [--dry-run] [--force] [--owner X] [--root PATH]
+Usage: python3 -I migrate/v1.0-v2.0/format.py <release> [--dry-run] [--force] [--owner X] [--root PATH]
 
 In the release folder:
 - Each flat spec plan/specs/NN-<slug>.md moves (git mv) to plan/specs/NN-<slug>/NN-<slug>.md
@@ -42,7 +42,7 @@ milestones); they must be equal, else nothing is committed. --dry-run prints the
 writes nothing. A second run finds status.json and changes nothing.
 
 Refuses: a release that has status.json already (nothing to do); a release folder with
-uncommitted changes; free-standing fix trackers (migrate/v0.0-v0.1/fixes.py first); milestones that do
+uncommitted changes; free-standing fix trackers (migrate/pre-v1.0/fixes.py first); milestones that do
 not schedule; a running milestone ("[ ]") unless --force: a builder in the middle of a
 milestone holds the earlier text, so let it merge first or tell it.
 """
@@ -232,7 +232,7 @@ def counts(own, st, folder):
 
 
 def main():
-    ap = argparse.ArgumentParser(usage="migrate/v0.1-v0.2/format.py <release> [--dry-run] [--force] [--owner X] [--root PATH]")
+    ap = argparse.ArgumentParser(usage="migrate/v1.0-v2.0/format.py <release> [--dry-run] [--force] [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--force", action="store_true", help="migrate while a milestone is running")
@@ -247,7 +247,7 @@ def main():
         print(f"{folder / st.FILE} exists: the release has the present form, nothing to change")
         return
     if C.legacy_fixes(folder):
-        C.die(f"{folder} has free-standing fix trackers: run migrate/v0.0-v0.1/fixes.py first")
+        C.die(f"{folder} has free-standing fix trackers: run migrate/pre-v1.0/fixes.py first")
     real = folder.resolve()
     git = lambda *args: subprocess.run(["git", "-C", str(real), *args], capture_output=True, text=True)
     if git("status", "--porcelain", "--", ".").stdout.strip():

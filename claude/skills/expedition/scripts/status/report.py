@@ -45,10 +45,10 @@ Checks, no Acceptance line; milestones sprints/check.py would refuse (collision,
 status/sprints.md missing, without a "| Milestone" grid, with text under the grid, with a cell
 not one of [x], [ ], [~], ·, [!] or blank, or with rows that differ from the milestones of the specs
 with an Epic line. Ownership also prints each tagged epic's critical path,
-computed on the fly. A folder without plan/ is refused (migrate/v0.0-v0.1/layout.py), a folder still on
-the old queue files too (migrate/v0.0-v0.1/queue.py), a decisions.md in the heading format too
-(migrate/v0.0-v0.1/decisions.py), a folder that still has status/ownership.md too
-(migrate/v0.0-v0.1/epics.py), a folder that still has run/trackers/fix-*-tracker.md too (migrate/v0.0-v0.1/fixes.py).
+computed on the fly. A folder without plan/ is refused (migrate/pre-v1.0/layout.py), a folder still on
+the old queue files too (migrate/pre-v1.0/queue.py), a decisions.md in the heading format too
+(migrate/pre-v1.0/decisions.py), a folder that still has status/ownership.md too
+(migrate/pre-v1.0/epics.py), a folder that still has run/trackers/fix-*-tracker.md too (migrate/pre-v1.0/fixes.py).
 A tracker Status of done (or the old merged) counts as done. A tracker no milestone owns counts as citing the
 queue cards named on its first line.
 """
@@ -542,7 +542,7 @@ def main():
     for e in sorted(set(marks) | {n for n, v in starts.items() if v}):
         v = starts.get(e)
         if e in marks and e in starts and not v:
-            print(f"  E{e} has rows in status/sprints.md and no Starts value: migrate/v0.0-v0.1/backfill_starts.py {a.release}")
+            print(f"  E{e} has rows in status/sprints.md and no Starts value: migrate/pre-v1.0/backfill_starts.py {a.release}")
         elif v and not own.SPRINT_VALUE_RE.match(v):
             print(f"  plan/epics/E{e}.md: Starts '{v}' is not S<number>")
     for gap in own.epic_gaps(folder, own.compute(folder)):

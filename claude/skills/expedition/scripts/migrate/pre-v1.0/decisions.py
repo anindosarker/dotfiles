@@ -3,7 +3,7 @@
 items, a tag line "[E<n>]", "[Done]  [E<n>]" or "[Done]" under a heading) in place into the
 kanban board of lib/decisions.py.
 
-Usage: python3 -I migrate/v0.0-v0.1/decisions.py <release> [--dry-run] [--owner X] [--root PATH]
+Usage: python3 -I migrate/pre-v1.0/decisions.py <release> [--dry-run] [--owner X] [--root PATH]
 
 Lossless: every decision becomes one card "- [ ] **D<n>** <title> <tags>" with its title (a
 "(superseded by D<n>)" mark moved to the end of the title) and every non-blank line of its body,
@@ -149,7 +149,7 @@ def convert(folder, release, text):
 
 
 def main():
-    ap = argparse.ArgumentParser(usage="migrate/v0.0-v0.1/decisions.py <release> [--dry-run] [--owner X] [--root PATH]")
+    ap = argparse.ArgumentParser(usage="migrate/pre-v1.0/decisions.py <release> [--dry-run] [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--owner")

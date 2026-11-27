@@ -67,4 +67,4 @@ Read `CHANGELOG.md` first: it says what is new and what a release in work has to
 
 ## The status board data
 
-A release in format 0.2 has the task board at `status/index.html`: open that file in a browser. It shows the epics, sprints, milestones and tasks with their statuses and reloads its data every 30 seconds. Its data is `status/data/status.data.js`, written from `status/data/status.json` on every status change. `reference/formats.md`, section Status, lists what the file holds.
+A release in format 2.0 has the task board at `status/index.html`: open that file in a browser. It shows the epics, sprints, milestones and tasks with their statuses and reloads its data every 30 seconds. Its data is `status/data/status.data.js`, written from `status/data/status.json` on every status change. `reference/formats.md`, section Status, lists what the file holds.

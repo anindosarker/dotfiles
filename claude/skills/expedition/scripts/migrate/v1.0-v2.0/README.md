@@ -1,4 +1,4 @@
-# Migration v0.1 to v0.2
+# Migration v1.0 to v2.0
 
 Moves one release that is in work from flat spec files and tracker statuses to spec folders, task files and the status file.
 
@@ -17,8 +17,8 @@ A release folder that has no `status/data/status.json`. `status/report.py <relea
 `<skill>` is the skill's folder. Run from the project folder.
 
 ```
-python3 -I <skill>/scripts/migrate/v0.1-v0.2/format.py <release> --dry-run
-python3 -I <skill>/scripts/migrate/v0.1-v0.2/format.py <release>
+python3 -I <skill>/scripts/migrate/v1.0-v2.0/format.py <release> --dry-run
+python3 -I <skill>/scripts/migrate/v1.0-v2.0/format.py <release>
 ```
 
 The dry run prints one line per spec and the counts, and writes nothing. `--force` runs it while a milestone is running; use it only when that builder has been told.
@@ -44,9 +44,9 @@ It is one commit in the repository that holds the plan folder: `git revert <that
 ## Prompt for a lead session
 
 ```
-The expedition skill is now v0.2. Read its CHANGELOG.md and scripts/migrate/v0.1-v0.2/README.md, then re-read SKILL.md whole.
+The expedition skill is now v2.0. Read its CHANGELOG.md and scripts/migrate/v1.0-v2.0/README.md, then re-read SKILL.md whole.
 For release <release>: save the output of sprints/check.py, status/report.py and status/progress.py. If the sprint grid has a running milestone, do not migrate now: tell me which ones run and wait for my word.
-Otherwise run migrate/v0.1-v0.2/format.py <release> --dry-run, read its lines, then run it without --dry-run. Run the three reports again and compare them with the saved ones.
+Otherwise run migrate/v1.0-v2.0/format.py <release> --dry-run, read its lines, then run it without --dry-run. Run the three reports again and compare them with the saved ones.
 Do not stop, replace or restart any session or Workflow for this.
 Report in under five lines.
 ```

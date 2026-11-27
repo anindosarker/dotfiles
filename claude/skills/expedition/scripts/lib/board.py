@@ -25,7 +25,7 @@ The extension may drop the frontmatter when it saves its settings: a file with a
 and a "## Open" lane is still a board, and write() restores the frontmatter.
 
 Old card format (a from tag "#owner", "#lead", "#lookup", "#run", "#run-E<n>" on the title
-line, or a "Decision: D<n>" sub-bullet): is_old() is true, and only migrate/v0.0-v0.1/queue.py reads it.
+line, or a "Decision: D<n>" sub-bullet): is_old() is true, and only migrate/pre-v1.0/queue.py reads it.
 """
 import fcntl
 import re

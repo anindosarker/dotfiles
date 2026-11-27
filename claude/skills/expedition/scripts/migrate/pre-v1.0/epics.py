@@ -2,7 +2,7 @@
 """Move a release folder off status/ownership.md: the ownership facts are computed in memory
 (lib/ownership.py compute) and each epic file carries its own "## Ownership" table.
 
-Usage: python3 -I migrate/v0.0-v0.1/epics.py <release> [--dry-run] [--owner X] [--root PATH]
+Usage: python3 -I migrate/pre-v1.0/epics.py <release> [--dry-run] [--owner X] [--root PATH]
 
 For every plan/epics/E<n>.md without an "## Ownership" section: writes the table from the specs
 (reference/formats.md, Epic file): one row per decision of the "Decisions:" line and spec of the
@@ -17,7 +17,7 @@ status/ownership.md is removed with git rm.
 
 Prints one line per epic file. --dry-run prints the same and writes nothing. Commits nothing. A
 second run changes nothing. Every other script refuses a folder that still has
-status/ownership.md, with one line naming this script; migrate/v0.0-v0.1/layout.py runs it.
+status/ownership.md, with one line naming this script; migrate/pre-v1.0/layout.py runs it.
 """
 import argparse
 import importlib.util
@@ -45,8 +45,8 @@ die = C.die
 
 
 def load(name):
-    """lib/ownership.py and migrate/v0.0-v0.1/queue.py, by their old names."""
-    return C.load({"ownership": "lib/ownership", "migrate_queue": "migrate/v0.0-v0.1/queue"}[name])
+    """lib/ownership.py and migrate/pre-v1.0/queue.py, by their old names."""
+    return C.load({"ownership": "lib/ownership", "migrate_queue": "migrate/pre-v1.0/queue"}[name])
 
 
 def drop_empty_notes(own, text):
@@ -66,7 +66,7 @@ def drop_empty_notes(own, text):
 
 
 def main():
-    ap = argparse.ArgumentParser(usage="migrate/v0.0-v0.1/epics.py <release> [--dry-run] [--owner X] [--root PATH]")
+    ap = argparse.ArgumentParser(usage="migrate/pre-v1.0/epics.py <release> [--dry-run] [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--owner")
@@ -81,7 +81,7 @@ def main():
         die(f"release folder missing: {folder}")
     if not (folder / "plan").is_dir():
         die(f"{folder} has the old layout (no plan/): run python3 -I {HERE / 'layout.py'} {a.release}")
-    old = load("migrate_queue").refusal(folder, a.release) or C.load("migrate/v0.0-v0.1/decisions").refusal(folder, a.release)
+    old = load("migrate_queue").refusal(folder, a.release) or C.load("migrate/pre-v1.0/decisions").refusal(folder, a.release)
     if old:
         die(old)
     comp = own.compute(folder)

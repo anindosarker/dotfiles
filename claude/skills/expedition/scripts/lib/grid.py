@@ -27,7 +27,7 @@ epic that has gone (a Starts value, not every decision in Done), touching only t
 decisions.md moved to the lanes of the Done rule (lib/decisions.py sync), so a merge reaches
 the board; then the Decided cards of queue.md synced with those lanes (lib/board.py sync: the
 tick and the #E<n> tag). sprints/refresh.py,
-sprints/mark.py, run/go.py (through sprints/refresh.py), plan/milestone.py and migrate/v0.0-v0.1/fixes.py use
+sprints/mark.py, run/go.py (through sprints/refresh.py), plan/milestone.py and migrate/pre-v1.0/fixes.py use
 refresh(); the swimlane data (sprints/swimlanes.py) follows it. set_mark() sets one run cell for
 sprints/mark.py, the only writer of the marks; resume_mark() is the cell a resume sets.
 """

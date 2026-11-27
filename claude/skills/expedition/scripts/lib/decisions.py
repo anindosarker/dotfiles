@@ -21,9 +21,9 @@ The lane is the state, from the Done rule (rule_lanes):
    every milestone tracker of every own spec is done or stopped, else In progress. In a
    new-form spec (modules, task pointers, numbered milestones) only the milestones count that
    hold a task of a module citing it; a citing module with no task in a milestone keeps it In
-   progress, except in a spec migrate/v0.1-v0.2/format.py marked "migrated: true".
+   progress, except in a spec migrate/v1.0-v2.0/format.py marked "migrated: true".
 3. No such row: Done when it is closed by hand (a ticked card in Done: decisions/close.py writes
-   it for a decision with nothing to run, migrate/v0.0-v0.1/decisions.py for an old "[Done]" tag line) or
+   it for a decision with nothing to run, migrate/pre-v1.0/decisions.py for an old "[Done]" tag line) or
    when any spec citing it has merged; In progress when it carries "#E<n>"; else To do.
 The checkbox is [x] only in Done. sync() moves every card whose lane disagrees with the rule,
 sets every card's tick to its lane and writes its tags in the order above; the scripts are the
@@ -219,7 +219,7 @@ def spec_state(folder, num, path):
             placed.add(t["module"])
             for d in t["cites"]:
                 per[d] = per.get(d, True) and done
-    pure = bool(doc["tasks"]) and "migrated" not in doc["front"]  # migrate/v0.1-v0.2/format.py: modules older than the tasks
+    pure = bool(doc["tasks"]) and "migrated" not in doc["front"]  # migrate/v1.0-v2.0/format.py: modules older than the tasks
     for mod, cites in (doc["modules"].items() if pure else ()):
         if mod not in placed:
             for d in cites:
