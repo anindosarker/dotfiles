@@ -46,27 +46,13 @@ def write_new(path, text):
 
 def from_template(name, release, today):
     """The template with the release filled in."""
-    path = C.TEMPLATES / name
-    if not path.is_file():
-        die(f"template missing: {path}")
     out = [line.replace("[release]", release).replace("[cycle]", release)
-           for line in path.read_text(encoding="utf-8").splitlines()]
+           for line in C.template(name).splitlines()]
     return "\n".join(out) + "\n"
 
 
 def release_key(name):
     return tuple(int(x) for x in re.findall(r"\d+", name))
-
-
-def repo_name(root):
-    """The project repo's folder name when the plan folder is inside that repo (its main
-    checkout or a worktree of it), else None: root is in no git repo, or a folder below it is
-    a repo of its own (plans in the root)."""
-    r = subprocess.run(["git", "-C", str(root), "rev-parse", "--path-format=absolute", "--git-common-dir"],
-                       capture_output=True, text=True)
-    if r.returncode or any((d / ".git").exists() for d in root.iterdir() if d.is_dir()):
-        return None
-    return Path(r.stdout.strip()).parent.name
 
 
 def process_text(root, owner, release):
@@ -81,17 +67,10 @@ def process_text(root, owner, release):
         text = src.read_text(encoding="utf-8")
         text = re.sub(r"^# (?:Expedition process|Process), .*$", f"# Process, {release}", text, count=1, flags=re.M)
         print(f"process.md copied from {src.relative_to(root)}; trim it for this release")
-        return text
-    tpl = C.TEMPLATES / "process.md"
-    if not tpl.is_file():
-        die(f"template missing: {tpl}")
-    print("process.md from the skill template; fill every [...] placeholder")
-    text = tpl.read_text(encoding="utf-8").replace("[release]", release, 1)
-    repo = repo_name(root)
-    if repo:
-        text = (text.replace("[plan folder]", f"{repo}/.ai/plans/").replace("[plan repo]", repo)
-                .replace("[repo]", repo))
-    return text
+    else:
+        print("process.md from the skill template; write one topic per project fact")
+        text = C.template("process.md").replace("[release]", release, 1)
+    return C.load("lib/ownership").set_front(text, "updated", f"{datetime.datetime.now():%Y-%m-%d %H:%M}")
 
 
 
@@ -123,16 +102,14 @@ def main():
     C.ignore_renders(folder)
     write_new(folder / "process.md", process_text(root, owner, a.release))
     c = a.release
-    write_new(folder / f"{c}-plan.md", (
-        f"# {c} plan\n\n"
-        "Decisions: [decisions.md](decisions.md). Sprints: [status/sprints.md](status/sprints.md). "
-        "Specs implement decisions and never re-decide.\n\n"
-        "## Goals\n\n- \n\n"
-        "## Deliverables\n\n| # | Spec | Epic | Scope |\n|---|---|---|---|\n"
-    ))
+    plan = "".join(l + "\n" for l in from_template("plan.md", c, None).splitlines() if not l.startswith("| [NN]"))
+    write_new(folder / f"{c}-plan.md", plan)
     today = datetime.date.today().isoformat()
     write_new(folder / "decisions.md", from_template("decisions.md", c, today))
     write_new(folder / "queue.md", from_template("queue.md", c, today))
+    st = C.load("lib/status")
+    st.save(folder, st.build(folder, c, ({}, {})))
+    print(st.path(folder))
 
 
 if __name__ == "__main__":

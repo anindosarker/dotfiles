@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
-"""Create a spec in a release: its folder and file (plan/specs/NN-<slug>/NN-<slug>.md), the
-tracker of its first milestone (run/trackers/NN-<slug>-tracker.md), and the row
-"| NN | [Title](plan/specs/NN-<slug>/NN-<slug>.md) |  | scope |" (Epic cell empty) in the
-Deliverables table of <release>-plan.md.
+"""Create a spec in a release: its folder plan/specs/NN-<slug>/ with the file NN-<slug>.md and
+the empty folder tasks/, and the row "| NN | [Title](plan/specs/NN-<slug>/NN-<slug>.md) |  |
+scope |" (Epic cell empty) in the Deliverables table of <release>-plan.md.
 
 Usage: python3 -I plan/new_spec.py <release> <num> <slug> "<Title>" "<scope>"
-       [--type structured|iterative] [--owner X] [--template PATH] [--root PATH]
+       [--owner X] [--template PATH] [--root PATH]
 
-Template: --template PATH; else, for --type iterative, the bundled templates/spec-iterative.md
-(a short scope and the open milestone "<Title> round 1"); else a contract stub when the project
-has planning rules (plan/find_rules.py); else the bundled templates/spec.md. Section 2.1 holds
-the task entries, 2.2 one "#### 2.2.N Milestone: [name]" block per milestone with its Tasks
-line; fill them, then run sprints/check.py and sprints/refresh.py. A later milestone's tracker
-is run/trackers/NN-<milestone-slug>-tracker.md. Later milestones and tasks: plan/milestone.py
-and plan/task.py.
+Template: --template PATH, else a contract stub when the project has planning rules
+(plan/find_rules.py), else the bundled templates/spec.md, without its note and with the
+sections 1.6 Modules, 2.1 Tasks and 2.2 Milestones empty. Write section 1, then add each piece
+of work with plan/milestone.py add: it writes the module heading, the task files, the task
+pointers, the milestone block and the milestone's tracker. Then run sprints/check.py.
 
 The epic tags on go are epics/tag.py.
 
@@ -44,46 +41,38 @@ die = C.die
 
 
 STUB = """---
-type: structured
+status: not started
 ---
 # {heading}
 
 Follow the project planning rules: {paths}. Keep the contract in the expedition skill's SKILL.md, Stage 2, The contract.
 
+## 1. Architecture
+
+### 1.6 Modules
+
 ## 2. Instructions for AI
 
 ### 2.1 Tasks
 
-#### 2.1.1 Task: [step]
-- Checks: `[command]`
-- Detail: [section of this file]
-
 ### 2.2 Milestones
-
-#### 2.2.1 Milestone: [name]
-- Tasks: 2.1.1
-- Files owned: `[path]`, `[path]`
-- Review: none
-- Local CI: none
 """
 
 
-def load_template(root, flag, rules, kind="structured"):
-    """Return template text: --template, else the bundled iterative template for that type,
-    else contract stub, else bundled."""
+def load_template(root, flag, rules):
+    """Return template text: --template, else contract stub, else bundled."""
     if flag:
         p = Path(flag)
         if not p.is_file():
             die(f"template not found: {p}")
         return p.read_text(encoding="utf-8")
-    if rules and kind == "structured":
+    if rules:
         return STUB.format(heading="[title]", paths=", ".join(rules))
-    bundled = C.TEMPLATES / ("spec-iterative.md" if kind == "iterative" else "spec.md")
-    if not bundled.is_file():
-        die(f"bundled template missing: {bundled}")
-    return bundled.read_text(encoding="utf-8")
-
-
+    sp = C.load("lib/specs")
+    text = "".join(l + "\n" for l in C.template("spec.md").splitlines() if not l.startswith("- Epic: E["))
+    for name in ("Modules", "Tasks", "Milestones"):
+        text = sp.empty_section(text, name)
+    return text
 
 
 def set_heading(text, heading):
@@ -98,9 +87,8 @@ def set_heading(text, heading):
 def main():
     ap = argparse.ArgumentParser(
         usage='plan/new_spec.py <release> <num> <slug> "<Title>" "<scope>" '
-              "[--type structured|iterative] [--owner X] [--template PATH] [--root PATH]"
+              "[--owner X] [--template PATH] [--root PATH]"
     )
-    ap.add_argument("--type", choices=("structured", "iterative"), default="structured")
     ap.add_argument("release")
     ap.add_argument("rest", nargs="*")
     ap.add_argument("--owner")
@@ -135,10 +123,8 @@ def main():
     for d in (specs_dir, trackers_dir):
         d.mkdir(parents=True, exist_ok=True)
     spec = specs_dir / f"{a.num}-{a.slug}" / spec_name
-    tracker = trackers_dir / f"{a.num}-{a.slug}-tracker.md"
-    for p in (spec, tracker):
-        if p.exists():
-            die(f"refusing to overwrite {p}")
+    if spec.exists():
+        die(f"refusing to overwrite {spec}")
     clash = [p.name for p in specs_dir.glob(f"{a.num}-*")]
     if clash:
         die(f"spec {a.num} already has a file: {clash[0]}")
@@ -146,23 +132,21 @@ def main():
     row = f"| {a.num} | [{a.title}](plan/specs/{a.num}-{a.slug}/{spec_name}) |  | {a.scope} |"
     new_plan = C.insert_row(plan.read_text(encoding="utf-8"), a.num, row)
     rules = [] if a.template else C.find_rules(root)
-    template = load_template(root, a.template, rules, a.type).replace("[Spec name] round 1", f"{a.title} round 1")
+    template = load_template(root, a.template, rules)
     cited = set()
     for text in (a.title, a.scope, template):
         for m in re.finditer(r"\((D\d+[^)]*)\)", text):
             cited |= {int(n) for n in re.findall(r"\bD(\d+)\b", m.group(1))}
     own.refuse_superseded(folder, cited, f"spec {spec_name}")
 
-    spec.parent.mkdir()
+    (spec.parent / "tasks").mkdir(parents=True)
     spec.write_text(set_heading(template, f"# {a.num}: {a.title}"), encoding="utf-8")
     print(spec)
-    tracker.write_text(C.tracker_text(a.num, a.title), encoding="utf-8")
-    print(tracker)
     plan.write_text(new_plan, encoding="utf-8")
-    if a.type == "iterative":
-        print("next: write the scope, then plan/task.py add for each feedback item")
-    else:
-        print("next: fill 2.1 Tasks and 2.2 Milestones, then sprints/check.py and sprints/refresh.py")
+    st = C.load("lib/status")
+    if st.active(folder):
+        st.sync(folder, a.release)
+    print("next: write section 1, then plan/milestone.py add for each piece of work, then sprints/check.py")
     for r in rules:
         print(f"Project planning rules: {r}")
 
