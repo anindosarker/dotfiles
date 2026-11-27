@@ -62,6 +62,7 @@ def main():
     if "\u2014" in a.title or "|" in a.title:
         die("the title contains an em dash or '|'")
     own, sp, st = load("lib/ownership"), load("lib/specs"), load("lib/status")
+    sp.check_title("title", a.title)
     root, folder = C.find_folder(a.release, a.owner, a.root)
     path = dict(own.spec_files(folder)).get(a.spec)
     if path is None:
@@ -92,7 +93,7 @@ def main():
     if module not in doc["modules"]:
         die(f"spec {a.spec} has no module {module}: name one with --module")
     number = sp.next_task(doc, path)
-    rel = f"tasks/{number}-{C.slugify(a.title)}.md"
+    rel = f"tasks/{number}-{sp.file_slug(a.title)}.md"
     text = sp.add_pointer(text, number, a.title, module, rel)
     if block:
         text = sp.link_task(text, a.milestone, number)
@@ -105,7 +106,7 @@ def main():
         if stored:
             with contextlib.redirect_stdout(io.StringIO()):
                 st.sync(folder, a.release)
-        C.commit(root, [path, out] + st.changed(), f"docs(plan): {a.release} task {a.spec} {number} {a.title}")
+        st.commit(root, folder, [path, out], f"docs(plan): {a.release} task {a.spec} {number} {a.title}")
         fcntl.flock(lock, fcntl.LOCK_UN)
     where = f"in milestone '{a.milestone}'" if block else "in no milestone yet"
     print(f"task {number} of spec {a.spec}: '{a.title}' {where}, module {module}, file {out.relative_to(folder).as_posix()}")

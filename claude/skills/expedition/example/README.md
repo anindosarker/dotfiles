@@ -8,6 +8,6 @@
 - `plan/specs/27-sidebar/`: the spec (four modules, six task pointers, four milestones) and its six task files in `tasks/`.
 - `run/trackers/`: one tracker per milestone; the blocked one has its reason under `## Attention`.
 - `status/data/status.json`: the store of every status; `status/sprints.md` is drawn from it.
-- A milestone is `done` only by its merge, which stores the merge commit. With every task done and no merge yet it stays `in progress`; it is `blocked` when no task is in work and one is blocked.
+- A milestone is `done` only by its merge, which stores the merge commit. With every task done and no merge yet it stays `in progress`; it is `blocked` when no task is in work and one is blocked. A spec is counted from its milestones and its tasks together, an epic from its specs. `status.json` holds no machine path: `root` is only in the git-ignored `status.data.js`.
 
 The scripts read this folder as a valid release: copy `v1.0.x/` under `.ai/plans/` of a scratch git repository to try a command on it.

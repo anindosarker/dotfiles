@@ -5,6 +5,7 @@ status of every epic, spec, milestone and task (lib/status.py).
 Usage: python3 -I status/status.py <release> set <id> "<status>" [--reason "<text>"] [--commit <sha>]
        python3 -I status/status.py <release> get <id>
        python3 -I status/status.py <release> list [--status "<status>"] [--kind epic|spec|milestone|task]
+       python3 -I status/status.py <release> drop <id>
        [--owner X] [--root PATH]
 
 <id>: a task is "<spec>-<number>" (27-03), a milestone its tracker file name without
@@ -17,8 +18,14 @@ JSON file, rolls a task change up into its milestone, counts the spec, the epic 
 writes the same word into the "status:" front matter line of the task, spec and epic files,
 draws status/sprints.md again, writes the page data and commits what changed. A task set to
 done with an open "Owner:" box becomes blocked, "waits for the owner's look"; with another open
-Verification box the change is refused. A milestone's done is its merge: use sprints/mark.py
-<release> <milestone> merge --commit <sha>, which calls the same code.
+Verification box the change is refused. A milestone's done is its merge: it needs --commit, a
+commit hash, and is refused while one of its tasks is not done, skipped or waiting for the
+owner's look (sprints/mark.py <release> <milestone> merge --commit <sha> calls the same code).
+A set that changes nothing writes nothing and makes no commit.
+
+drop removes one stored milestone or task entry that no spec has any more (a renamed or removed
+milestone or task). The other commands stop, naming such entries, until they are restored or
+dropped: a stored status is never thrown away by itself.
 
 It writes in the release folder where the scripts keep their lock (status/data/.ids.lock), also
 when it is run from a milestone worktree that holds its own copy of the plan folder.
@@ -52,17 +59,6 @@ C = _common()
 KINDS = ("epic", "spec", "milestone", "task")
 
 
-def home(root, folder):
-    """(root, folder) of the copy the scripts write in: the one that holds the lock file, when
-    this checkout's copy does not and exactly one other worktree's copy does."""
-    rel = folder.relative_to(root)
-    lock = Path(C.STATUS_DIR) / "data" / ".ids.lock"
-    if (folder / lock).is_file():
-        return root, folder
-    others = [wt for wt, _ in C.load("status/progress").worktrees(root) if (wt / rel / lock).is_file()]
-    return (others[0], others[0] / rel) if len(others) == 1 else (root, folder)
-
-
 def line(kind, e):
     why = f" ({e['reason']})" if e.get("reason") else ""
     return f"{kind} {e['id']}: {e['status']}{why} {e.get('name') or e.get('title') or ''}".rstrip()
@@ -74,7 +70,7 @@ def main():
               "       status/status.py <release> get <id>\n"
               '       status/status.py <release> list [--status "<status>"] [--kind epic|spec|milestone|task]')
     ap.add_argument("release")
-    ap.add_argument("action", choices=("set", "get", "list"))
+    ap.add_argument("action", choices=("set", "get", "list", "drop"))
     ap.add_argument("rest", nargs="*")
     ap.add_argument("--reason", default="")
     ap.add_argument("--commit", default="")
@@ -86,7 +82,7 @@ def main():
     if not C.RELEASE_RE.match(a.release):
         C.die(f"bad release '{a.release}', expected like v0.9.x")
     st = C.load("lib/status")
-    root, folder = home(*C.find_folder(a.release, a.owner, a.root))
+    root, folder = st.home(*C.find_folder(a.release, a.owner, a.root))
     if not st.active(folder):
         C.die(f"{folder} has no {st.FILE}: a release made before this format keeps its statuses "
               "in the grid and the trackers (sprints/mark.py)")
@@ -107,6 +103,18 @@ def main():
             C.die(f"nothing has the id {a.rest[0]}")
         print(f"{e['id']}: {e['status']}" + (f" ({e['reason']})" if e.get("reason") else ""))
         return
+    if a.action == "drop":
+        if len(a.rest) != 1:
+            C.die("drop takes one id")
+        with open(C.lock_file(folder), "a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            kind = st.drop(folder, a.rest[0])
+            if kind is None:
+                C.die(f"status.json has no milestone or task entry {a.rest[0]}")
+            st.commit(root, folder, [], f"docs(plan): {a.release} {kind} {a.rest[0]} dropped from status.json")
+            fcntl.flock(lock, fcntl.LOCK_UN)
+        print(f"{kind} {a.rest[0]}: dropped")
+        return
     if len(a.rest) != 2:
         C.die('set takes <id> "<status>"')
     ident, word = a.rest[0], a.rest[1].strip().lower()
@@ -114,9 +122,12 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_EX)
         with contextlib.redirect_stdout(io.StringIO()):
             kind, e, stored = st.set_status(folder, a.release, ident, word, a.reason, a.commit, locked=True)
-        paths = st.changed() + [folder / C.SPRINTS_MD, folder / "decisions.md", folder / C.QUEUE_MD]
+        if stored is None:
+            print(f"{kind} {ident}: already {e['status']}, nothing changed")
+            return
+        paths = [folder / C.SPRINTS_MD, folder / "decisions.md", folder / C.QUEUE_MD]
         paths += sorted((folder / C.EPICS_DIR).glob("E*.md"))
-        C.commit(root, paths, f"docs(plan): {a.release} {kind} {ident} {stored}")
+        st.commit(root, folder, paths, f"docs(plan): {a.release} {kind} {ident} {stored}")
         fcntl.flock(lock, fcntl.LOCK_UN)
     print(f"{kind} {ident}: {stored}" + (f" ({e['reason']})" if e["reason"] else ""))
 

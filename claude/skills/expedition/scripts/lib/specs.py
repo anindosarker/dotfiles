@@ -80,6 +80,26 @@ def empty_section(text, name):
     return "\n".join(lines[:start + 1] + [""] + lines[end:])
 
 
+SLUG_MAX = 60
+
+
+def check_title(what, title):
+    """Die unless title can be a heading and a file name: no "[" at the start (a template
+    placeholder), no control character or line break, and something left for the file name."""
+    if title.startswith("["):
+        C.die(f"{what} '{title}' starts with '[': that is a template placeholder, write the real title")
+    if any(ord(c) < 32 or ord(c) == 127 for c in title):
+        C.die(f"{what} holds a control character or a line break: one plain line is needed")
+    if not C.slugify(title):
+        C.die(f"{what} '{title}' has no letter or digit: nothing is left for its file name")
+
+
+def file_slug(title):
+    """The slug of a task file name, cut to SLUG_MAX characters at a word end."""
+    slug = C.slugify(title)
+    return slug if len(slug) <= SLUG_MAX else slug[:SLUG_MAX].rsplit("-", 1)[0]
+
+
 def next_id(ids, number):
     last = max((int(i.rsplit(".", 1)[1]) for i in ids if i.rsplit(".", 1)[0] == number), default=0)
     return f"{number}.{last + 1}"

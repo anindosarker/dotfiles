@@ -154,6 +154,7 @@ def print_progress(root, folder, plan, own, bd, q_text):
     by_name = {(num, b["name"]): b for num, bl in blocks.items() for b in bl}
     st = C.load("lib/status")
     stored_m, stored_t = st.entries(folder) if st.active(folder) else (None, {})
+    stored_s = {s["id"]: s["status"] for s in (st.load(folder) or {}).get("specs", [])}
     KIND = {"not started": "planned", "in progress": "running", "blocked": "waiting",
             "done": "done", "skipped": "skipped"}
     wts = None
@@ -177,8 +178,23 @@ def print_progress(root, folder, plan, own, bd, q_text):
                 if warn:
                     print(f"warning: {num} {row['name']}: {warn}", file=sys.stderr)
 
+    def closed(num, rows):
+        """A spec is finished: its counted status in status.json (its milestones and its tasks),
+        else every row done or stopped by a decision."""
+        if num in stored_s:
+            return stored_s[num] in ("done", "skipped")
+        return all(r["kind"] in CLOSED for r in rows)
+
     def counts(specs):
-        return sum(1 for rows in specs.values() if all(r["kind"] in CLOSED for r in rows)), len(specs)
+        return sum(1 for n, rows in specs.items() if closed(n, rows)), len(specs)
+
+    def waiting(num):
+        """The reason of a spec that is blocked by a task alone: its milestone is merged and a
+        task still waits (the owner's look)."""
+        if stored_s.get(num) != "blocked":
+            return None
+        return next((f"task {t['number']}: {t['reason']}" for t in stored_t.values()
+                     if t["spec"] == num and t["status"] == "blocked"), None)
 
     def tasks(num, rows):
         """" · <milestone> d/t" for each unfinished milestone of the spec with a task started."""
@@ -204,20 +220,20 @@ def print_progress(root, folder, plan, own, bd, q_text):
     blocks = []
     for e in sorted(epics):
         specs = epics[e]
-        if all(r["kind"] in CLOSED for rows in specs.values() for r in rows):
+        if all(closed(n, rows) for n, rows in specs.items()):
             continue
         d, t = counts(specs)
         lines = [f"**E{e}** · Specs {d}/{t}"]
         nums = sorted(specs, key=num_key)
         running = [n for n in nums if any(r["kind"] == "running" for r in specs[n])]
-        blocked = [n for n in nums if any(r["kind"] in ("stopped", "waiting") for r in specs[n])]
+        blocked = [n for n in nums if any(r["kind"] in ("stopped", "waiting") for r in specs[n]) or waiting(n)]
         if running:
             lines.append("- **Running**")
             lines += [f"  - {n} {title(n, specs[n])}{tasks(n, specs[n])}" for n in running]
         if blocked:
             lines.append("- **Blocked**")
             for n in blocked:
-                reason = why([r for r in specs[n] if r["kind"] in ("stopped", "waiting")])
+                reason = why([r for r in specs[n] if r["kind"] in ("stopped", "waiting")]) or waiting(n)
                 lines.append(f"  - {n} {title(n, specs[n])}" + (f": {reason}" if reason else ""))
         blocks.append("\n".join(lines))
     if blocks:

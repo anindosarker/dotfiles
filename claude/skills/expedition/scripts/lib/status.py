@@ -29,6 +29,7 @@ and epic file (mirror). Nobody writes a status by hand.
 import datetime
 import importlib.util
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -52,6 +53,8 @@ WITH_REASON = ("blocked", "skipped")
 CLOSED = ("done", "skipped")
 MARKS = {"not started": "·", "in progress": "[ ]", "blocked": "[~]", "done": "[x]", "skipped": "[!]"}
 OWNER_REASON = "waits for the owner's look"
+PENDING = "status/data/.pending"
+COMMIT_RE = re.compile(r"^[0-9a-f]{7,40}$")
 BOX_RE = re.compile(r"^\s*-\s*\[( |x|X)\]\s*(.*)$")
 CHANGED = []
 
@@ -70,7 +73,40 @@ def active(folder):
 
 
 def load(folder):
-    return json.loads(C.read(path(folder))) if active(folder) else None
+    """The stored file as a dict; None for a release without it. A file that cannot be parsed
+    ends the script with one line."""
+    if not active(folder):
+        return None
+    try:
+        return json.loads(C.read(path(folder)))
+    except ValueError as e:
+        C.die(f"{path(folder)} is not valid JSON ({e}): restore it from git; nothing was changed")
+
+
+def write_json(p, text):
+    """Write text to p through a temporary file, so a reader never sees half a file."""
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, p)
+
+
+def home(root, folder):
+    """(root, folder) of the one copy of the release folder the scripts write in, for a command
+    run from a milestone worktree that holds its own copy of the plan folder: the copy that
+    holds the scripts' lock file (plan/new_cycle.py creates it); with no lock anywhere, the main
+    checkout's copy; else this one."""
+    rel = folder.relative_to(root)
+    lock = Path(C.STATUS_DIR) / "data" / ".ids.lock"
+    if (folder / lock).is_file():
+        return root, folder
+    wts = [wt for wt, _ in C.load("status/progress").worktrees(root)]
+    held = [wt for wt in wts if (wt / rel / lock).is_file()]
+    if len(held) == 1:
+        return held[0], held[0] / rel
+    if not held and wts and wts[0] != root and (wts[0] / rel).is_dir():
+        return wts[0], wts[0] / rel
+    return root, folder
 
 
 def entries(folder):
@@ -84,7 +120,8 @@ def now():
 
 
 def rollup(words):
-    """One status from the statuses inside."""
+    """One status from the statuses inside. skipped is closed, never started: with only skipped
+    and not started items nothing has started."""
     words = list(words)
     if not words:
         return STATUSES[0]
@@ -94,7 +131,7 @@ def rollup(words):
         return "in progress"
     if "blocked" in words:
         return "blocked"
-    return "in progress" if any(w in CLOSED for w in words) else STATUSES[0]
+    return "in progress" if "done" in words else STATUSES[0]
 
 
 def old_state(folder, stem):
@@ -186,10 +223,17 @@ def build(folder, release, stored=None):
         for t in o.read_spec(p)["tasks"].values():
             if t["id"] not in placed:
                 tasks.append(task_entry(num, t, ""))
+    have = {e["id"] for e in milestones + tasks}
+    lost = sorted(i for i, e in {**old_m, **old_t}.items()
+                  if i not in have and (e.get("status", STATUSES[0]) != STATUSES[0] or e.get("changed")))
+    if lost:
+        C.die(f"status.json holds statuses no spec has now: {', '.join(lost)}. A spec lost its row or link in "
+              "the Deliverables table, or a milestone or task was renamed or removed: restore it, or drop "
+              f"each entry with status/status.py {release} drop <id>. Nothing written")
     specs = []
     for num, p in coll["docs"]:
-        inside = [m["status"] for m in milestones if m["spec"] == num] \
-            or [t["status"] for t in tasks if t["spec"] == num]
+        mine = [m["status"] for m in milestones if m["spec"] == num]
+        inside = mine + [t["status"] for t in tasks if t["spec"] == num] if mine else []
         specs.append({"id": num, "title": titles.get(num, ""), "path": links[num],
                       "epic": f"E{epic_of[num]}" if epic_of.get(num) else "", "status": rollup(inside)})
     epics = []
@@ -197,29 +241,30 @@ def build(folder, release, stored=None):
         mine = [s for s in specs if s["epic"] == f"E{n}"]
         head = re.search(rf"^# E{n}:?[ \t]+(\S.*?)[ \t]*$", C.read(o.epic_path(folder, n)), re.M)
         epics.append({"id": f"E{n}", "name": head.group(1) if head else (mine[0]["title"] if mine else ""),
-                      "status": rollup(m["status"] for m in milestones if m["epic"] == f"E{n}"),
+                      "status": rollup(s["status"] for s in mine),
                       "specs": [s["id"] for s in mine]})
     sprints = []
     for c in sorted({int(m["sprint"][1:]) for m in milestones if m["sprint"]}):
         inside = [m["status"] for m in milestones if m["sprint"] == f"S{c}"]
         sprints.append({"id": f"S{c}", "status": rollup(inside),
                         "done": sum(1 for w in inside if w in CLOSED), "total": len(inside)})
-    return {"release": release, "updated": now(), "root": str(folder), "statuses": list(STATUSES),
+    return {"release": release, "updated": now(), "statuses": list(STATUSES),
             "sprints": sprints, "epics": epics, "specs": specs, "milestones": milestones, "tasks": tasks}
 
 
 def save(folder, data):
-    """Write status.json and status.data.js when anything but the time changed."""
+    """Write status.json when anything but the time changed, and status.data.js, the same data
+    with "root", the release folder on this machine (a render, git-ignored)."""
     p = path(folder)
     old = load(folder)
     if old is not None and {**old, "updated": ""} == {**data, "updated": ""}:
         data = old
     else:
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        write_json(p, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
         CHANGED.append(p)
-    text = json.dumps(data, indent=2, ensure_ascii=False)
-    (folder / SCRIPT).write_text(f"window.STATUS_DATA = {text};\n", encoding="utf-8")
+    page = {k: v for k, v in data.items() if k in ("release", "updated")}
+    page.update(root=str(folder), **{k: v for k, v in data.items() if k not in page})
+    write_json(folder / SCRIPT, f"window.STATUS_DATA = {json.dumps(page, indent=2, ensure_ascii=False)};\n")
 
 
 def mirror(folder, data):
@@ -260,11 +305,33 @@ def sync(folder, release, stored=None):
     return data
 
 
-def changed():
-    """The files written since the last call, for the caller's commit."""
-    out = list(dict.fromkeys(CHANGED))
+def commit(root, folder, extra, message):
+    """Commit the files the store and its mirrors wrote, with extra. The paths are kept in
+    status/data/.pending (git-ignored) until a commit succeeds, so a run after a failed commit
+    still commits every mirrored file. Returns what lib/common.py commit returns."""
+    pend = folder / PENDING
+    kept = [folder / l for l in C.read(pend).splitlines() if l.strip()] if pend.is_file() else []
+    paths = list(dict.fromkeys(kept + CHANGED))
     CHANGED.clear()
-    return out
+    pend.parent.mkdir(parents=True, exist_ok=True)
+    pend.write_text("".join(f"{p.relative_to(folder).as_posix()}\n" for p in paths), encoding="utf-8")
+    done = C.commit(root, [str(p) for p in paths] + [str(p) for p in extra], message)
+    pend.unlink()
+    return done
+
+
+def drop(folder, ident):
+    """Remove one stored milestone or task entry that no spec has any more. Returns its kind, or
+    None when the file has no such entry."""
+    data = load(folder)
+    for kind in ("milestones", "tasks"):
+        left = [e for e in data[kind] if e["id"] != ident]
+        if len(left) != len(data[kind]):
+            data[kind] = left
+            write_json(path(folder), json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+            CHANGED.append(path(folder))
+            return kind[:-1]
+    return None
 
 
 def find(data, ident):
@@ -277,9 +344,11 @@ def find(data, ident):
 
 
 def set_status(folder, release, ident, status, reason="", commit="", locked=False):
-    """Set one milestone or task and run the chain. Returns (kind, entry, the word stored).
-    Dies on an unknown id, a spec or an epic, a word that is not one of the five, a missing
-    reason, or a task set to done with an open box that is not an "Owner:" line."""
+    """Set one milestone or task and run the chain. Returns (kind, entry, the word stored), the
+    word None when nothing changed (then nothing is written). Dies on an unknown id, a spec or
+    an epic, a word that is not one of the five, a missing reason, a task set to done with an
+    open box that is not an "Owner:" line, a milestone set to done without a commit hash or
+    with a task that is not finished."""
     if status not in STATUSES:
         C.die(f"bad status '{status}': one of {', '.join(STATUSES)}")
     data = build(folder, release)
@@ -287,7 +356,7 @@ def set_status(folder, release, ident, status, reason="", commit="", locked=Fals
     if kind is None:
         C.die(f"no milestone or task has the id {ident}")
     if kind in ("spec", "epic"):
-        C.die(f"the status of {kind} {ident} is counted from its milestones, never set")
+        C.die(f"the status of {kind} {ident} is counted from what is inside it, never set")
     reason = reason.strip()
     if kind == "task" and status == "done" and e["file"]:
         owner, other = boxes(folder / e["file"])
@@ -297,22 +366,32 @@ def set_status(folder, release, ident, status, reason="", commit="", locked=Fals
             status, reason = "blocked", OWNER_REASON
     if status in WITH_REASON and not reason:
         C.die(f'{status} needs --reason "<text>"')
-    e.update(status=status, reason=reason if status in WITH_REASON else "", changed=now())
+    mine = [t for t in data["tasks"] if t["milestone"] == (ident if kind == "milestone" else e["milestone"])]
+    if kind == "milestone" and status == "done":
+        if not COMMIT_RE.match(commit):
+            C.die(f"milestone {ident}: done is its merge and needs --commit <sha>, 7 to 40 hex characters")
+        open_ = [t["number"] for t in mine if not (t["status"] in CLOSED or t["ownerCheck"])]
+        if open_:
+            C.die(f"milestone {ident} cannot merge: task(s) {', '.join(open_)} are not done, skipped or "
+                  "waiting for the owner's look")
+    new = {"status": status, "reason": reason if status in WITH_REASON else ""}
     if kind == "milestone":
-        e["commit"] = commit if status == "done" else ""
-    elif e["milestone"]:
-        m = find(data, e["milestone"])[1]
-        mine = [t for t in data["tasks"] if t["milestone"] == m["id"]]
+        new["commit"] = commit if status == "done" else ""
+    if all(e[k] == v for k, v in new.items()):
+        return kind, e, None
+    e.update(new, changed=now())
+    if kind == "task":
+        e["ownerCheck"] = status == "blocked" and reason == OWNER_REASON
+        m = find(data, e["milestone"])[1] if e["milestone"] else None
         words = [t["status"] for t in mine]
-        if m["status"] not in CLOSED and any(w != STATUSES[0] for w in words):
+        if m and m["status"] not in CLOSED and any(w not in (STATUSES[0], "skipped") for w in words):
             word = rollup(words)
             word = "in progress" if word in CLOSED else word
             why = next((t["reason"] for t in mine if t["status"] == "blocked"), "") if word == "blocked" else ""
             if (m["status"], m["reason"]) != (word, why):
                 m.update(status=word, reason=why, changed=now())
-    p = path(folder)
-    p.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    CHANGED.append(p)
+    write_json(path(folder), json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    CHANGED.append(path(folder))
     C.load("lib/grid").refresh(folder, release, quiet=True, locked=locked)
     if (folder / C.SPRINTS_MD).is_file():
         C.load("sprints/swimlanes").write(folder, release, quiet=True)

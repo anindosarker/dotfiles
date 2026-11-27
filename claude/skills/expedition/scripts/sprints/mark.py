@@ -63,20 +63,24 @@ def milestone_of(own, folder, release, key):
 
 def mark_status(a, st, root, folder, key, num, name):
     """A release with status/data/status.json: the verb is a status of that file (lib/status.py).
-    launch and resume: in progress. merge: done, with --commit. wait and stop: blocked, with
-    --reason; a stop whose reason starts with a decision id ("D15 ...") is skipped."""
+    launch and resume: in progress. merge: done, with --commit (a commit hash), refused while a
+    task of the milestone is not done, skipped or waiting for the owner's look. wait and stop:
+    blocked, with --reason; a stop whose reason starts with a decision id ("D15 ...") is
+    skipped. It writes the one release folder the scripts keep their lock in, also when run from
+    a milestone worktree that holds a copy of the plan folder."""
     word = {"launch": "in progress", "resume": "in progress", "merge": "done"}.get(a.action, "blocked")
     if a.action == "stop" and re.match(r"^D\d+\b", a.reason.strip()):
         word = "skipped"
-    if a.action == "merge" and not a.commit:
-        C.die("merge needs --commit <sha>, the merge commit")
     with open(C.lock_file(folder), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         with contextlib.redirect_stdout(io.StringIO()):
             _, e, stored = st.set_status(folder, a.release, key, word, a.reason, a.commit, locked=True)
-        paths = st.changed() + [folder / C.SPRINTS_MD, folder / "decisions.md", folder / C.QUEUE_MD]
+        if stored is None:
+            print(f"{key}: already {e['status']}, nothing changed")
+            return
+        paths = [folder / C.SPRINTS_MD, folder / "decisions.md", folder / C.QUEUE_MD]
         paths += sorted((folder / C.EPICS_DIR).glob("E*.md"))
-        C.commit(root, paths, f"docs(plan): {a.release} {key} {a.action}")
+        st.commit(root, folder, paths, f"docs(plan): {a.release} {key} {a.action}")
         fcntl.flock(lock, fcntl.LOCK_UN)
     print(f"{key}: {stored} ({num} {name}); committed")
 
@@ -96,6 +100,8 @@ def main():
         C.die(f"bad release '{a.release}', expected like v0.9.x")
     key = Path(a.milestone).name.removesuffix(".md").removesuffix("-tracker")
     root, folder = C.find_folder(a.release, a.owner, a.root)
+    if C.load("lib/status").active(folder):
+        root, folder = C.load("lib/status").home(root, folder)
     own, g = C.load("lib/ownership"), C.load("lib/grid")
     hit = milestone_of(own, folder, a.release, key)
     if hit is None:

@@ -451,7 +451,9 @@ def main():
     decisions = folder / "decisions.md"
     print("Files:")
     for p in (plan, folder / SPRINTS_MD, folder / INDEX_HTML, decisions, queue):
-        print(f"  {p.relative_to(folder)}: {'present' if p.is_file() else 'missing'}")
+        render = p.name == "index.html" and not p.is_file()  # git-ignored: a fresh clone has none
+        print(f"  {p.relative_to(folder)}: "
+              + ("not rendered yet (sprints/swimlanes.py writes it)" if render else 'present' if p.is_file() else 'missing'))
 
     own = C.load("lib/ownership")
     d = own.new_collect(folder, plan)

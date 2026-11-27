@@ -1,7 +1,6 @@
 {
   "release": "v1.0.x",
   "updated": "2026-11-27 09:10",
-  "root": "/path/to/project/.ai/plans/v1.0.x/owner",
   "statuses": [
     "not started",
     "in progress",

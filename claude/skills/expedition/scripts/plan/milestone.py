@@ -142,7 +142,12 @@ def main():
             die(f"bad epic '{a.epic}', expected like E12")
         want_epic = int(m.group(1))
     a.files = [f.strip().strip("`") for f in a.files.split(",") if f.strip()]
-    own = load("lib/ownership")
+    own, sp = load("lib/ownership"), load("lib/specs")
+    sp.check_title("name", a.name)
+    for x in a.task:
+        sp.check_title("task title", x)
+    if len(C.slugify(a.name)) > 150:
+        die(f"the name is too long for its tracker file name ({len(C.slugify(a.name))} characters): 150 at most")
     root, folder = C.find_folder(a.release, a.owner, a.root)
     with open(C.lock_file(folder), "a") as lock:
         run(a, own, root, folder, ids, decision, want_epic, lock)
@@ -248,7 +253,7 @@ def run(a, own, root, folder, ids, decision, want_epic, lock):
         number, tasks = int(sp.next_task(doc, path)), []
         for title in a.task or [a.name]:
             n = f"{number + len(tasks):02d}"
-            rel = f"tasks/{n}-{C.slugify(title)}.md"
+            rel = f"tasks/{n}-{sp.file_slug(title)}.md"
             text = sp.add_pointer(text, n, title, module, rel)
             writes[path.parent / rel] = sp.task_file_text(title, a.type)
             tasks.append(n)
@@ -306,20 +311,21 @@ def run(a, own, root, folder, ids, decision, want_epic, lock):
         for i in ids:
             q_text = bd.move(q_text, int(i[1:]), "Autofix")
         bd.write(queue, q_text)
-    fcntl.flock(lock, fcntl.LOCK_UN)
     if epic and decision is not None:
+        # epics/tag.py takes the lock itself, on its own file handle
+        fcntl.flock(lock, fcntl.LOCK_UN)
         sp.tag_decision(folder, epic, decision)
+        fcntl.flock(lock, fcntl.LOCK_EX)
     with contextlib.redirect_stdout(io.StringIO()):
         if epic:
-            load("lib/grid").refresh(folder, a.release, quiet=True)
+            load("lib/grid").refresh(folder, a.release, quiet=True, locked=True)
             load("sprints/swimlanes").write(folder, a.release, quiet=True)
         elif st.active(folder):
             st.sync(folder, a.release)
-    fcntl.flock(lock, fcntl.LOCK_EX)
-    paths = [str(p) for p in list(writes) + st.changed()]
+    paths = [str(p) for p in writes]
     paths += [str(folder / own.SPRINTS_MD), str(folder / "decisions.md"), str(queue)]
     paths += [str(p) for p in sorted((folder / own.EPICS_DIR).glob("E*.md"))]
-    C.commit(root, paths, f"docs(plan): {a.release} milestone {num} {a.name}")
+    st.commit(root, folder, paths, f"docs(plan): {a.release} milestone {num} {a.name}")
     fcntl.flock(lock, fcntl.LOCK_UN)
     rel = tracker.relative_to(folder).as_posix()
     what = f"follow-up spec {num} of spec {a.spec}: milestone" if follow else f"milestone of spec {num}:"

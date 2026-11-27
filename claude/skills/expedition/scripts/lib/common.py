@@ -144,12 +144,21 @@ def ignore_renders(folder):
 
 
 def upgrade_ignore(path, lines):
-    """Replace the earlier ignore of the whole status/data/ folder by the lines that keep
-    status.json in git: a file inside an ignored folder cannot be un-ignored."""
-    old = lines[1].removesuffix("*")
-    if path.is_file() and old in path.read_text(encoding="utf-8").splitlines():
-        kept = [l for l in path.read_text(encoding="utf-8").splitlines() if l != old]
-        path.write_text("".join(l + "\n" for l in kept), encoding="utf-8")
+    """Replace every line that ignores a whole status/data/ folder, whatever its prefix, by the
+    pair that keeps status.json in git: a file inside an ignored folder cannot be un-ignored."""
+    if not path.is_file():
+        return
+    out, hit = [], False
+    for l in path.read_text(encoding="utf-8").splitlines():
+        s = l.strip()
+        if s.endswith("status/data/") and not s.startswith(("#", "!")):
+            hit = True
+            pair = [s + "*", "!" + s + "status.json"]
+            out += [x for x in pair if x not in out]
+        elif not (hit and s in out and s.endswith(("status/data/*", "status/data/status.json"))):
+            out.append(l)
+    if hit:
+        path.write_text("".join(l + "\n" for l in out), encoding="utf-8")
 
 
 def render_ignores(folder, top):
