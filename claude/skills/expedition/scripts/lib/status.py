@@ -4,7 +4,7 @@ task of a release, and the data of the status page. Library for status/status.py
 sprints/mark.py, lib/grid.py and the readers; no CLI.
 
 A release that has the file is read through it. A release without it (made before this format)
-is read as before: grid marks, tracker "Status:" lines. plan/new_cycle.py writes the first file.
+is read as before: grid marks, tracker "Status:" lines. plan/new_release.py writes the first file.
 
 Five words (STATUSES): "not started", "in progress", "blocked", "done", "skipped". A blocked or
 skipped item carries a short reason. Stored: the status, reason, changed time and merge commit

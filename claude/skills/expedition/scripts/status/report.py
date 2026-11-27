@@ -257,7 +257,7 @@ def new_print(folder, plan, d, own):
     print("Specs:")
     text = read(plan) if plan.is_file() else ""
     if not plan.is_file():
-        print(f"  {plan.name} missing: plan/new_cycle.py writes it")
+        print(f"  {plan.name} missing: plan/new_release.py writes it")
     elif not re.search(r"^## Deliverables\s*$", text, re.M):
         print(f"  {plan.name} has no ## Deliverables section")
     print(f"  {plan.name} rows: {len(rows)}, linked spec files: {len(docs)}")
@@ -469,7 +469,7 @@ def main():
     print("Process:")
     proc = folder / "process.md"
     if not proc.is_file():
-        print("  process.md missing: plan/new_cycle.py copies it from the previous release")
+        print("  process.md missing: plan/new_release.py copies it from the previous release")
         p_ids = []
     else:
         lines = [l for _, l in outside_fences(read(proc))]

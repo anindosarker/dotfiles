@@ -200,7 +200,7 @@ type_into() {
   [ -n "$pane" ] || die "$1: no claude pane found in its window; nothing typed"
   pane_typable "$pane" || die "$1: pane $pane is not running claude (a shell or gone); nothing typed"
   tmux send-keys -t "$pane" -l -- "$2"
-  sleep 0.3
+  sleep 0.3  # tmux needs a moment to draw the typed text before Enter; less and the line is sent cut
   tmux send-keys -t "$pane" Enter
   TYPED_PANE="$pane"
 }

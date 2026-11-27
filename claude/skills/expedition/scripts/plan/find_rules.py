@@ -16,7 +16,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MAX_DEPTH = 4
+MAX_DEPTH = 4  # docs/ and its sub-folders hold planning rules; deeper is vendored or generated code, slow to walk
 NAME_PATTERNS = ("*plan*guide*.md", "planning*.md")
 SKIP_DIRS = {
     "node_modules", ".git", "worktrees", ".worktrees", "dist", "build", "out",

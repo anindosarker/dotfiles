@@ -6,7 +6,7 @@ Usage: python3 -I migrate/pre-v1.0/layout.py <release> [--owner X] [--root PATH]
 git mv: specs/ and epics/ into plan/; trackers/ and handoffs/ into run/; sprints.md into
 status/ (a plain move when a path is untracked); the old ownership.md is git rm'ed (the
 ownership facts are computed in memory; migrate/pre-v1.0/epics.py fills the epic files' tables). Copies
-templates/swimlanes.html to status/index.html. Rewrites links: specs/ to plan/specs/ (and the
+board/swimlanes.html to status/index.html. Rewrites links: specs/ to plan/specs/ (and the
 sprints.md link) in <release>-plan.md; specs/, epics/, trackers/, handoffs/,
 sprints.md paths of this release inside the handoffs and the epic files.
 A decisions.md in the old heading format then goes through migrate/pre-v1.0/decisions.py, a folder
@@ -135,12 +135,12 @@ def main():
         print("removed: ownership.md (computed in memory now)")
     for sub in ("plan/specs", "plan/epics", "run/trackers", "run/handoffs", "status/data"):
         (folder / sub).mkdir(parents=True, exist_ok=True)
-    tpl = C.TEMPLATES / "swimlanes.html"
+    tpl = C.BOARD / "swimlanes.html"
     if not tpl.is_file():
         die(f"template missing: {tpl}")
     shutil.copyfile(tpl, folder / "status" / "index.html")
     C.ensure_gitignore(folder)
-    print("copied: templates/swimlanes.html -> status/index.html")
+    print("copied: board/swimlanes.html -> status/index.html")
     load_ownership().ignore_renders(folder)
 
     plan = folder / f"{a.release}-plan.md"

@@ -80,7 +80,7 @@ def empty_section(text, name):
     return "\n".join(lines[:start + 1] + [""] + lines[end:])
 
 
-SLUG_MAX = 60
+SLUG_MAX = 60  # a task file name stays readable in a pointer line and far below the 255 byte limit of a file name
 
 
 def check_title(what, title):

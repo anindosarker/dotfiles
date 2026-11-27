@@ -104,6 +104,7 @@ def worktree_roots(cwd):
     """The folders of the repo's linked worktrees: registered, holding a .git file, never the
     main checkout, a bare repo, /, the home folder or a folder above it. Any failure gives none."""
     try:
+        # timeout=2: this runs as a hook before a tool call; a hung git must not hold the session
         out = subprocess.run(["git", "-C", cwd, "worktree", "list", "--porcelain", "-z"],
                              capture_output=True, text=True, timeout=2).stdout
         home, trees = os.path.realpath(HOME), []

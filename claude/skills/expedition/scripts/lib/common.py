@@ -19,6 +19,7 @@ from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent.parent
 TEMPLATES = SCRIPTS.parent / "templates"
+BOARD = SCRIPTS.parent / "board"  # the status pages: task-board.html, swimlanes.html
 
 RELEASE_RE = re.compile(r"^v\d+\.\d+\.x$")
 SPECS_DIR = "plan/specs"
@@ -76,7 +77,7 @@ def die(msg):
 def repo_root(flag, release, new=False):
     """The repository root every script works in. Order: --root; else the git top level of the
     cwd when it holds .ai/plans/<release>/; else the one direct child folder of the cwd or of
-    that top level that holds it. new=True (plan/new_cycle.py, release not made yet) looks for
+    that top level that holds it. new=True (plan/new_release.py, release not made yet) looks for
     .ai/plans/ instead. Several matches stop with the list. No match falls back to the git top
     level, so the caller's usual error follows."""
     if flag:
@@ -202,7 +203,7 @@ def render_ignores(folder, top):
 
 
 def ensure_gitignore(folder):
-    """Append the status render ignores to the repo's .gitignore when missing. plan/new_cycle.py
+    """Append the status render ignores to the repo's .gitignore when missing. plan/new_release.py
     and migrate/pre-v1.0/layout.py run it before ignore_renders, which then finds nothing missing; the two
     differ in the blank line they leave before the lines and in what they print, so each keeps
     its own behaviour."""

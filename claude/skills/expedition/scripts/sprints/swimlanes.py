@@ -15,10 +15,10 @@ its first ## Attention bullet, else the detail of its tracker's Status line, fro
 tracker copies status/progress.py reads (the milestone's own worktree included); empty when none
 is found.
 In a release with status/data/status.json none of that is written: the page is
-templates/task-board.html, which reads status/data/status.data.js (lib/status.py), and this
+board/task-board.html, which reads status/data/status.data.js (lib/status.py), and this
 script only keeps the page and that file current (refresh_board).
-Refreshes status/index.html from templates/swimlanes.html when the template is newer or the
-page is missing. Both are renders, ignored by git (plan/new_cycle.py and migrate/pre-v1.0/layout.py add
+Refreshes status/index.html from board/swimlanes.html when the template is newer or the
+page is missing. Both are renders, ignored by git (plan/new_release.py and migrate/pre-v1.0/layout.py add
 the .gitignore lines), never committed. Writes nothing else. sprints/refresh.py runs it last, after
 the grid chain.
 """
@@ -46,7 +46,7 @@ C = _common()
 NUM = r"\d{2}(?:\.\d+)?"
 PLAN_ROW_RE = re.compile(r"^\|\s*(" + NUM + r")\s*\|\s*\[(.+?)\]\((.+?)\)\s*\|\s*(E\d+)?\s*\|\s*(.+?)\s*\|\s*$", re.M)
 GRID_LABEL_RE = re.compile(r"^(E\d+)\s+(" + NUM + r")\s+(.+)$")
-TEMPLATE = C.TEMPLATES / "swimlanes.html"
+TEMPLATE = C.BOARD / "swimlanes.html"
 
 
 die = C.die
@@ -162,11 +162,11 @@ def build(folder, release, own):
     }
 
 
-BOARD = C.TEMPLATES / "task-board.html"
+BOARD = C.BOARD / "task-board.html"
 
 
 def refresh_board(folder):
-    """A release with status/data/status.json: status/index.html is templates/task-board.html,
+    """A release with status/data/status.json: status/index.html is board/task-board.html,
     copied when the page is missing or differs; its data, status.data.js, is written from the
     status file, and the swimlane data files of the earlier page are removed. Returns True when
     the page was written."""
