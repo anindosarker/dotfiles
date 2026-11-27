@@ -14,6 +14,8 @@ Expedition runs work that does not fit one session as a release: decisions are m
 
 Requires: tmux, the `claude` command, python3.
 
+Voice: at its start, every session of a release (lead, runner, spec writer) loads the skill `caveman:ultracave` when it is listed, and keeps that voice in chat for the whole session, also after a roll over. Plan files, commits and the lines typed to another session stay in plain prose.
+
 ## The model
 
 - A release is one folder, the release folder `.ai/plans/v0.<n>.x/<owner>/`, and one version:

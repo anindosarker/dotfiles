@@ -45,14 +45,49 @@ Item format, one item per message, the next item only after the explicit word on
 
 ```
 # Q<n>. <Title>: one plain sentence a non-expert reads in one pass, in everyday words, no ids, paths or jargon.
-- the first bullet, required: what is wrong today, where, and what the change is (file:line, ids, measurements)
-- optional bullets: facts, how the common references do it (measured or read, never assumed)
+- Now
+  - the facts today, one per sub-bullet: what exists or what is wrong, and the code that holds it (name, file:line, ids, measurements)
+  - a bug: the fault and its cause
+  - how the common references do it, when that was measured or read, never assumed
 ## Options:
-- recommended: ...
-- ...
+1. Recommended: <the proposal in a few words>
+   - one sub-bullet per step; each starts with the thing it changes ("Update the role seed code: ...")
+   - one-time work that is not part of the product, last
+2. <another real choice>
+   - only what differs from option 1
+
+Say "record it" to record it, or add to it.
 ```
 
-No question at the end; the options are the question. Options are about the decision only: fix, keep, drop, or which variant. An option never names an epic, a sprint or a release, and never offers to decide later; the owner says "later" or "drop it" unprompted. Write the decision into `decisions.md` only on the explicit word (SKILL.md, Explicit word), in that same turn, then post the next item.
+- `Now` holds facts only. The proposal is in the options and nowhere else.
+- Options are numbered; the first is the recommended one and starts with `Recommended:`. One option is normal when there is no real alternative: never a second option made up to fill the list, and never one the owner already overruled in this discussion.
+- An item holds only what the owner said or what a lookup found. The lead adds no statement of its own to fill a gap, and does not replace a line the owner removed.
+- Each step names the thing that changes (the code, the file, the setting). A step that says only the result hides what is edited.
+- Wording: the words of ASD-STE100, kept lean: fragments and colon lists, not one full sentence per sub-bullet.
+- The message holds the item and nothing else. A report from the runner (`MERGED`, `DONE`), a builder's notes or other news get their own short message after the item is closed, or when the owner asks.
+
+A filled item:
+
+```
+# Q139. The app gets a super admin role. The first account is the super admin.
+- Now
+  - Role seed code, `RbacService.onModuleInit`, both backends. Runs at backend start.
+    - Admin, rank 0.
+    - User, rank 20.
+  - Set-up request: first account gets Admin.
+## Options:
+1. Recommended: add the role
+   - Update role seed code:
+     - Super admin, rank 0.
+     - Admin, rank 1.
+     - User, rank 20.
+   - Update set-up request: first account gets Super admin.
+   - After merge, the lead deletes the owner's local database of this project and creates it again.
+
+Say "record it" to record it, or add to it.
+```
+
+No question at the end apart from the record line; the options are the question. Options are about the decision only: fix, keep, drop, or which variant. An option never names an epic, a sprint or a release, and never offers to decide later; the owner says "later" or "drop it" unprompted. Write the decision into `decisions.md` only on the explicit word (SKILL.md, Explicit word), in that same turn, then post the next item.
 - Recording: run `python3 -I ${CLAUDE_SKILL_DIR}/scripts/queue/item.py <release> D "<title>"` (with `--source Q<n>` for a queued item), write the bullets under the card it made, each indented with one tab, above a `- Source:` line (targeted edit, then commit), and reply with the id it printed. The item has no D number before that.
 - Handoff: only when the owner asks. State and Open only, what the next session needs; never history. State names the runner window and the writer's session name and uuid (formats.md, Handoff).
 

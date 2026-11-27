@@ -35,6 +35,8 @@ Changed after the tag `expedition-v2.0`, same format:
 - In discuss, the lead fills the module and the task file of a milestone it adds to a spec in progress.
 - `queue/item.py` refuses a second `--bullet`.
 - Owner words: `delegate` and `epic delegate` replace `go` and `epic go`, which stay accepted as old names.
+- Every session of a release starts in the `caveman:ultracave` voice when that skill is installed.
+- Item format: the facts in one `Now` block, the proposal inside numbered options with `Recommended:` first, lean wording, each step names what it changes, nothing the owner did not say, no other news in the item message.
 - New owner word `iterate`: the open item is decided, planned by the regular steps and sent to the runner at once, as the next module of its spec or as a new spec with its own epic. The runner chooses the moment it starts.
 
 Migration: [scripts/migrate/v1.0-v2.0/README.md](scripts/migrate/v1.0-v2.0/README.md).
