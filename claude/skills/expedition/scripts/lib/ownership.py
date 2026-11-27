@@ -123,10 +123,10 @@ def set_front(text, key, value):
 
 
 def task_title(text):
-    """(title without its trailing cite, the first D id cited there or None)."""
+    """(title without its trailing cite, the D numbers cited there)."""
     m = TAIL_CITE_RE.search(text)
-    d = re.search(r"\bD\d+\b", m.group(1)) if m else None
-    return (text[:m.start()] if m else text).strip().rstrip("."), d.group(0) if d else None
+    return ((text[:m.start()] if m else text).strip().rstrip("."),
+            [int(n) for n in re.findall(r"\bD(\d+)\b", m.group(1))] if m else [])
 
 
 def read_spec(path):
@@ -137,7 +137,8 @@ def read_spec(path):
     A block: dict id (the section number, None in the old form), name, line, files (list or None
     when the line is missing), deps (raw text or None), review (text or None), starts (column
     number or None), tasks (list of task dicts, in the order the milestone lists them).
-    A task: dict id, line, title, decision (the first D id on its heading or None), checks (True
+    A task: dict id, line, title, cites (the D numbers on its heading), decision (the first of
+    them as "D<n>", or None), checks (True
     when it names checks), detail and plan (its pointers or None), path (the task file or None).
     """
     text = read(path)
@@ -154,8 +155,9 @@ def read_spec(path):
             blocks.append(cur)
             continue
         if th:
-            title, d = task_title(th.group(2))
-            task = {"id": th.group(1), "line": i, "title": title, "decision": d, "checks": False,
+            title, ds = task_title(th.group(2))
+            task = {"id": th.group(1), "line": i, "title": title, "cites": ds,
+                    "decision": f"D{ds[0]}" if ds else None, "checks": False,
                     "detail": None, "plan": None, "path": None}
             tasks[task["id"]] = task
             cur, level = None, len(line) - len(line.lstrip("#"))
@@ -190,9 +192,9 @@ def read_spec(path):
             else:
                 cur["review"] = val
         elif old:
-            d = re.search(r"\((D\d+)[^)]*\)", old.group(2))
-            cur["tasks"].append({"id": old.group(1), "line": i, "title": line.strip(),
-                                 "decision": d.group(1) if d else None, "checks": "Checks:" in line,
+            ds = [int(n) for c in D_CITE_RE.findall(old.group(2)) for n in re.findall(r"\bD(\d+)\b", c)]
+            cur["tasks"].append({"id": old.group(1), "line": i, "title": line.strip(), "cites": ds,
+                                 "decision": f"D{ds[0]}" if ds else None, "checks": "Checks:" in line,
                                  "detail": None, "plan": None, "path": None})
     for b in blocks:
         b["tasks"] += [tasks[x] for x in b.pop("task_ids") if x in tasks]

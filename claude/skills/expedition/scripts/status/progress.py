@@ -7,7 +7,11 @@ Usage: python3 -I status/progress.py <release> [--owner X] [--root PATH]
 One block per epic with an unfinished milestone: "**E<n>** · Specs d/t" (t the epic's specs in
 the grid, d those whose milestones are all done or stopped by a decision, "stopped (D<n>)"), then "- **Running**" (specs with a running
 milestone) and "- **Blocked**" (specs with a waiting milestone or one stopped for a reason other than a decision, each with its reason),
-each spec as its number and its Deliverables title. With nothing unfinished: the last epic's
+each spec as its number and its Deliverables title. A new-form milestone that is not finished
+that runs, or has a task started, adds " · <milestone> d/t" to its spec's line, its tasks done of total (lib/specs.py task_status),
+with "(<task id> blocked: <reason>)" for a blocked task. An iterative spec that is not closed
+(plan/close_spec.py) is never counted in d, keeps its epic's block, and is listed under
+"- **Open**" when none of its milestones runs or is blocked. With nothing unfinished: the last epic's
 line, then "Nothing running." and the unticked Decided cards of queue.md as
 "Ready for an epic: **Q<n>**, ...".
 
@@ -145,8 +149,12 @@ def print_progress(root, folder, plan, own, bd, q_text):
             cell = next((c for c in cells if c), "")
             epics[int(m.group(1))][m.group(2)].append({"name": m.group(3), "cell": cell})
     titles = own.spec_titles(plan)
-    trackers = {(num, b["name"]): b["tracker"]
-                for num, bl in own.new_collect(folder, plan)["blocks"].items() for b in bl}
+    blocks = own.new_collect(folder, plan)["blocks"]
+    trackers = {(num, b["name"]): b["tracker"] for num, bl in blocks.items() for b in bl}
+    by_name = {(num, b["name"]): b for num, bl in blocks.items() for b in bl}
+    sp = C.load("lib/specs")
+    open_specs = {num for num, p in own.spec_files(folder)
+                  if (d := own.read_spec(p))["type"] == "iterative" and not d["closed"]}
     wts = None
     for e in sorted(epics):
         for num in sorted(epics[e], key=num_key):
@@ -164,7 +172,23 @@ def print_progress(root, folder, plan, own, bd, q_text):
                     print(f"warning: {num} {row['name']}: {warn}", file=sys.stderr)
 
     def counts(specs):
-        return sum(1 for rows in specs.values() if all(r["kind"] in CLOSED for r in rows)), len(specs)
+        return sum(1 for n, rows in specs.items()
+                   if n not in open_specs and all(r["kind"] in CLOSED for r in rows)), len(specs)
+
+    def tasks(num, rows):
+        """" · <milestone> d/t" for each unfinished new-form milestone of the spec."""
+        out = ""
+        for r in rows:
+            b = by_name.get((num, r["name"]))
+            if r["kind"] in CLOSED or not b or b["id"] is None or not b["tasks"]:
+                continue
+            states = [(t["id"],) + sp.task_status(t, r["path"]) for t in b["tasks"]]
+            if r["kind"] == "planned" and all(s[1] == sp.STATUSES[0] for s in states):
+                continue
+            out += f" · {r['name']} {sum(1 for s in states if s[1] == 'done')}/{len(states)}"
+            stuck = [f"{i} blocked: {why}" for i, s, why in states if s == "blocked"]
+            out += f" ({'; '.join(stuck)})" if stuck else ""
+        return out
 
     def title(num, rows):
         return titles.get(num) or rows[0]["name"]
@@ -175,7 +199,7 @@ def print_progress(root, folder, plan, own, bd, q_text):
     blocks = []
     for e in sorted(epics):
         specs = epics[e]
-        if all(r["kind"] in CLOSED for rows in specs.values() for r in rows):
+        if all(r["kind"] in CLOSED for rows in specs.values() for r in rows) and not open_specs & set(specs):
             continue
         d, t = counts(specs)
         lines = [f"**E{e}** · Specs {d}/{t}"]
@@ -184,12 +208,16 @@ def print_progress(root, folder, plan, own, bd, q_text):
         blocked = [n for n in nums if any(r["kind"] in ("stopped", "waiting") for r in specs[n])]
         if running:
             lines.append("- **Running**")
-            lines += [f"  - {n} {title(n, specs[n])}" for n in running]
+            lines += [f"  - {n} {title(n, specs[n])}{tasks(n, specs[n])}" for n in running]
         if blocked:
             lines.append("- **Blocked**")
             for n in blocked:
                 reason = why([r for r in specs[n] if r["kind"] in ("stopped", "waiting")])
                 lines.append(f"  - {n} {title(n, specs[n])}" + (f": {reason}" if reason else ""))
+        idle = [n for n in nums if n in open_specs and n not in running and n not in blocked]
+        if idle:
+            lines.append("- **Open**")
+            lines += [f"  - {n} {title(n, specs[n])}{tasks(n, specs[n])}" for n in idle]
         blocks.append("\n".join(lines))
     if blocks:
         print("\n\n".join(blocks))
