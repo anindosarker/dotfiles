@@ -21,7 +21,7 @@ The lane is the state, from the Done rule (rule_lanes):
    every milestone tracker of every own spec is done or stopped, else In progress. In a
    new-form spec (modules, task pointers, numbered milestones) only the milestones count that
    hold a task of a module citing it; a citing module with no task in a milestone keeps it In
-   progress.
+   progress, except in a spec migrate/format.py marked "migrated: true".
 3. No such row: Done when it is closed by hand (a ticked card in Done: decisions/close.py writes
    it for a decision with nothing to run, migrate/decisions.py for an old "[Done]" tag line) or
    when any spec citing it has merged; In progress when it carries "#E<n>"; else To do.
@@ -219,7 +219,8 @@ def spec_state(folder, num, path):
             placed.add(t["module"])
             for d in t["cites"]:
                 per[d] = per.get(d, True) and done
-    for mod, cites in (doc["modules"].items() if doc["tasks"] else ()):
+    pure = bool(doc["tasks"]) and "migrated" not in doc["front"]  # migrate/format.py: modules older than the tasks
+    for mod, cites in (doc["modules"].items() if pure else ()):
         if mod not in placed:
             for d in cites:
                 per[d] = False

@@ -247,10 +247,11 @@ def collect(folder):
     errors = []
     raw = []
     for num, path in spec_files(folder):
-        blocks = parse_spec(path)
-        for b in blocks:
+        doc = read_spec(path)
+        for b in doc["blocks"]:
             b["spec"] = num
             b["path"] = path
+            b["migrated"] = "migrated" in doc["front"]
             raw.append(b)
     names = [b["name"] for b in raw]
     for name, c in collections.Counter(names).items():
@@ -276,7 +277,7 @@ def collect(folder):
             errors.append(f"{where}: milestone '{b['name']}' depends on unknown '{u}'")
         out.append({"name": b["name"], "spec": b["spec"], "order": i, "deps": deps,
                     "files": b["files"] or [], "review": b.get("review"), "starts": b.get("starts"),
-                    "new": b["id"] is not None, "cites": sorted({d for t in b["tasks"] for d in t["cites"]})})
+                    "new": b["id"] is not None and not b["migrated"], "cites": sorted({d for t in b["tasks"] for d in t["cites"]})})
     return out, errors
 
 
