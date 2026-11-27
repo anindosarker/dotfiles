@@ -6,4 +6,5 @@ import sys
 from pathlib import Path
 
 sys.dont_write_bytecode = True
+print("plan/new_cycle.py is plan/new_release.py: it runs that script", file=sys.stderr)
 runpy.run_path(str(Path(__file__).resolve().parent / "new_release.py"), run_name="__main__")

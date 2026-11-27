@@ -1,5 +1,7 @@
 # Planning Guidelines
 
+For a release with `status/data/status.json`. A release without it is format 1.0: follow [old-form/planning-guidelines.md](old-form/planning-guidelines.md).
+
 How to write an implementation plan for this repository. Applies to humans and agents.
 
 ## Contents

@@ -115,7 +115,7 @@ def main():
             C.die("drop takes one id")
         with open(C.lock_file(folder), "a") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
-            kind = st.drop(folder, a.rest[0])
+            kind = st.drop(folder, a.release, a.rest[0])
             if kind is None:
                 C.die(f"status.json has no milestone or task entry {a.rest[0]}")
             st.commit(root, folder, [], f"docs(plan): {a.release} {kind} {a.rest[0]} dropped from status.json")

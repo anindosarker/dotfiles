@@ -83,6 +83,9 @@ def main():
     a = ap.parse_args()
     if not C.RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
+    print(f"re-read the expedition skill (SKILL.md) before the first spec: this release is format {C.skill_version()}, "
+          f"specs are folders with task files and statuses are set with status/status.py {a.release} set|get|list",
+          file=sys.stderr)
     root = C.repo_root(a.root, a.release, new=True)
     owner = detect_owner(root, a.owner)
     folder = root / ".ai" / "plans" / a.release / owner
@@ -111,8 +114,6 @@ def main():
     st.save(folder, st.build(folder, c, ({}, {})))
     print(st.path(folder))
     open(C.lock_file(folder), "a").close()
-    print(f"statuses of this release: status/status.py {c} set|get|list (the store is status/data/status.json); "
-          "specs are folders with task files: re-read the expedition skill before the first spec")
 
 
 if __name__ == "__main__":

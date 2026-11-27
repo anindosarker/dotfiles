@@ -324,9 +324,19 @@ def pending(folder):
     return (folder / PENDING).is_file()
 
 
-def drop(folder, ident):
-    """Remove one stored milestone or task entry that no spec has any more. Returns its kind, or
-    None when the file has no such entry."""
+def drop(folder, release, ident):
+    """Remove one stored milestone or task entry that no spec has. Returns its kind, or None
+    when the file has no such entry. Dies when a spec still has the milestone or task."""
+    o = own()
+    live = set()
+    for num, bl in o.new_collect(folder, folder / f"{release}-plan.md")["blocks"].items():
+        for b in bl:
+            live.add(b["tracker"].name.removesuffix("-tracker.md"))
+    for num, p in o.spec_files(folder):
+        doc = o.read_spec(p)
+        live |= {f"{num}-{t}" for t in doc["tasks"]} | {f"{num}-{t['id']}" for b in doc["blocks"] for t in b["tasks"]}
+    if ident in live:
+        C.die(f"{ident} is a milestone or task a spec still has: drop removes only an entry no spec has")
     data = load(folder)
     for kind in ("milestones", "tasks"):
         left = [e for e in data[kind] if e["id"] != ident]

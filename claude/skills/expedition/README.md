@@ -30,6 +30,7 @@ templates/        the shape of each file the agent writes
 board/            the status pages
 example/          one small release with every kind of file filled in
 scripts/          the commands that do the mechanical steps
+  lib/            the code the scripts share
   plan/           new release, new spec, new milestone, new task
   epics/          start an epic, tag its specs, show its table
   sprints/        the sprint grid and the milestone marks

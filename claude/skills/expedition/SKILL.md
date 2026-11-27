@@ -44,12 +44,12 @@ One word per thing, in every file of this skill:
 
 - Owner words: `record it`, `accepted`, `k`, `epic`, `hold D<n>`, `go`, `epic go`, `roll over`; `set up` and `keep` for the First run question only.
 - **Explicit word.** No plan-file write until the owner's explicit word. The point of this rule: while the owner is still talking an item through, nothing about it goes into plan files, card notes included. Write once the owner is done with it: they say so, or they move to another item. When unsure whether they are done, keep discussing. A question mark anywhere in the owner's message, also alone on the last line, is a hint that they are still discussing: answer, DO NOT GO TO THE RECORD STEP, and write nothing to plan files. A plan-file write is a new D item, a sentence added to or changed in an existing D item, or a queue card moved, dropped or closed. The words: "record it" or "accepted" writes the decision; "later" moves the card to Later; "drop it" moves it to Dropped. "k" is a yes to what the agent just asked. Asked to record (the complete item ending with the line `Say "record it" to record it, or add to it.`): it records. Asked for go: it is the go. Agent asked nothing: "k" does nothing. A picked option, a comment, specifics, a correction, "fix it", "makes sense", or any message with a question is discussion: answer the question, fold it all into the item, post the item again, and wait. Not covered: an item that never reaches the owner (a card that is not a real choice, which the lead settles or closes by Lead-side close; a card the run sends to Autofix). Once the owner comments on such an item, the rule applies to it.
-- On `progress` (or "status") the session, lead or runner, runs `status/progress.py <release>` and replies with its block; a report on epic work is that same block. The rules and the example: [reference/formats.md](reference/formats.md), Progress reply and reports.
+- On `progress` (or "status") the session, lead or runner, runs `status/progress.py <release>`. No warning and nothing the session knows to be wrong: it replies with the output unchanged and nothing else. A report on epic work is that same block: no commit id, sprint number, file path or script leftover. The other cases and the example: [reference/formats.md](reference/formats.md), Progress reply and reports.
 - `resume` (or "resume E<n>", "resume the runner"): send the one word `resume` to every live window `run/runner.sh list` shows (`run/runner.sh resume <release>` for the runner, `run/runner.sh resume "<release> specs E<n>"` for each fork), in one turn, then post the next item.
   - No picking a window, no status checks, no pane reading or report of a session's state, no audits; the lead does its own work only when the owner says so.
   - The runner checks its own Workflows on that word ([reference/tick.md](reference/tick.md), step 3, Wake check).
 - `roll over`: the session uses the `roll-over` skill, which clears it in its own window and starts it again from its handoff; its Workflows keep running. What a lead's or a runner's handoff must carry for that: [reference/run.md](reference/run.md), Roll over. `roll over <runner name>` in the lead types `roll over` into that runner's window.
-- A runner or spec writer window that hits a usage limit is never stopped, replaced or started again: it continues by itself when the limit resets, and `resume` typed into it (or `claude --resume <uuid>` after a crash) brings it back. `run/runner.sh stop` marks the entry stopped, after which `fork` cannot resume it. A decision with nothing to run is closed with `decisions/close.py` when recorded.
+- A runner or spec writer window that hits a usage limit is never stopped, replaced or opened a second time: it continues by itself when the limit resets, and `resume` typed into it (or `claude --resume <uuid>` after a crash) brings it back. `run/runner.sh stop` marks the entry stopped, after which `fork` cannot resume it. A decision with nothing to run is closed with `decisions/close.py` when recorded.
 - Owner comments are feedback for discussion, not decisions (Explicit word).
 - Only a real choice reaches the owner: a visible behavior or look, a public API, a re-decided decision, a scope change, and only when it fails the weight test. Spec wording that follows shipped code, tracker and process gaps, tooling with one right answer, a deviation from the letter of a decision that keeps its intent: the agent settles them, records a short decision and moves on.
 - **Weight test.** The lead asks three questions of a card before it posts it.
@@ -67,11 +67,19 @@ One word per thing, in every file of this skill:
 - Cost is one clause, once: "bigger spec", "two epics". Never argue an option down on effort, never repeat the cost after the owner leans; the owner decides what is worth building.
 - "Explain" always means explain simply: three or four short bullets, plain words, one example, no ids or paths; detail only on a follow-up. The same for a "what are we deciding" recap.
 
+## Stages
+
+Each stage has one file. Read it whole when the stage starts, and again after a compaction.
+
+- **Stage 1, discuss.** The lead reads [reference/discuss.md](reference/discuss.md) before the first discussion turn: how an item is filed, screened, posted and recorded, epics and the go, changing a decision.
+- **Stage 2, plan.** The spec writer reads [reference/plan.md](reference/plan.md) before it writes a spec, and the lead before it checks one: the steps, the contract every spec keeps, and how to write a plan file ([reference/planning-guidelines.md](reference/planning-guidelines.md)).
+- **Stage 3, run.** The runner reads [reference/run.md](reference/run.md) and [reference/tick.md](reference/tick.md). What the lead does is below.
+- **Stage 4, triage.** The lead reads [reference/triage.md](reference/triage.md) when the run's cards come back. The short form is below.
+- File layout and conventions: [reference/files.md](reference/files.md). File formats (decisions, queue, epic file, tracker, status, handoff): [reference/formats.md](reference/formats.md). The shape of each authored file: [templates/](templates/). One small release with every kind of file filled in, to read before writing a file of that kind: [example/](example/README.md).
+
 ## Process notes
 
-!`python3 -I ${CLAUDE_SKILL_DIR}/scripts/plan/process.py $ARGUMENTS`
-
-The P rules printed above bind this session. After a handoff, a compaction or a RUN line, re-read the file with `python3 -I ${CLAUDE_SKILL_DIR}/scripts/plan/process.py <release>` before any other step.
+The P rules printed below bind this session. After a handoff, a compaction or a RUN line, re-read the file with `python3 -I ${CLAUDE_SKILL_DIR}/scripts/plan/process.py <release>` before any other step, and the stage file named under Stages.
 
 - The release's `process.md` holds project facts only: branches, the milestone branch and worktree, merge, release, checks on the shared machine, the agent sandbox, the public surface, commits, shared files, plans.
 - The process itself is this skill; commands are in the package manifests; code rules in the project's coding standards; what a milestone must run is in its spec (`Local CI:` line).
@@ -85,11 +93,14 @@ The P rules printed above bind this session. After a handoff, a compaction or a 
 - A suggestion to agents (a tool they may use) stays; a requirement for one milestone goes to that spec.
 - The agent settles the file; the owner reads it only when a bullet is a real choice.
 
+The process file of this release:
+
+!`python3 -I ${CLAUDE_SKILL_DIR}/scripts/plan/process.py $ARGUMENTS`
+
 ## Core loop
 
 Two sessions on one checkout:
 
-- two sessions on one checkout.
 - The lead (this session) discusses with the owner and records decisions; the runner (a second session, `scripts/run/runner.sh`) runs epics.
 - An epic is every decided item that is ready when the owner says `epic`: no tag, dependencies in epics running or done, no overlap with the owned files of a running epic (`epics/overlap.py`).
 - No upper count.
@@ -103,17 +114,7 @@ Everything in this skill is a default that makes the work efficient, not a law. 
 
 Arguments: `$ARGUMENTS`. Stage missing: run `python3 -I ${CLAUDE_SKILL_DIR}/scripts/status/report.py <release>`, take its inferred stage, and say which stage you picked.
 
-## Stages
-
-Each stage has one file. Read it whole when the stage starts, and again after a compaction.
-
-- **Stage 1, discuss.** The lead reads [reference/discuss.md](reference/discuss.md) before the first discussion turn: how an item is filed, screened, posted and recorded, epics and the go, changing a decision.
-- **Stage 2, plan.** The spec writer reads [reference/plan.md](reference/plan.md) before it writes a spec, and the lead before it checks one: the steps, the contract every spec keeps, and how to write a plan file ([reference/planning-guidelines.md](reference/planning-guidelines.md)).
-- **Stage 3, run.** The runner reads [reference/run.md](reference/run.md) and [reference/tick.md](reference/tick.md). What the lead does is below.
-- **Stage 4, triage.** The lead reads [reference/triage.md](reference/triage.md) when the run's cards come back. The short form is below.
-- File layout and conventions: [reference/files.md](reference/files.md). File formats (decisions, queue, epic file, tracker, status, handoff): [reference/formats.md](reference/formats.md). The shape of each authored file: [templates/](templates/). One small release with every kind of file filled in, to read before writing a file of that kind: [example/](example/README.md).
-
-### Stage 3: run
+## Stage 3: run
 
 Unattended, in the runner session (`run/runner.sh start`, brief `templates/runner-brief.md`). The lead never runs this stage. The runner's rules: [reference/run.md](reference/run.md); the steps of one tick: [reference/tick.md](reference/tick.md). What the lead does:
 
@@ -123,7 +124,7 @@ Unattended, in the runner session (`run/runner.sh start`, brief `templates/runne
 - `HOLD <target>` and `RESUME <target>`, typed the same way, hold and resume an epic, a spec or one milestone. These and every other line between lead and runner: [reference/run.md](reference/run.md), Epics.
 - A dead runner: `run/runner.sh start` resumes it.
 
-### Stage 4: triage
+## Stage 4: triage
 
 Folded into stage 1: the run's cards are queue cards and come up through `queue/next.py` like any other. Rules: [reference/triage.md](reference/triage.md). Short form:
 
@@ -153,7 +154,7 @@ A release with no status file is in format 1.0 and is read as it is; no release 
 
 - A spec is one flat file `plan/specs/NN-<slug>.md` with `### Milestone: <name>` blocks and `- Task N: ... Checks: ...` lines; `- Files owned:` is required in each block.
 - A milestone's status is its grid mark and the `Status:` line of its tracker ([reference/formats.md](reference/formats.md), Milestone status); there is no status file and no task status.
-- `plan/new_spec.py` writes the flat file there, and `plan/new_fix.py` adds a fix; how to write such a plan file: [reference/old-form/planning-guidelines.md](reference/old-form/planning-guidelines.md).
+- `plan/new_spec.py` writes the flat file there, from [templates/spec-flat.md](templates/spec-flat.md), and `plan/new_fix.py` adds a fix. How to write such a plan file: [reference/old-form/planning-guidelines.md](reference/old-form/planning-guidelines.md) and [reference/old-form/specs.md](reference/old-form/specs.md); an example plan: [reference/old-form/example-plan.md](reference/old-form/example-plan.md).
 - The status page is the swimlane page.
 - To move the release to format 2.0: [scripts/migrate/v1.0-v2.0/README.md](scripts/migrate/v1.0-v2.0/README.md).
 

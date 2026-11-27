@@ -116,7 +116,8 @@ def old_spec(a, root, own, folder, plan):
     tracker.write_text(C.tracker_text(a.num, a.title, True), encoding="utf-8")
     print(tracker)
     plan.write_text(new_plan, encoding="utf-8")
-    print("next: fill the ### Milestone: blocks, then sprints/check.py and sprints/refresh.py")
+    print("next: fill the ### Milestone: blocks, then sprints/check.py and sprints/refresh.py "
+          "(this release is format 1.0: reference/old-form/planning-guidelines.md and reference/old-form/specs.md)")
     for r in rules:
         print(f"Project planning rules: {r}")
 

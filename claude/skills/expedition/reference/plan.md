@@ -7,6 +7,7 @@ For the spec writer, and for the lead's check of the specs before go: read this 
 - The contract
 - Plan file and spec
 - Modules, tasks, milestones
+- Cutting an epic into specs
 - Milestones
 - Lines the spec writer adds
 - Integration never waits on CI
@@ -15,7 +16,7 @@ For the spec writer, and for the lead's check of the specs before go: read this 
 
 Specs per epic, written by the spec writer (the session `run/runner.sh fork` opens) after `epic`, checked by the lead before `go`. Write the plan per spec, not all at once.
 
-The spec writer's order: fill the Files column of the epic's Ownership table (the files each decision changes, paths as the project writes them); cut the epic into specs by the three aims below; write the specs; run `epics/table.py E<n>` to complete the table; check the plan with that output and its own judgment, and regroup when a clearly better cut exists; send `SPECS`.
+The spec writer's order: fill the Files column of the epic's Ownership table (the files each decision changes, paths as the project writes them); cut the epic into specs by the three aims below; write the specs; run `epics/table.py <release> E<n>` to complete the table; check the plan with that output and its own judgment, and regroup when a clearly better cut exists; send `SPECS`.
 
 Cutting an epic into specs: weigh three aims.
 
@@ -31,7 +32,7 @@ These are aims, not rules. They pull against each other, and the right cut depen
    - Before a spec is written, the spec writer maps every site the change touches (file:line table); the spec lists those files, not guesses.
    - A ride-along item (a timeout bump, a glob fix) joins the nearest spec as a named ride-along, never its own spec.
 4. Each spec says what must be proven (its `Acceptance:` line), not how it is run; the runner picks the orchestration per sprint ([run.md](run.md), Orchestration). The spec writer writes section 1 by hand, then adds each piece of work with `plan/milestone.py add`: it writes the module heading in 1.6, the task files, their pointer lines in 2.1, the milestone block in 2.2 and the milestone's tracker. The writer then fills each module and each task file (Goals, Verification). Merge adjacent small tasks. The lines are in the contract below; the filled shape is in the example release.
-5. After each spec file, run `sprints/check.py`: it computes, in memory, each milestone's sprint and each epic's critical path from the milestone blocks, and writes nothing. A file shared by two milestones of the same sprint, or a dependency cycle, is a script error naming the file and the two milestones: fix it in the spec and run `sprints/check.py` again. When the epic's specs are written, `epics/table.py E<n>` completes the epic file's table. On go, `run/go.py` runs `sprints/refresh.py` then `sprints/swimlanes.py`: they write the `status/sprints.md` grid, one column per sprint, and the swimlane data for `status/index.html` (see [files.md](files.md)). Checks sit in each task's Verification list and `process.md`, Acceptance in each spec's line, the release in the release spec, sandbox rules in `process.md` P5. `status/report.py` flags a missing or extra piece.
+5. After each spec file, run `sprints/check.py`: it computes, in memory, each milestone's sprint and each epic's critical path from the milestone blocks, and writes nothing. A file shared by two milestones of the same sprint, or a dependency cycle, is a script error naming the file and the two milestones: fix it in the spec and run `sprints/check.py` again. When the epic's specs are written, `epics/table.py <release> E<n>` completes the epic file's table. On go, `run/go.py` runs `sprints/refresh.py` then `sprints/swimlanes.py`: they write the `status/sprints.md` grid, one column per sprint, and the page data for `status/index.html` (format 2.0: `status.data.js` for the task board, `board/task-board.html`; format 1.0: the swimlane data) (see [files.md](files.md)). Checks sit in each task's Verification list and `process.md`, Acceptance in each spec's line, the release in the release spec, sandbox rules in `process.md` P5. `status/report.py` flags a missing or extra piece.
    - The run unit is the milestone: one team, its own branch, worktree, tracker and merge. Usually one milestone per spec; a spec may yield several (file groups, or a read-only side job like captures). Every changed file is owned by exactly one milestone while it runs; two milestones that share a file sit in different sprints (`lib/ownership.py` orders them, lower spec number first), or the two merge.
    - Sprints are computed across every epic: `lib/ownership.py` puts each milestone in the first sprint at or after its epic's start sprint (`Starts:` in the epic file, the current sprint at go) whose dependencies and file owners are satisfied. A milestone with a running or finished grid row keeps its sprint. A new epic never lands in a finished sprint, and a milestone added after go (`plan/milestone.py add`) starts at the current sprint ([files.md](files.md), Ownership).
    - What two or more milestones need (dependency adds, lockfile, lint or tsconfig config, CI edits, shared new helpers, baseline captures) is the shared milestone of the first sprint; later milestones never touch `package.json`, the lockfile, ESLint or CI config.
@@ -115,7 +116,7 @@ The three aims to weigh, and what to do when they pull against each other: Writi
 
 ## Lines the spec writer adds
 
-These lines are expedition's own. The contract in [SKILL.md](../SKILL.md) says which of them a script needs.
+These lines are expedition's own. The contract, above, says which of them a script needs.
 
 - Decision cites: `(D7)` on the heading of the module that carries decision D7, outside code fences (the scripts count every cite in the file outside a fence), `(Q3)` for a queue card, `(v0.4.x D9)` for a decision of another release.
 - `- Review: none | fable` in each milestone block. `Review: fable` only where the change warrants a review: a public API, shared state, or a change across specs. Every other milestone says `Review: none` and gets its checks only. The runner picks the orchestration.

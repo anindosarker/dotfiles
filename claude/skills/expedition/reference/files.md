@@ -45,14 +45,14 @@ Deliverables table: columns `#`, `Spec` (linked to the spec file), `Epic` (fille
 
 Milestones live in the spec files, not in `<release>-plan.md`: each spec holds one `#### 2.2.N Milestone: <name>` block per milestone (a format 1.0 spec: `### Milestone: <name>`), with the lines of the contract ([plan.md](plan.md), The contract). Branch and worktree are assigned at launch and recorded in the milestone's tracker, never in the spec.
 
-Checks live in each task's `Checks:` and the release's `process.md`; Acceptance in each spec's `Acceptance:` line (programmatic or judged); the release in the release spec; sandbox rules in `process.md`.
+Checks live in each task's Verification list and the release's `process.md`; Acceptance in each spec's `Acceptance:` line (programmatic or judged); the release in the release spec; sandbox rules in `process.md`.
 
 `<release>-plan.md` is not frozen: specs add rows, each go fills their Epic cells.
 
 ## Ownership
 
 - `lib/ownership.py` computes the ownership facts from those blocks, in memory; no file holds them, and every script that needs them (`sprints/check.py`, the grid chain, `sprints/swimlanes.py`, `status/report.py`, `plan/milestone.py`, `run/go.py`) calls the same code.
-- An edge from A to B exists when B lists A under `Depends on` or when A and B share a file (lower spec number first); a new-form milestone with no `Depends on` line follows the milestone listed before it in its spec, and one with no `Files owned` line shares no file.
+- An edge from A to B exists when B lists A under `Depends on` or when A and B share a file (lower spec number first); a milestone with no `Files owned` line shares no file.
 - A milestone's sprint is the longest chain ending at it plus one, across every epic, and never before its epic's start sprint: the `Starts: S<n>` line of `plan/epics/E<n>.md`, written on go by `epics/tag.py` as the current sprint.
 - The start sprint carries along the edges.
 - An epic file without a `Starts:` value means no floor.

@@ -104,7 +104,8 @@ def split_task(text):
     if len(title) > TITLE_MAX:
         cut = max(title.rfind(s, 30, TITLE_MAX) for s in ("; ", ": ", ", "))
         title = (title[:cut] if cut > 0 else title[:TITLE_MAX].rsplit(" ", 1)[0]).rstrip(".:,; ")
-    boxes = [c.strip().rstrip(".") for c in checks.split(";") if c.strip().rstrip(".")]
+    # a check that names the old Checks section, "2.2", names the section it becomes, "2.3"
+    boxes = [re.sub(r"^2\.2\b", "2.3", c.strip().rstrip(".")) for c in checks.split(";") if c.strip().rstrip(".")]
     return title or "Task", module, ds, boxes
 
 
