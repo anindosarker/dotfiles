@@ -31,13 +31,14 @@ const ROOT = '/abs/path/to/repo' // the main checkout: merge, check and release 
 const PLANS = '.ai/plans/v<release>/<owner>'
 const PROCESS_FILE = `${PLANS}/process.md`
 const RELEASE = PLANS.split('/')[2] // the release folder name, e.g. v0.9.x
-const MARK = '~/.claude/skills/expedition/scripts/sprints/mark.py' // the only writer of status/sprints.md marks
+const MARK = '~/.claude/skills/expedition/scripts/sprints/mark.py' // the milestone's status, by the run's verbs
+const STATUS = '~/.claude/skills/expedition/scripts/status/status.py' // task statuses, in a release with status/data/status.json
 const stems = (p) => [].concat(p.tracker).map(t => t.split('/').pop().replace(/-tracker\.md$/, '')) // mark.py names a milestone by its tracker stem
 const INTEGRATION = '<integration branch>'
 const MIRROR = 'dev' // the staging branch: untouched during the sprints, fast-forwarded to INTEGRATION once after the last feature column (process.md P1)
 const RELEASE_LABEL = '<release label>'
 const RELEASE_PREFIX = 'v<release>' // merge commit subject: `merge: <milestone> (<epic>)`
-const RELEASE_EPIC = `${PLANS}/plan/specs/<release epic>.md` // the release milestone's check and release steps
+const RELEASE_EPIC = `${PLANS}/plan/specs/<release epic>.md` // the release milestone's check and release steps; a spec folder: plan/specs/<NN-slug>/<NN-slug>.md
 const GATE_JUDGED = null // { question: '...', captures: ['...'] | 'tracker' } when RELEASE_EPIC names a judged clause
 // Stage switches: a milestone turns a stage off here.
 const RUN_FILES_CHECK = true, RUN_REVIEW = true, RUN_VERIFY = true, RUN_JUDGES = true, RUN_MERGE = true, RUN_GATE = true, RUN_RELEASE = true
@@ -50,6 +51,7 @@ const STOPPED_MILESTONES = [] // release milestone: { milestone: '<name>', statu
 const MILESTONES = [
   // One entry: this milestone (empty for a release milestone with no build of its own). `epic` is the epic number; `plan` is the epic file and `tracker` the milestone's tracker (a string or an array).
   // review: 'fable' runs the review bounce (the milestone block says `Review: fable`); judged: { question, captures: [...] | 'tracker' }, judgeCount (default 3).
+  // plan: the spec file, `${PLANS}/plan/specs/NN-<slug>/NN-<slug>.md` for a spec folder, `${PLANS}/plan/specs/NN-<slug>.md` for a flat spec.
   { id: 'NN', epic: 'NN', wt: `${ROOT}.worktrees/<slug>`, branch: 'v<release>/<slug>', plan: `${PLANS}/plan/specs/NN-<slug>.md`, tracker: `${PLANS}/run/trackers/NN-<milestone-slug>-tracker.md`, title: '<milestone name>', review: 'fable', judged: null },
   // releaseLabel overrides RELEASE_LABEL for a milestone whose label differs (P6): { ..., releaseLabel: '<label>' }.
   // A shared run: several file sets, one branch. `lead` is the shared prework prompt on the run worktree,
@@ -106,33 +108,33 @@ const SPECIFICS = {
   'NN': `Milestone NN specifics: ...`,
 }
 
-const buildPrompt = (p, wt = p.wt, branch = p.branch) => `You are the coder for milestone ${p.id}. Implement its "### Milestone:" block of the epic ${list(p.plan)} (read the epic whole, plus ${PLANS}/<release>-plan.md and ${PLANS}/decisions.md) on worktree ${wt}.
+const buildPrompt = (p, wt = p.wt, branch = p.branch) => `You are the coder for milestone ${p.id}. Implement its "Milestone:" block of the epic ${list(p.plan)} (read the epic whole, plus ${PLANS}/<release>-plan.md and ${PLANS}/decisions.md) on worktree ${wt}.
 ${RULES(p, wt, branch)}
 How to work:
 - The branch may already hold commits from an interrupted earlier attempt: read \`git log --oneline ${BASE_SHA}..HEAD\` and \`git status\` first and continue from that state; do not redo finished tasks.
 - The epic's "Acceptance:" line (section 1.2) is your check: run it yourself and keep going until it passes; for a judged check, capture, compare against the named reference, run the judges, fix, repeat.
-- Follow your milestone's Task lines in order (its block in section 2.1). Each task ends with its checks green and one or more commits pushed. Per task run only tsc and lint on your own files; at milestone end run the unit tests plus one base of the long per-base checks. The verifier runs every base. Slow checks run in parallel, not one after another: per-base checks on separate ports at once, builds at once, test runs at once.
-- Record every check you ran in ${list(p.tracker)} under "Checks:" as one bullet: command, commit, result. The verifier trusts that record and does not repeat it. Set "Status: running" when you start; add one line per task with its last commit. No narration, no check output, no commit lists.
+- Follow your milestone's tasks in order: the task files its "- Tasks:" line lists by number (the pointer lines in section 2.1 name each file; its Goals, Instructions and Verification list are the task), or the "- Task N:" lines inside the block when it has those. When the release folder has status/data/status.json, set each task's status with \`python3 -I ${STATUS} ${RELEASE} set <spec number>-<task number> "<status>"\`, run from your worktree (the command finds the plan folder from there, also when it is in a root folder above the repository, and reads the boxes you ticked in your copy of the task file): "in progress" before you start it; "done" after you ticked, in the task file, every Verification box you have proven (a box that starts with "Owner:" is the owner's: never tick it and never open a browser for it); "blocked" with --reason "<a few words>" when you cannot go on. Each task ends with its checks green and one or more commits pushed. Per task run only tsc and lint on your own files; at milestone end run the unit tests plus one base of the long per-base checks. The verifier runs every base. Slow checks run in parallel, not one after another: per-base checks on separate ports at once, builds at once, test runs at once.
+- Record every check you ran in ${list(p.tracker)} under "Checks:" as one bullet: command, commit, result. The verifier trusts that record and does not repeat it. When the release folder has no status/data/status.json, set "Status: running" in the tracker when you start and add one line per task with its last commit; when it has the file, the tracker holds no status line and no task line. No narration, no check output, no commit lists.
 - Design decisions are in the epic; implementation is yours. Where the epic says "does NOT", respect it.
 - ${SPECIFICS[p.id]}
 - Push after each task; no PR: a milestone merges into ${INTEGRATION} on its recorded local checks (process.md P1). Do not wait for CI.
 Return: blocked, blockedReason (when blocked), head (short sha after your last push), commits (sha and subject, in order), notes (facts the reviewer and verifier need), attention (what needs the owner; usually empty).`
 
-const reviewPrompt = (p, round, prior) => `You are the reviewer for milestone ${p.id}, round ${round}. Review the branch ${p.branch} on worktree ${p.wt}: \`git diff ${BASE_SHA}..HEAD\` plus \`git log --oneline ${BASE_SHA}..HEAD\`, against the epic ${list(p.plan)} (its milestone block), ${PLANS}/decisions.md and the project standards (cite the section for each finding).
+const reviewPrompt = (p, round, prior) => `You are the reviewer for milestone ${p.id}, round ${round}. Review the branch ${p.branch} on worktree ${p.wt}: \`git diff ${BASE_SHA}..HEAD\` plus \`git log --oneline ${BASE_SHA}..HEAD\`, against the epic ${list(p.plan)} (its milestone block, and, when the block has a "- Tasks:" line, the task files it lists with their modules in section 1.6), ${PLANS}/decisions.md and the project standards (cite the section for each finding).
 ${RULES(p)}
 Review for: correctness against the epic (every "does" done, every "does NOT" respected), a finding that contradicts an accepted decision (set contradictsDecision=true and say which), dead code, docs and changelog accuracy, tracker completeness, the project's forbidden patterns, missing commit trailer. Read the actual files; do not trust commit messages. Run the cheap checks yourself.
 ${round > 1 && prior ? `Round ${round} is incremental: review only \`git diff ${prior.head}..HEAD\` (the fixer's commits), not the whole branch. Confirm each previous finding was fixed or re-raise it. ${quoted('The previous round findings and the fixer\'s notes follow.', prior)}` : ''}
 Do not edit files. Return pass (true only when no major findings remain), contradictsDecision, and findings, each with severity, file, line, problem, fix, standardSection.`
 
 const fixPrompt = (p, findings) => `You are the fixer for milestone ${p.id} on worktree ${p.wt}. Read the findings and \`git diff ${BASE_SHA}..HEAD\` only; open an epic or decisions line only where a finding may contradict it. Fix the review findings below that you confirm in the code (major first; minor and nit too unless they contradict the epic ${list(p.plan)} or ${PLANS}/decisions.md, in which case say why in notes).
-${quoted('The review findings follow.', findings, `Your edits stay within the files of the Files owned line of the milestone's block in ${list(p.plan)}; a finding that needs another file is declined in notes.`)}
+${quoted('The review findings follow.', findings, `Your edits stay within the files of the Files owned line of the milestone's block in ${list(p.plan)} (when the block has no such line, the files its task files and section 1.4 name); a finding that needs another file is declined in notes.`)}
 ${RULES(p)}
 One commit per concern, pushed. Re-record in ${list(p.tracker)} every check you reran after a code change (command, commit, result). Return blocked (true only when a finding cannot be fixed without contradicting an accepted decision), blockedReason, head, commits, notes (per finding: fixed or declined, and why), attention.`
 
-const verifyPrompt = (p) => `You are the verifier for milestone ${p.id} on worktree ${p.wt}, branch ${p.branch}. Read the Checks section of ${list(p.tracker)} first. Do NOT rerun a check recorded there whose commit is HEAD, or whose \`git diff --name-only <recorded commit>..HEAD\` touches only plan files and the changelog. Run only the checks of section 2.2 of ${list(p.plan)} that are missing, from a clean tree, in parallel where independent, and record them. The long checks (pages check, Storybook build, browser tests per base) run here once, every base concurrently, never per task. CI is the second run for tsc, lint, tests and builds; do not repeat those locally when recorded green.
+const verifyPrompt = (p) => `You are the verifier for milestone ${p.id} on worktree ${p.wt}, branch ${p.branch}. Read the Checks section of ${list(p.tracker)} first. Do NOT rerun a check recorded there whose commit is HEAD, or whose \`git diff --name-only <recorded commit>..HEAD\` touches only plan files and the changelog. Run only the checks of the Checks section of ${list(p.plan)} ("2.3 Checks", or "2.2 Checks" in a spec with "### Milestone:" blocks) that are missing, from a clean tree, in parallel where independent, and record them. The long checks (pages check, Storybook build, browser tests per base) run here once, every base concurrently, never per task. CI is the second run for tsc, lint, tests and builds; do not repeat those locally when recorded green.
 ${RULES(p)}
 Rerun the epic's "Acceptance:" check (section 1.2) once and record it. No PR exists for a milestone (process.md P1): the main session merges on the recorded checks.
-Append or extend the Checks section in ${list(p.tracker)} with one line per check and who ran it, commit ("docs(plan): milestone ${p.id} checks"), push.${RUN_MERGE ? '' : ` This run stops before the merge: when every check passes, set the "Status:" line of ${list(p.tracker)} to "waiting (lead: <what the lead checks or does before the merge, in a few words>)" in the same commit.`}
+Append or extend the Checks section in ${list(p.tracker)} with one line per check and who ran it, commit ("docs(plan): milestone ${p.id} checks"), push.${RUN_MERGE ? '' : ` This run stops before the merge: when every check passes, say what the lead checks or does before the merge, in a few words, in the same commit: as the "Status:" line of ${list(p.tracker)}, "waiting (lead: <what>)", when the release folder has no status/data/status.json; as one bullet under "## Attention" of that tracker when it has the file.`}
 Return allPass, head, checks (check, pass, output excerpt), failures, notes, attention.`
 
 // A blocked result never throws and never stops the other MILESTONES entries: the main session
@@ -156,7 +158,7 @@ Rules that bind you: read ${PROCESS_FILE} first (the project facts: branches, me
 ${DATA_RULE}
 - Your final text is a return value for a script, not a message to a human.`
 
-const filesCheckPrompt = (p, b) => `You are the files checker for milestone ${p.id} on worktree ${p.wt}, branch ${p.branch} (head ${b.head}). Run \`git diff ${BASE_SHA}..HEAD --stat\` and compare the touched files with the Files owned line of the milestone's block and the file list in sections 1.4 and 1.6 of ${list(p.plan)}. Plan files under ${PLANS}, the changelog and generated copies the epic names count as listed.
+const filesCheckPrompt = (p, b) => `You are the files checker for milestone ${p.id} on worktree ${p.wt}, branch ${p.branch} (head ${b.head}). Run \`git diff ${BASE_SHA}..HEAD --stat\` and compare the touched files with the Files owned line of the milestone's block and the file list in sections 1.4 and 1.6 of ${list(p.plan)} (when the block has no Files owned line, use the files its task files and section 1.4 name). Plan files under ${PLANS}, the changelog and generated copies the epic names count as listed.
 ${RULES(p)}
 Do not edit files. Return filesMatch (true when no file is extra or missing), extra (touched, not listed), missing (listed, not touched), notes.`
 
@@ -169,7 +171,7 @@ Do not edit files. Your final text is a return value for a script. Return pass a
 
 const mergePrompt = (p, v) => `You are the merger for milestone ${p.id}. Verify is green on ${p.branch} (head ${v.head}).
 ${ROOT_RULES}
-Steps, from ${ROOT}: fetch; check out ${INTEGRATION} and fast-forward it to origin; \`git merge --no-ff origin/${p.branch}\` with the subject \`merge: ${p.title} (${p.epic})\`; push; delete ${p.branch} local and remote. Set the "Status:" line of ${list(p.tracker)} to "done (<merge sha>)", commit those paths only ("docs(plan): milestone ${p.id} merged"), then run ${stems(p).map(s => `\`python3 -I ${MARK} ${RELEASE} ${s} merge\``).join(' and ')} from ${ROOT} (it ticks the grid and commits it; it never pushes), push. Never touch ${MIRROR}: it is fast-forwarded once, after the last feature column (process.md P1). A conflict: abort the merge, return mergeSha "" and the conflicting files in attention.
+Steps, from ${ROOT}: fetch; check out ${INTEGRATION} and fast-forward it to origin; \`git merge --no-ff origin/${p.branch}\` with the subject \`merge: ${p.title} (${p.epic})\`; push; delete ${p.branch} local and remote. When the release folder has no status/data/status.json, set the "Status:" line of ${list(p.tracker)} to "done (<merge sha>)" and commit those paths only ("docs(plan): milestone ${p.id} merged"); when it has the file there is no such line. Then run ${stems(p).map(s => `\`python3 -I ${MARK} ${RELEASE} ${s} merge --commit <merge sha>\``).join(' and ')} from ${ROOT} (it stores the merge, draws the grid and commits; it never pushes), push. Never touch ${MIRROR}: it is fast-forwarded once, after the last feature column (process.md P1). A conflict: abort the merge, return mergeSha "" and the conflicting files in attention.
 Return mergeSha, notes, attention.`
 
 const gatePrompt = (sprint) => `You are the release check for this release: milestones ${sprint.merged.join(', ')} merged into ${INTEGRATION}. Run the check of ${RELEASE_EPIC} on ${INTEGRATION} in ${ROOT}, every base it names, ${SERIAL_GATES ? 'one base after another' : 'bases concurrently on separate ports'}. Captures go to the scratchpad the release epic names, never the repo.
