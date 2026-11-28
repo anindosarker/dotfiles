@@ -1,4 +1,4 @@
-Items in the chat form of a release of format 2.0 or lower; in format 2.1 the filled items are the item files in `v1.0.x/owner/queue/`.
+Items in the chat form of a release of format 2.0 or lower; in format 2.1 or higher the filled items are the item files in `v1.0.x/owner/queue/`.
 
 # Item examples
 
