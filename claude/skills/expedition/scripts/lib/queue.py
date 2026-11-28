@@ -21,7 +21,7 @@ Item file (templates/queue-item.md), format 2.1:
     ## Options:                   written by the lead: "1. Recommended: ...", "2. ..."
 
 A release of format 2.2 and higher (status_form()) stores the words of format 2.2 in the same
-line: to-do, blocked, done, backlog or archived (STATUSES_22). The map: open is to-do, decided is
+line: to-do, blocked, done, backlog or archived. The map: open is to-do, decided is
 done with a decision line, autofix is done with none, later is backlog, dropped is archived;
 blocked has no word in format 2.1. A command takes the words of both formats and stores the word
 of the release's format (move_status(), select()). A 2.2 file with no status line counts as to-do.
@@ -78,11 +78,10 @@ def _common():
 
 C = _common()
 ITEM_FORMAT = (2, 1)
-STATUS_FORMAT = (2, 2)  # the status words of format 2.2 (STATUSES_22)
+STATUS_FORMAT = (2, 2)  # the first format that stores the status words to-do, blocked, done, backlog, archived
 QUEUE_DIR = C.QUEUE_DIR
 DATA = "status/data/queue.data.js"
 STATUSES = ("open", "decided", "later", "dropped", "autofix")  # format 2.1
-STATUSES_22 = ("to-do", "blocked", "done", "backlog", "archived")  # format 2.2 and higher
 # A word of a command of either format: (the status of format 2.1, the status of format 2.2).
 MOVES = {"open": ("open", "to-do"), "to-do": ("open", "to-do"), "later": ("later", "backlog"),
          "backlog": ("later", "backlog"), "dropped": ("dropped", "archived"), "archived": ("dropped", "archived"),
