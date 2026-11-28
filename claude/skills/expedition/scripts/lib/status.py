@@ -22,6 +22,13 @@ In a release of format 2.2 (spec 04, D13) this file is also the store of each mi
 compute, which reads the started columns from here) and of "launched", true from its first
 sprints/mark.py launch on; lib/ownership.py grid reads the grid rows from here, and the release
 has no status/sprints.md. Below 2.2 "sprint" is the column of status/sprints.md.
+In a release of format 2.2 (spec 05, D8) every epic, spec, milestone and task entry also has
+"decider", worked out on every build (deciders) and stored in no plan file: an epic "you"; a task
+the decider of the decision its module cites ("" when it cites none); a milestone the decider of
+the first of its tasks that has a decision ("agent" when none has); a spec the decider of the first
+decision a module of it cites ("" when none cites one). The decider of a decision is the "decider"
+line of the queue item whose "decision" line names it (lib/queue.py); "" when no item names it or
+the item has no such line. decisions.md is only read.
 Everything else in the file is rebuilt from the specs on every write (build), in the shape of
 the status board: release, updated, root, statuses, sprints, epics, specs, milestones, tasks.
 
@@ -271,6 +278,10 @@ def build(folder, release, stored=None):
     else:
         gcols = o.grid_columns(folder)
     milestones, tasks = [], []
+    dec_of = deciders(folder) if new else None
+
+    def decider(d):
+        return dec_of.get(d, "") if d else ""
 
     def task_entry(num, t, mid):
         tid = f"{num}-{t['id']}"
@@ -282,6 +293,8 @@ def build(folder, release, stored=None):
         e.update(ownerCheck=e["status"] == "blocked" and e["reason"] == OWNER_REASON,
                  type=kind if kind in ("feat", "bug") else "feat", decision=t["decision"] or "",
                  file=t["path"].relative_to(folder).as_posix() if has_file else "")
+        if new:
+            e["decider"] = decider(e["decision"])
         return e
 
     for num, p in coll["docs"]:
@@ -304,6 +317,9 @@ def build(folder, release, stored=None):
             for t in b["tasks"]:
                 placed.add(t["id"])
                 tasks.append(task_entry(num, t, mid))
+            if new:
+                first = next((x for x in tasks if x["milestone"] == mid and x["decision"]), None)
+                e["decider"] = decider(first["decision"]) if first else "agent"
         for t in o.read_spec(p)["tasks"].values():
             if t["id"] not in placed:
                 tasks.append(task_entry(num, t, ""))
@@ -320,6 +336,9 @@ def build(folder, release, stored=None):
         inside = mine + [t["status"] for t in tasks if t["spec"] == num] if mine else []
         specs.append({"id": num, "title": titles.get(num, ""), "path": links[num],
                       "epic": f"E{epic_of[num]}" if epic_of.get(num) else "", "status": rollup(inside)})
+        if new:
+            cite = next((c for c in o.read_spec(p)["modules"].values() if c), None)
+            specs[-1]["decider"] = decider(f"D{cite[0]}" if cite else "")
     epics = []
     for n in o.epic_numbers(folder):
         mine = [s for s in specs if s["epic"] == f"E{n}"]
@@ -331,7 +350,7 @@ def build(folder, release, stored=None):
         for e in epics:
             word, why = epic_state(o, folder, int(e["id"][1:]), e["status"], milestones, tasks)
             specs_ = e.pop("specs")
-            e.update(status=word, reason=why, specs=specs_)
+            e.update(status=word, reason=why, decider="you", specs=specs_)
     sprints = []
     for c in sorted({int(m["sprint"][1:]) for m in milestones if m["sprint"]}):
         inside = [m["status"] for m in milestones if m["sprint"] == f"S{c}"]
@@ -340,6 +359,16 @@ def build(folder, release, stored=None):
     return {"release": release, "format": fmt,
             "updated": now(), "statuses": list(STATUSES),
             "sprints": sprints, "epics": epics, "specs": specs, "milestones": milestones, "tasks": tasks}
+
+
+def deciders(folder):
+    """{"D<n>": decider} of a release of format 2.2: the "decider" line of the queue item whose
+    "decision" line names the decision, the first such item with one, in number order."""
+    out = {}
+    for it in C.load("lib/queue").items(folder):
+        if it["decision"] and not out.get(it["decision"]):
+            out[it["decision"]] = it["decider"]
+    return out
 
 
 def epic_state(o, folder, n, counted, milestones, tasks):
