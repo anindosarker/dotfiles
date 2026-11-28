@@ -5,12 +5,15 @@ earlier release (else the skill template), and the sub-folders:
 
   plan/specs/  plan/epics/              authored
   run/trackers/  run/handoffs/   written during the run
-  status/index.html  status/data/       generated; nothing under status/ is edited by hand
+  status/index.html  status/src/  status/data/   generated; nothing under status/ is edited by hand
 
-status/index.html is copied from board/task-board.html. status/index.html and status/data/
-are renders, never committed: the two .ai/plans/*/*/status/ lines are appended to the repo's
-.gitignore when missing. status/data/ (and status/sprints.md, below format 2.2) are written later
-by sprints/refresh.py.
+The page follows the skill's version, which is the format of the new release: from 2.2 on
+status/index.html is board/dashboard.html (D15) with status/src/, the files of board/src/
+(sprints/swimlanes.py install_dashboard), and the script prints both paths; below 2.2 it is
+board/task-board.html. status/index.html, status/src/ and status/data/ are renders, never
+committed: the .ai/plans/*/*/status/ lines are appended to the repo's .gitignore when missing,
+the status/src/ line only from 2.2 on. status/data/ (and status/sprints.md, below format 2.2) are
+written later by sprints/refresh.py.
 
 The plan file follows the skill's version too: templates/plan.md holds the form of 2.2, with no
 link to status/sprints.md; below 2.2 the script adds the link (PLAN_LINK), as releases of that
@@ -110,13 +113,20 @@ def main():
     for sub in ("plan/specs", "plan/epics", "run/trackers", "run/handoffs", "status/data"):
         (folder / sub).mkdir(parents=True)
         print(folder / sub)
-    tpl = C.BOARD / "task-board.html"
-    if not tpl.is_file():
-        die(f"template missing: {tpl}")
-    shutil.copyfile(tpl, folder / "status" / "index.html")
-    C.ensure_gitignore(folder)
+    sw = C.load("sprints/swimlanes")
+    dashboard = C.load("lib/status").version(C.skill_version()) >= sw.DASHBOARD_FORMAT
+    if dashboard:
+        sw.install_dashboard(folder)
+    else:
+        tpl = C.BOARD / "task-board.html"
+        if not tpl.is_file():
+            die(f"template missing: {tpl}")
+        shutil.copyfile(tpl, folder / "status" / "index.html")
+    C.ensure_gitignore(folder, page_src=dashboard)
     print(folder / "status" / "index.html")
-    C.ignore_renders(folder)
+    if dashboard:
+        print(folder / "status" / "src")
+    C.ignore_renders(folder, page_src=dashboard)
     write_new(folder / "process.md", process_text(root, owner, a.release))
     c = a.release
     plan = "".join(l + "\n" for l in from_template("plan.md", c, None).splitlines() if not l.startswith("| [NN]"))
