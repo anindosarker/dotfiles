@@ -77,7 +77,8 @@ def mark_status(a, st, root, folder, key, num, name):
     blocked, with --reason; a stop whose reason starts with a decision id ("D15 ...") is
     skipped (archived in a release of format 2.2: lib/status.py stores and prints the word of the
     release's format). It writes the one release folder the scripts keep their lock in, also when run from
-    a milestone worktree that holds a copy of the plan folder."""
+    a milestone worktree that holds a copy of the plan folder. In a release of format 2.2 launch,
+    wait, resume and stop write and make no commit (D22): status/sync.py commits them."""
     word = {"launch": "in progress", "merge": "done"}.get(a.action, "blocked")
     if a.action == "resume":
         now = st.entries(folder)[0].get(key, {}).get("status", "not started")
@@ -92,15 +93,15 @@ def mark_status(a, st, root, folder, key, num, name):
             _, e, stored = st.set_status(folder, a.release, key, word, a.reason, a.commit, locked=True,
                                          launched=a.action == "launch")
         if stored is None:
-            late = st.pending(folder) and st.commit(root, folder, [], f"docs(plan): {a.release} {key} {a.action}")
+            late = st.pending(folder) and st.record(root, folder, [], f"docs(plan): {a.release} {key} {a.action}")
             print(f"{key}: already {st.say(folder, e['status'])}, nothing changed" + ("; an earlier failed commit is made now" if late else ""))
             return
         paths = [*C.load("lib/grid").grid_files(folder), *C.load("lib/decisions").commit_paths(folder),
                  *C.load("lib/queue").commit_paths(folder)]
         paths += sorted((folder / C.EPICS_DIR).glob("E*.md"))
-        st.commit(root, folder, paths, f"docs(plan): {a.release} {key} {a.action}")
+        made = (st.commit if a.action == "merge" else st.record)(root, folder, paths, f"docs(plan): {a.release} {key} {a.action}")
         fcntl.flock(lock, fcntl.LOCK_UN)
-    print(f"{key}: {stored} ({num} {name}); committed")
+    print(f"{key}: {stored} ({num} {name}); " + ("committed" if made or not st.deferred(folder) else "written, not committed (status/sync.py)"))
 
 
 def main():

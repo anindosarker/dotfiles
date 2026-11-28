@@ -533,6 +533,39 @@ def pending(folder):
     return (folder / PENDING).is_file()
 
 
+def deferred(folder):
+    """True for a release of format 2.2 or higher (D22): a status change writes its files and
+    makes no commit; status/sync.py commits the release folder. Below 2.2 every status change
+    is committed (commit)."""
+    return new_form(folder)
+
+
+def record(root, folder, extra, message):
+    """The commit of one status change: commit below format 2.2; in format 2.2 no commit, the
+    files stay written and uncommitted until the next sync (sync_commit). Returns True when a
+    commit was made."""
+    if deferred(folder):
+        CHANGED.clear()
+        return False
+    return commit(root, folder, extra, message)
+
+
+def done_epics(folder):
+    """The ids of the epics whose stored status is done."""
+    return {e["id"] for e in (load(folder) or {}).get("epics", []) if e["status"] == "done"}
+
+
+def sync_commit(root, folder, message):
+    """The sync (D22): one commit of every change under the release folder, by that path only
+    (lib/common.py commit_tree). The caller holds the lock (lib/common.py lock_file). Clears the
+    list of a failed commit (status/data/.pending): its files are under the folder too. Returns
+    False when there was nothing to commit."""
+    CHANGED.clear()
+    done = C.commit_tree(root, folder, message)
+    (folder / PENDING).unlink(missing_ok=True)
+    return done
+
+
 def drop(folder, release, ident):
     """Remove one stored milestone or task entry that no spec has. Returns its kind, or None
     when the file has no such entry. Dies when a spec still has the milestone or task."""

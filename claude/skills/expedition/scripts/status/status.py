@@ -20,7 +20,8 @@ set works on a task or a milestone; the status of a spec and an epic is counted.
 JSON file, rolls a task change up into its milestone, counts the spec, the epic and the sprint,
 writes the same word into the "status:" front matter line of the task, spec and epic files,
 draws status/sprints.md again (below format 2.2; a release of format 2.2 has no grid file),
-writes the page data and commits what changed. A task set to
+writes the page data and commits what changed; in a release of format 2.2 it commits nothing
+(D22): the files stay written and status/sync.py <release> commits them. A task set to
 done with an open "Owner:" box becomes blocked, "waits for the owner's look"; with another open
 Verification box the change is refused. A milestone's done is its merge: it needs --commit, a
 commit hash, and is refused while one of its tasks is not done, skipped or waiting for the
@@ -137,13 +138,13 @@ def main():
                                             boxes_in=mine if mine and mine.is_dir() else None)
         if stored is None:
             now = st.say(folder, e["status"])
-            late = st.pending(folder) and st.commit(root, folder, [], f"docs(plan): {a.release} {kind} {ident} {now}")
+            late = st.pending(folder) and st.record(root, folder, [], f"docs(plan): {a.release} {kind} {ident} {now}")
             print(f"{kind} {ident}: already {now}, nothing changed" + ("; an earlier failed commit is made now" if late else ""))
             return
         paths = [*C.load("lib/grid").grid_files(folder), *C.load("lib/decisions").commit_paths(folder),
                  *C.load("lib/queue").commit_paths(folder)]
         paths += sorted((folder / C.EPICS_DIR).glob("E*.md"))
-        st.commit(root, folder, paths, f"docs(plan): {a.release} {kind} {ident} {stored}")
+        st.record(root, folder, paths, f"docs(plan): {a.release} {kind} {ident} {stored}")
         fcntl.flock(lock, fcntl.LOCK_UN)
     print(f"{kind} {ident}: {stored}" + (f" ({e['reason']})" if e["reason"] else ""))
 
