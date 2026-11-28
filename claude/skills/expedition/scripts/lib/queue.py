@@ -3,13 +3,19 @@
 queue.md, a plain list of the item files that the scripts write. Library, no CLI. A release of a
 lower format keeps queue.md as a kanban board (lib/board.py); item_form() tells the two apart.
 
-Item file (templates/queue-item.md):
+Item file (templates/queue-item.md), format 2.1:
 
     ---
     status: open                  open, decided, later, dropped or autofix
     decision: D<n>                a decided item only
     option: <n>                   the picked option, when one was given
     ---
+
+A release of format 2.2 and higher (status_form()) stores the words of format 2.2 in the same
+line: to-do, blocked, done, backlog or archived (STATUSES_22). The map: open is to-do, decided is
+done with a decision line, autofix is done with none, later is backlog, dropped is archived;
+blocked has no word in format 2.1. A command takes the words of both formats and stores the word
+of the release's format (move_status(), select()). A 2.2 file with no status line counts as to-do.
     # Q<n>. <title>
 
     ## Notes
@@ -60,9 +66,17 @@ def _common():
 
 C = _common()
 ITEM_FORMAT = (2, 1)
+STATUS_FORMAT = (2, 2)  # the status words of format 2.2 (STATUSES_22)
 QUEUE_DIR = C.QUEUE_DIR
 DATA = "status/data/queue.data.js"
-STATUSES = ("open", "decided", "later", "dropped", "autofix")
+STATUSES = ("open", "decided", "later", "dropped", "autofix")  # format 2.1
+STATUSES_22 = ("to-do", "blocked", "done", "backlog", "archived")  # format 2.2 and higher
+# A word of a command of either format: (the status of format 2.1, the status of format 2.2).
+MOVES = {"open": ("open", "to-do"), "to-do": ("open", "to-do"), "later": ("later", "backlog"),
+         "backlog": ("later", "backlog"), "dropped": ("dropped", "archived"), "archived": ("dropped", "archived"),
+         "autofix": ("autofix", "done"), "done": ("autofix", "done")}
+# The words queue/list.py takes besides LANES: the six status words; in progress is no queue status.
+WORDS_22 = ("to-do", "in progress", "blocked", "done", "backlog", "archived")
 LANES = ("Open", "Decided", "Later", "Dropped", "Autofix")  # the lane words of the commands, in this order
 FRONT_KEYS = ("status", "decision", "option")
 FILE_RE = re.compile(r"^Q(\d+)-.*\.md$")
@@ -82,6 +96,12 @@ def item_form(folder):
     return version(C.load("lib/status").release_format(folder)) >= ITEM_FORMAT
 
 
+def status_form(folder):
+    """True when the release stores the status words of format 2.2: its "format" is 2.2 or
+    higher, whatever version the skill's own SKILL.md states."""
+    return version(C.load("lib/status").release_format(folder)) >= STATUS_FORMAT
+
+
 def commit_paths(folder):
     """The queue paths a commit of the release names: queue.md, and the queue/ folder in the
     item form."""
@@ -89,15 +109,50 @@ def commit_paths(folder):
     return [folder / C.QUEUE_MD] + ([folder / QUEUE_DIR] if item_form(folder) else [])
 
 
-def status_of(it):
+def status_of(it, new=False):
     """The status an item counts with on the page, in queue/list.py and in queue/next.py: its
-    "status" line, or "open" when the file has none (status/report.py still reports the file)."""
-    return it["status"] or "open"
+    "status" line, or "open" ("to-do" in format 2.2, new=True) when the file has none
+    (status/report.py still reports the file)."""
+    return it["status"] or ("to-do" if new else "open")
 
 
 def lane_status(lane):
     """The status word of a lane word of the commands ("Later" -> "later"); None when unknown."""
     return lane.lower() if lane.lower() in STATUSES else None
+
+
+def move_status(word, new=False):
+    """The status queue/item.py --move stores for word, a lane word (Open, Later, Dropped,
+    Autofix) or a word of format 2.2 (to-do, backlog, archived, done), in any case: the word of
+    format 2.1, or of format 2.2 when new. None for any other word."""
+    pair = MOVES.get(word.lower())
+    return pair[1 if new else 0] if pair else None
+
+
+def select(its, word, new=False, status=None):
+    """The items of its that the word of queue/list.py names, in their order; None for an unknown
+    word. word: a lane word (Open, Decided, Later, Dropped, Autofix) or one of the six status
+    words, in any case. Format 2.1: each word names the status it maps to (done: decided and
+    autofix; blocked and in progress: none). Format 2.2 (new): Open is to-do and blocked, Decided
+    is done with a decision line, Autofix is done without one, Later is backlog, Dropped is
+    archived; the six words select by status alone. status(it) gives the status an item counts
+    with (default status_of)."""
+    w = word.lower()
+    st = status or (lambda it: status_of(it, new))
+    if new:
+        want = {"open": lambda it: st(it) in ("to-do", "blocked"),
+                "decided": lambda it: st(it) == "done" and bool(it["decision"]),
+                "autofix": lambda it: st(it) == "done" and not it["decision"],
+                "later": lambda it: st(it) == "backlog", "dropped": lambda it: st(it) == "archived"}.get(w)
+        if want is None and w in WORDS_22:
+            want = lambda it: st(it) == w
+    else:
+        words = {"to-do": ("open",), "backlog": ("later",), "archived": ("dropped",),
+                 "done": ("decided", "autofix"), "blocked": (), "in progress": ()}.get(w)
+        if words is None and w in STATUSES:
+            words = (w,)
+        want = None if words is None else (lambda it: st(it) in words)
+    return None if want is None else [it for it in its if want(it)]
 
 
 # --- one item file ---
@@ -191,10 +246,10 @@ def read_item(path):
             "path": Path(path), "text": text}
 
 
-def new_item(num, title, bullet=None):
-    """The text of a new item file: front matter, title and Notes."""
+def new_item(num, title, bullet=None, new=False):
+    """The text of a new item file: front matter, title and Notes. new: format 2.2 (to-do)."""
     notes = f"\n{note_line(bullet)}\n" if bullet else ""
-    return f"---\nstatus: open\n---\n# Q{num}. {title}\n\n## Notes\n{notes}"
+    return f"---\nstatus: {'to-do' if new else 'open'}\n---\n# Q{num}. {title}\n\n## Notes\n{notes}"
 
 
 def note_line(text):
@@ -321,10 +376,11 @@ def changed(folder, path):
 def data(folder):
     """The queue data of the page, with root."""
     folder = Path(folder)
+    new = status_form(folder)
     out = []
     for it in items(folder):
         e = {"id": f"Q{it['file_num']}", "number": it["file_num"], "title": it["title"],
-             "status": status_of(it), "decision": it["decision"], "option": it["option"],
+             "status": status_of(it, new), "decision": it["decision"], "option": it["option"],
              "file": it["path"].relative_to(folder).as_posix()}
         when = changed(folder, it["path"])
         if when:

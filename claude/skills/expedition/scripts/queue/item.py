@@ -4,7 +4,7 @@ on one checkout never pick the same number.
 
 Usage: python3 -I queue/item.py <release> D|Q "<title>" [--source Q<n>] [--option <n>]
        [--bullet "<text>"] [--new-round] [--owner X] [--root PATH]
-       python3 -I queue/item.py <release> --move Q<n> Open|Later|Dropped|Autofix
+       python3 -I queue/item.py <release> --move Q<n> Open|Later|Dropped|Autofix|to-do|backlog|archived|done
        python3 -I queue/item.py <release> --fact Q<n> "<text>"
 
 Under an exclusive lock on <release folder>/status/data/.ids.lock, re-reading the files right before the
@@ -39,13 +39,21 @@ queue.md as a list the script writes again after each change; nothing is synced 
 - --fact: one bullet at the end of "## Notes"; no other line of the file changes.
 - --move: "status" set to the lane word in lower case; an item leaving decided loses its
   "decision" and "option" lines.
-- D: the decision card as above; with --source, the item gets "status: decided",
+- D: the decision card as above; with --source, the item gets "status: decided" ("done" in
+  format 2.2),
   "decision: D<n>" (an item already decided keeps the highest decision number) and, with
   --option, "option: <n>". An option number the item's "## Options:" does not have is refused
   before anything is written; --option needs --source.
 
 It writes the item file, queue.md and status/data/queue.data.js (the Queue view of the task
 board, git-ignored), commits the item file, queue.md and decisions.md, and prints the id alone.
+
+--move takes the lane words and the words of format 2.2 in every format, in any case: to-do is
+Open, backlog is Later, archived is Dropped, done is Autofix. It stores the word of the release's
+format (lib/queue.py move_status); on a board the word moves the card to that lane.
+
+A release of format 2.2 and higher (lib/queue.py status_form) stores the words of format 2.2: Q
+writes "status: to-do"; --move writes to-do, backlog, archived or done.
 """
 import argparse
 import fcntl
@@ -69,7 +77,7 @@ def _common():
 C = _common()
 SOURCE_RE = re.compile(r"^Q\d+$")
 die = C.die
-
+BOARD_LANES = {"open": "Open", "later": "Later", "dropped": "Dropped", "autofix": "Autofix"}
 
 
 class _Once(argparse.Action):
@@ -81,7 +89,7 @@ class _Once(argparse.Action):
 def main():
     ap = argparse.ArgumentParser(
         usage='queue/item.py <release> D|Q "<title>" [--source Q<n>] [--option <n>] [--bullet "<text>"] [--new-round] | '
-              '<release> --move Q<n> Open|Later|Dropped|Autofix | <release> --fact Q<n> "<text>" '
+              '<release> --move Q<n> Open|Later|Dropped|Autofix|to-do|backlog|archived|done | <release> --fact Q<n> "<text>" '
               '[--owner X] [--root PATH]'
     )
     ap.add_argument("release")
@@ -106,8 +114,9 @@ def main():
             die("--move and --fact take only a Q id and a lane or a text")
         if not SOURCE_RE.match(card_op[0]):
             die(f"bad id '{card_op[0]}', expected like Q3")
-        if a.move and a.move[1] not in ("Open", "Later", "Dropped", "Autofix"):
-            die(f"bad lane '{a.move[1]}': Open, Later, Dropped or Autofix (Decided only through D --source)")
+        if a.move and C.load("lib/queue").move_status(a.move[1]) is None:
+            die(f"bad lane '{a.move[1]}': Open, Later, Dropped or Autofix, or to-do, backlog, archived or done "
+                "(Decided only through D --source)")
     else:
         if a.kind not in ("D", "Q"):
             die(f"bad kind '{a.kind}': the kinds are D and Q")
@@ -156,7 +165,7 @@ def main():
                 die(f"{card_op[0]} is not in {queue}")
             ident = card_op[0]
             if a.move:
-                new = bd.move(board, num, a.move[1])
+                new = bd.move(board, num, BOARD_LANES[Q.move_status(a.move[1])])
                 subject = f"{ident} to {a.move[1]}"
             else:
                 new = bd.add_fact(board, num, fact)
@@ -211,6 +220,7 @@ def main():
 def items(a, root, folder, Q, dc, target, card_op, title, fact):
     """The commands on a release of format 2.1 and higher (item files, lib/queue.py)."""
     bd = C.load("lib/board")
+    new22 = Q.status_form(folder)
     with open(C.lock_file(folder), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         written = []
@@ -220,7 +230,7 @@ def items(a, root, folder, Q, dc, target, card_op, title, fact):
             if item is None:
                 die(f"{ident} is not in {folder / Q.QUEUE_DIR}")
             if a.move:
-                word = Q.lane_status(a.move[1])
+                word = Q.move_status(a.move[1], new22)
                 new = Q.set_front(item["text"], status=word, decision=None, option=None)
                 subject = f"{ident} to {a.move[1]}"
             else:
@@ -234,7 +244,7 @@ def items(a, root, folder, Q, dc, target, card_op, title, fact):
             path = Q.item_path(folder, int(ident[1:]), title)
             if path.exists():
                 die(f"refusing to overwrite {path}")
-            Q.write_item(path, Q.new_item(int(ident[1:]), title, a.bullet))
+            Q.write_item(path, Q.new_item(int(ident[1:]), title, a.bullet, new22))
             written.append(path)
             subject = f"{ident} {title}"
         else:
@@ -257,13 +267,14 @@ def items(a, root, folder, Q, dc, target, card_op, title, fact):
             bd.write(target, bd.insert_card(d_text, dc.TODO, block, int(ident[1:]), "D"))
             written.append(target)
             if item is not None:
-                m = re.match(r"^D(\d+)$", item["decision"]) if item["status"] == "decided" else None
+                closed = "done" if new22 else "decided"
+                m = re.match(r"^D(\d+)$", item["decision"]) if item["status"] == closed else None
                 old = int(m.group(1)) if m else None
                 if old and old > int(ident[1:]):
                     print(f"{a.source} keeps D{old}", file=sys.stderr)
-                    new = Q.set_front(item["text"], status="decided")
+                    new = Q.set_front(item["text"], status=closed)
                 else:
-                    new = Q.set_front(item["text"], status="decided", decision=ident, option=a.option)
+                    new = Q.set_front(item["text"], status=closed, decision=ident, option=a.option)
                 if new != item["text"]:
                     Q.write_item(item["path"], new)
                     written.append(item["path"])

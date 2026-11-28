@@ -1,7 +1,9 @@
 ---
-status: [open | decided | later | dropped | autofix]
-decision: [D<n>; optional: a decided item only]
+status: [to-do | blocked | done | backlog | archived; format 2.1: open | decided | later | dropped | autofix]
+decision: [D<n>; optional: a done item that a decision closed]
 option: [<n>; optional: the number of the picked option, when one was given]
+decider: [you | lead | agent; optional: a done or archived item only; not in format 2.1]
+depends_on: [Q<n>, Q<n>; optional: the items this item waits for; not in format 2.1]
 ---
 # Q[n]. [One plain sentence.]
 

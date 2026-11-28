@@ -9,6 +9,16 @@ A release of format 2.1 and higher (lib/queue.py): the lane word selects the ite
 the lines of each item's "## Notes" under it, each indented with one TAB. Lane "all" prints one
 line per lane word with its item count.
 
+The word may also be one of the six status words of format 2.2 (to-do, in progress, blocked,
+done, backlog, archived), in every format. On a board: to-do is Open, backlog Later, archived
+Dropped, done Decided then Autofix; blocked and in progress print "none". Format 2.1: each word
+names the status it maps to (lib/queue.py select).
+
+A release of format 2.2 and higher (lib/queue.py status_form): Open lists the to-do and the
+blocked items, Decided the done items with a decision line, Autofix the done items without one,
+Later the backlog items, Dropped the archived ones; the six words select by status alone. Lane
+"all" counts the items of each lane word.
+
 Usage: python3 -I queue/list.py <release> [lane] [--facts] [--owner X] [--root PATH]
 """
 import argparse
@@ -50,6 +60,21 @@ def print_lane(bd, text, lane, facts):
                     print(s)
 
 
+def print_words(bd, text, word, facts):
+    """A board and a word of format 2.2: the cards of the lanes it maps to, or none."""
+    lanes = {"to-do": ("Open",), "backlog": ("Later",), "archived": ("Dropped",),
+             "done": ("Decided", "Autofix")}.get(word, ())
+    cards = [c for n in lanes for c in bd.parse(text)["cards"] if c["lane"] == n]
+    if not cards:
+        print("none")
+    for c in cards:
+        print(card_line(c))
+        if facts:
+            for s in c["subs"]:
+                if s.strip():
+                    print(s)
+
+
 def print_counts(bd, text):
     """One line per lane with its card count: the board's lanes, then any missing known lane."""
     board = bd.parse(text)
@@ -60,13 +85,13 @@ def print_counts(bd, text):
         print(f"{n} {sum(1 for c in cards if c['lane'] == n)}")
 
 
-def print_items(Q, its, lane, facts):
+def print_items(Q, its, lane, facts, new=False):
     """The item form: the items of one lane word, or the count of each lane word (lane None)."""
     if lane is None:
         for n in Q.LANES:
-            print(f"{n} {sum(1 for it in its if Q.status_of(it) == n.lower())}")
+            print(f"{n} {len(Q.select(its, n, new))}")
         return
-    mine = [it for it in its if Q.status_of(it) == lane.lower()]
+    mine = Q.select(its, lane, new)
     if not mine:
         print("none")
     for it in mine:
@@ -90,21 +115,24 @@ def main():
     bd = C.load("lib/board")
     lane = None
     if a.lane.lower() != "all":
-        lane = next((n for n in bd.LANES if n.lower() == a.lane.lower()), None)
+        lane = next((n for n in (*bd.LANES, *C.load("lib/queue").WORDS_22) if n.lower() == a.lane.lower()), None)
         if lane is None:
-            C.die(f"unknown lane '{a.lane}', expected one of: {', '.join(bd.LANES)}, all")
+            C.die(f"unknown lane '{a.lane}', expected one of: {', '.join(bd.LANES)}, all, "
+                  f"or {', '.join(C.load('lib/queue').WORDS_22)}")
     root = C.repo_root(a.root, a.release)
     folder = C.release_folder(root, C.detect_owner(root, a.owner), a.release)
     Q = C.load("lib/queue")
     if Q.item_form(folder):
-        print_items(Q, Q.items(folder), lane, a.facts)
+        print_items(Q, Q.items(folder), lane, a.facts, Q.status_form(folder))
         return
     queue = folder / C.QUEUE_MD
     text = C.read(queue) if queue.is_file() else ""
     if lane is None:
         print_counts(bd, text)
-    else:
+    elif lane in bd.LANES:
         print_lane(bd, text, lane, a.facts)
+    else:
+        print_words(bd, text, lane, a.facts)
 
 
 if __name__ == "__main__":
