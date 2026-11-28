@@ -1,4 +1,5 @@
-const STATUSES = ["not started", "in progress", "blocked", "done", "skipped"];
+// The words of format 2.2 in the four plan views (Epics, Tasks, Sprints, Milestones).
+const STATUSES = ["to-do", "in progress", "blocked", "done", "archived"];
 // Queue statuses (v2.1.x D8; no queue item is in progress) share these maps with the task statuses.
 const QSTATUSES = ["to-do", "blocked", "done", "backlog", "archived"];
 const SK = { "not started": "ns", "in progress": "prog", "blocked": "block", "done": "done", "skipped": "skip",
@@ -27,11 +28,17 @@ const TURNS = ["you", "lead", "agent"];
 const TURN_INFO = { you: ["You", "user", "Your turn"], lead: ["Lead", "compass", "The lead's turn"], agent: ["Agent", "bot", "An agent's turn"] };
 const KINDS = ["queue", "decision", "epic", "milestone", "task"];
 const DV = () => state.view === "dash";
+// A plan view shows "to-do" and "archived" with the look of "not started" and "skipped"; the Queue and
+// Dashboard views keep the look of SK and SICON for the two words.
+const PLAN_SK = { "to-do": "ns", archived: "skip" }, PLAN_SICON = { "to-do": "circle", archived: "ban" };
+const planView = () => state.view !== "queue" && !DV();
+const skOf = (st) => (planView() && PLAN_SK[st]) || SK[st];
+const siconOf = (st) => (planView() && PLAN_SICON[st]) || SICON[st];
 const KIND_LABEL = { epic: "Epic", spec: "Spec", ms: "Milestone", task: "Task", sprint: "Sprint", q: "Queue item" };
 // Folder of status.data.js and dashboard.data.js, relative to this page.
 const DATA_DIR = "data/";
 const CHILD = { epic: "spec", spec: "ms", ms: "task", sprint: "ms" };
-// Done and skipped columns in the Tasks view show this many compact rows until "Show all".
+// Done and archived columns in the Tasks view show this many compact rows until "Show all".
 const COMPACT_LIMIT = 60;
 
 // Sort options per view; the first is the default and gives the order the view had before sorting existed.
@@ -52,7 +59,7 @@ try {
   const ui = JSON.parse(localStorage.getItem("dashboard-ui") || "{}");
   for (const k of Object.keys(DEFAULTS)) if (k in ui) state[k] = ui[k];
   if (!VIEWS.includes(state.view)) state.view = DEFAULTS.view;
-  if (!Array.isArray(state.status)) state.status = [];
+  state.status = Array.isArray(state.status) ? state.status.filter((s) => STATUSES.includes(s)) : [];
   state.qstatus = Array.isArray(state.qstatus) ? state.qstatus.filter((s) => QSTATUSES.includes(s)) : [];
   if (state.qmode !== "board") state.qmode = "list";
   if (state.dmode !== "list") state.dmode = "board";
@@ -163,7 +170,7 @@ function load(data) {
 
   if (foldRelease !== D.release) loadFold();
   $("#rel").textContent = D.release;
-  const all = { d: D.tasks.filter((x) => x.status === "done" || x.status === "skipped").length, n: D.tasks.length };
+  const all = { d: D.tasks.filter((x) => x.status === "done" || x.status === "archived").length, n: D.tasks.length };
   const td = $("#tdone");
   td.innerHTML = `${icon("check-circle")}${all.d}/${all.n}`;
   td.title = `${all.d} of ${all.n} tasks done`;
@@ -174,7 +181,7 @@ const get = (pick) => { const i = pick.indexOf(":"), k = pick.slice(0, i); retur
 // A milestone shows its ref, "<spec>.<number>"; older data without it falls back to the spec id.
 const label = (kind, o) => kind === "task" ? `${o.spec}-${o.number}` : kind === "ms" ? (o.ref || o.spec) : o.id;
 const title = (kind, o) => o.name || o.title || o.id;
-const doneOf = (c) => `${c.done + c.skipped}/${c.total}`;
+const doneOf = (c) => `${c.done + c.archived}/${c.total}`;
 // ---- Filter: status buttons and search, applied the same way in every view ----
 let terms = [], stSet = null, passMemo = new Map();
 const active = () => terms.length > 0 || stSet !== null;
@@ -222,7 +229,7 @@ function sorted(list, key, dir) {
     return (cmp(p[0], q[0]) || dataPos.get(p[1]) - dataPos.get(q[1])) * dir;
   }).map((p) => p[1]);
 }
-const pct = (c) => c.total ? (c.done + c.skipped) / c.total : null;
+const pct = (c) => c.total ? (c.done + c.archived) / c.total : null;
 const stIdx = (o) => STATUSES.indexOf(o.status);
 const MS_KEYS = {
   plan: (m) => dataPos.get(m), ref: (m) => segs(m.ref || m.spec), status: stIdx, progress: (m) => pct(cnt.get(m)), changed: (m) => m.changed || null,
@@ -308,7 +315,7 @@ function crumbs(kind, o) {
 const checkItem = (kind, x) => {
   const c = kind !== "task" ? cnt.get(x) : null;
   const abs = kind === "task" && x.file ? absPath(x.file) : "";
-  return `<li class="ck ${SK[x.status] || "ns"}" data-pick="${kind}:${esc(x.id)}" title="${esc(x.status + (x.reason ? ": " + x.reason : ""))}">${sicon(x.status)}${kind === "ms" ? icon("flag", "mi") : ""}<span class="num ck-chip">${kc(kind, kind === "spec" ? "Spec " + x.id : label(kind, x))}</span><span class="ck-name">${esc(title(kind, x))}</span>${kind === "task" && x.ownerCheck ? `<span class="owner">${icon("eye")}owner</span>` : ""}${c ? `<span class="frac">${doneOf(c)}</span>` : ""}${abs ? `<a class="fbtn open-f" href="${esc(vscodeUrl(abs))}" title="Open the task file in VS Code: ${esc(x.file)}">open</a>` : ""}</li>`;
+  return `<li class="ck ${skOf(x.status) || "ns"}" data-pick="${kind}:${esc(x.id)}" title="${esc(x.status + (x.reason ? ": " + x.reason : ""))}">${sicon(x.status)}${kind === "ms" ? icon("flag", "mi") : ""}<span class="num ck-chip">${kc(kind, kind === "spec" ? "Spec " + x.id : label(kind, x))}</span><span class="ck-name">${esc(title(kind, x))}</span>${kind === "task" && x.ownerCheck ? `<span class="owner">${icon("eye")}owner</span>` : ""}${c ? `<span class="frac">${doneOf(c)}</span>` : ""}${abs ? `<a class="fbtn open-f" href="${esc(vscodeUrl(abs))}" title="Open the task file in VS Code: ${esc(x.file)}">open</a>` : ""}</li>`;
 };
 const sec = (h, body) => body ? `<div class="p-sec"><h3>${h}</h3>${body}</div>` : "";
 const checklist = (kind, list) => list.length ? `<ul class="checklist">${list.map((x) => checkItem(kind, x)).join("")}</ul>` : "";
@@ -332,10 +339,10 @@ function renderPanel(scrollTop) {
     <button class="ibtn sm" data-close aria-label="Close" data-tip="Close (Esc)" data-tip-end>${icon("x")}</button></div>
     <div class="p-kind">${kind === "ms" ? icon("flag", "mi") : ""}${KIND_LABEL[kind]} ${kc(kind, kind === "spec" ? o.id : label(kind, o))}</div><h2>${esc(title(kind, o))}</h2>
     <div class="p-row">${pill(o.status)}${kind === "task" ? `<span class="tag">${esc(o.type)}</span>` : ""}${o.ownerCheck ? `<span class="owner">${icon("eye")}owner check</span>` : ""}${o.critical ? `<span class="tag">critical path</span>` : ""}</div>`;
-  if (o.reason) h += `<div class="p-reason s-${SK[o.status]}" style="text-decoration:none">${esc(o.reason)}</div>`;
+  if (o.reason) h += `<div class="p-reason s-${skOf(o.status)}" style="text-decoration:none">${esc(o.reason)}</div>`;
   if (kind !== "task") {
     const c = cnt.get(o);
-    h += sec("Progress", `${progress(c)}<div class="breakdown">${STATUSES.filter((s) => c[s]).map((s) => `<span class="pill s-${SK[s]}">${c[s]} ${esc(s)}</span>`).join("")}</div>`);
+    h += sec("Progress", `${progress(c)}<div class="breakdown">${STATUSES.filter((s) => c[s]).map((s) => `<span class="pill s-${skOf(s)}">${c[s]} ${esc(s)}</span>`).join("")}</div>`);
   }
   if (kind === "epic") h += sec(`Specs (${kids.get(o).length})`, specLinks(kids.get(o)));
   if (kind === "spec") {
@@ -412,8 +419,8 @@ function syncControls() {
   }
   const fName = (x) => DV() ? (x.startsWith("t:") ? TURN_INFO[x.slice(2)][2] : GROUP_INFO[x]?.[0] || x) : x[0].toUpperCase() + x.slice(1);
   $("#filter-label").textContent = !fsel.length ? (DV() ? "All items" : "All statuses") : fsel.length === 1 ? fName(fsel[0]) : `${fsel.length} ${DV() ? "filters" : "statuses"}`;
-  $("#filter-ic").setAttribute("class", "i" + (DV() ? (fsel.length === 1 && GROUP_INFO[fsel[0]] ? " " + GROUP_INFO[fsel[0]][2] : "") : fsel.length === 1 ? " c-" + SK[fsel[0]] : ""));
-  $("#filter-ic use").setAttribute("href", DV() ? (fsel.length === 1 && GROUP_INFO[fsel[0]] ? "#ic-" + GROUP_INFO[fsel[0]][1] : "#ic-filter") : fsel.length === 1 ? "#ic-" + SICON[fsel[0]] : "#ic-filter");
+  $("#filter-ic").setAttribute("class", "i" + (DV() ? (fsel.length === 1 && GROUP_INFO[fsel[0]] ? " " + GROUP_INFO[fsel[0]][2] : "") : fsel.length === 1 ? " c-" + skOf(fsel[0]) : ""));
+  $("#filter-ic use").setAttribute("href", DV() ? (fsel.length === 1 && GROUP_INFO[fsel[0]] ? "#ic-" + GROUP_INFO[fsel[0]][1] : "#ic-filter") : fsel.length === 1 ? "#ic-" + siconOf(fsel[0]) : "#ic-filter");
   fb.setAttribute("aria-pressed", fsel.length > 0);
   if (!$("#filter-pop").hidden) renderFilterPop();
   const lanesView = LANE_VIEWS.has(state.view);

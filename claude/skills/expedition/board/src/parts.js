@@ -40,12 +40,12 @@ const icon = (id, cls = "") => `<svg class="i ${cls}"><use href="#ic-${id}"/></s
 // Item id chip in its kind's color (legend: Kinds); sprints and specs get a neutral chip.
 const KC = { epic: "epic", ms: "milestone", milestone: "milestone", task: "task", q: "queue", queue: "queue", decision: "decision" };
 const kc = (kind, text) => `<span class="kchip k-${KC[kind] || "plain"}" title="${esc(KC[kind] || kind)}">${esc(text)}</span>`;
-const sicon = (st) => icon(SICON[st] || "circle", "c-" + (SK[st] || "ns"));
-const pill = (st) => `<span class="pill s-${SK[st] || "ns"}">${icon(SICON[st] || "circle")}${esc(st)}</span>`;
+const sicon = (st) => icon(siconOf(st) || "circle", "c-" + (skOf(st) || "ns"));
+const pill = (st) => `<span class="pill s-${skOf(st) || "ns"}">${icon(siconOf(st) || "circle")}${esc(st)}</span>`;
 function progress(c, frac = true) {
   const pct = (n) => c.total ? (n / c.total * 100).toFixed(2) + "%" : "0";
-  const bar = `<span class="pbar" title="${c.done} done, ${c.skipped} skipped, ${c["in progress"]} in progress, ${c.blocked} blocked, ${c["not started"]} not started">`
-    + `<i class="b-done" style="width:${pct(c.done)}"></i><i class="b-skip" style="width:${pct(c.skipped)}"></i>`
+  const bar = `<span class="pbar" title="${c.done} done, ${c.archived} archived, ${c["in progress"]} in progress, ${c.blocked} blocked, ${c["to-do"]} to-do">`
+    + `<i class="b-done" style="width:${pct(c.done)}"></i><i class="b-skip" style="width:${pct(c.archived)}"></i>`
     + `<i class="b-prog" style="width:${pct(c["in progress"])}"></i><i class="b-block" style="width:${pct(c.blocked)}"></i></span>`;
   return `<span class="pgw">${bar}${frac ? `<span class="frac">${doneOf(c)}</span>` : ""}</span>`;
 }
@@ -67,7 +67,7 @@ function saveFold() { try {
   all[D.release] = { mode: foldSt.mode, empty: foldSt.empty, toggled: [...foldSt.toggled] };
   localStorage.setItem("taskboard-fold", JSON.stringify(all));
 } catch (e) {} }
-const spFinished = (s) => s.status === "done" || s.status === "skipped";
+const spFinished = (s) => s.status === "done" || s.status === "archived";
 // Empty: no milestone in this sprint passes the current filter.
 const spEmpty = (s) => !kids.get(s).some((m) => pass(m, "ms"));
 function foldRule(s) {
@@ -206,7 +206,7 @@ function shownSprints(lanes) {
   const ids = new Set(lanes.map((e) => e.id));
   return D.sprints.map((_, i) => i).filter((i) => !active() || D.milestones.some((m) => sprintOf(m) === i && ids.has(m.epic) && visible(m)));
 }
-const finished = (m) => m.status === "done" || m.status === "skipped";
+const finished = (m) => m.status === "done" || m.status === "archived";
 function nowSprint() {
   const open = D.milestones.filter((m) => !finished(m)).map(sprintOf).filter((i) => i >= 0);
   return open.length ? Math.min(...open) : -1;
@@ -234,7 +234,7 @@ function chain(id) {
 const focusSet = () => state.sel && state.sel.startsWith("ms:") ? chain(state.sel.slice(3)) : null;
 const tip = (m) => (idx.spec.get(m.spec)?.title || m.name) + (m.reason ? "\n" + m.reason : "");
 function cardClass(m, focus, extra = "") {
-  const cls = ["card", "st-" + SK[m.status]];
+  const cls = ["card", "st-" + skOf(m.status)];
   if (extra) cls.push(extra);
   if (state.sel === "ms:" + m.id) cls.push("sel");
   if (state.crit && m.critical) cls.push("crit-on");
@@ -254,7 +254,7 @@ function headerRow(sprints, now, firstLabel) {
     const pct = ms.length ? Math.round((done / ms.length) * 100) : 0;
     const last = k === sprints.length - 1 ? " lastcol" : "";
     if (isFolded(s)) {
-      html += `<div class="hcell fold${last}" data-fold="${esc(s.id)}" title="${esc(s.id)} · ${esc(s.status)} · ${done}/${ms.length} done\nClick to unfold"><span class="sdot fbar st-${SK[s.status]}"></span><span class="vid">${esc(s.id)}</span></div>`;
+      html += `<div class="hcell fold${last}" data-fold="${esc(s.id)}" title="${esc(s.id)} · ${esc(s.status)} · ${done}/${ms.length} done\nClick to unfold"><span class="sdot fbar st-${skOf(s.status)}"></span><span class="vid">${esc(s.id)}</span></div>`;
       return;
     }
     html += `<div class="hcell${i === now ? " now" : ""}${last}" data-fold="${esc(s.id)}" title="Click to fold">
@@ -275,19 +275,19 @@ function laneLabel(e) {
 // Collapsed lane: one chip per sprint standing for its milestones; follows the filter like the cards.
 const CHIP_ORDER = ["blocked", "in progress"];
 const chipStatus = (shown) => CHIP_ORDER.find((s) => shown.some((m) => m.status === s))
-  || (shown.every(finished) ? (shown.some((m) => m.status === "done") ? "done" : "skipped") : "not started");
+  || (shown.every(finished) ? (shown.some((m) => m.status === "done") ? "done" : "archived") : "to-do");
 // A folded column's cell: a count pill tinted like the collapsed-lane chips; a click unfolds the sprint.
 function foldPill(cards, sid) {
   const shown = cards.filter(visible);
-  return shown.length ? `<span class="fpill st-${SK[chipStatus(shown)]}" data-fold="${esc(sid)}" title="${shown.length} milestone${shown.length > 1 ? "s" : ""} in ${esc(sid)}\nClick to unfold">${shown.length}</span>` : "";
+  return shown.length ? `<span class="fpill st-${skOf(chipStatus(shown))}" data-fold="${esc(sid)}" title="${shown.length} milestone${shown.length > 1 ? "s" : ""} in ${esc(sid)}\nClick to unfold">${shown.length}</span>` : "";
 }
 function laneChip(e, cards) {
   const shown = cards.filter(visible);
   if (!shown.length) return "";
   const status = chipStatus(shown);
-  return `<div data-lane="${esc(e.id)}" class="card chip st-${SK[status]}">${shown.length} milestone${shown.length > 1 ? "s" : ""}</div>`;
+  return `<div data-lane="${esc(e.id)}" class="card chip st-${skOf(status)}">${shown.length} milestone${shown.length > 1 ? "s" : ""}</div>`;
 }
-const cnt1 = (m) => `<span class="cnt" title="tasks done or skipped / all tasks">${doneOf(cnt.get(m))}</span>`;
+const cnt1 = (m) => `<span class="cnt" title="tasks done or archived / all tasks">${doneOf(cnt.get(m))}</span>`;
 function renderEpic(lanes, sprints, now, focus) {
   const nowCls = (i, k) => (i === now ? " now" : "") + (k === sprints.length - 1 ? " lastcol" : "") + (fx.sprint === D.sprints[i].id ? " reveal" : "");
   let html = headerRow(sprints, now, "Epic");
@@ -301,7 +301,7 @@ function renderEpic(lanes, sprints, now, focus) {
       html += `<div class="cell${nowCls(i, k)}${fx.lane === e.id ? " reveal" : ""}">`;
       if (collapsed) html += laneChip(e, cards);
       else cards.filter(visible).forEach((m) => {
-        html += `<div class="${cardClass(m, focus)}" data-id="${esc(m.id)}" data-pick="ms:${esc(m.id)}" title="${esc(tip(m))}">${kc("ms", label("ms", m))}<span class="mn">${esc(m.name)}</span>${cnt1(m)}${m.reason ? `<span class="reason">${icon(SICON[m.status])}<span>${esc(m.reason)}</span></span>` : ""}</div>`;
+        html += `<div class="${cardClass(m, focus)}" data-id="${esc(m.id)}" data-pick="ms:${esc(m.id)}" title="${esc(tip(m))}">${kc("ms", label("ms", m))}<span class="mn">${esc(m.name)}</span>${cnt1(m)}${m.reason ? `<span class="reason">${icon(siconOf(m.status))}<span>${esc(m.reason)}</span></span>` : ""}</div>`;
       });
       html += `</div>`;
     });
@@ -332,7 +332,7 @@ function renderMilestone(lanes, sprints, now, focus) {
       sprints.forEach((i, k) => {
         if (isFolded(D.sprints[i])) { html += `<div class="mcell fcell${nowCls(i, k)}">${sprintOf(m) === i ? foldPill([m], D.sprints[i].id) : ""}</div>`; return; }
         html += `<div class="mcell${nowCls(i, k)}${fx.lane === e.id ? " reveal" : ""}">`;
-        if (sprintOf(m) === i) html += `<div class="${cardClass(m, focus, "mcard")}" data-id="${esc(m.id)}" data-pick="ms:${esc(m.id)}" title="${esc(m.status)}: ${esc(tip(m))}">${icon(SICON[m.status])}${kc("ms", label("ms", m))}<span class="mn">${esc(m.name)}</span>${cnt1(m)}</div>`;
+        if (sprintOf(m) === i) html += `<div class="${cardClass(m, focus, "mcard")}" data-id="${esc(m.id)}" data-pick="ms:${esc(m.id)}" title="${esc(m.status)}: ${esc(tip(m))}">${icon(siconOf(m.status))}${kc("ms", label("ms", m))}<span class="mn">${esc(m.name)}</span>${cnt1(m)}</div>`;
         html += `</div>`;
       });
     });

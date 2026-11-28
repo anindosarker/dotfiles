@@ -44,14 +44,14 @@ function renderSprints() {
 }
 function msRow(m) {
   const open = state.open.c.has(m.id), c = cnt.get(m);
-  let h = `<div class="mr ${SK[m.status]}${isSel("ms:" + m.id)}" data-pick="ms:${esc(m.id)}">
+  let h = `<div class="mr ${skOf(m.status)}${isSel("ms:" + m.id)}" data-pick="ms:${esc(m.id)}">
     <button class="tog${open ? " open" : ""}" data-tog="c:${esc(m.id)}" aria-label="${open ? "Hide" : "Show"} tasks" title="${open ? "Hide" : "Show"} tasks">${icon("chevron")}</button>
     ${icon("flag", "mi")}<span class="m-num">${kc("ms", label("ms", m))}</span><span class="m-name" title="${esc(m.name)}">${esc(m.name)}</span>
     <span class="m-epic">${kc("epic", m.epic)}</span><span class="r-pill">${pill(m.status)}</span>${progress(c)}</div>`;
   if (open) h += `<div class="mr-tasks"><ul class="checklist${fx.tog === m.id ? " reveal" : ""}">${shownKids(m, "ms").map((t, i) => taskCheck(t).replace("<li ", `<li style="--i:${Math.min(i, 10)}" `)).join("") || `<li class="ck">No tasks</li>`}</ul></div>`;
   return h;
 }
-const taskCheck = (t) => `<li class="ck ${SK[t.status]}${isSel("task:" + t.id)}" data-pick="task:${esc(t.id)}" title="${esc(t.status + (t.reason ? ": " + t.reason : ""))}">${sicon(t.status)}${kc("task", t.number)}<span class="ck-name">${esc(t.title)}</span>${t.ownerCheck ? `<span class="owner">${icon("eye")}owner</span>` : ""}${t.type === "bug" ? `<span class="tag">bug</span>` : ""}</li>`;
+const taskCheck = (t) => `<li class="ck ${skOf(t.status)}${isSel("task:" + t.id)}" data-pick="task:${esc(t.id)}" title="${esc(t.status + (t.reason ? ": " + t.reason : ""))}">${sicon(t.status)}${kc("task", t.number)}<span class="ck-name">${esc(t.title)}</span>${t.ownerCheck ? `<span class="owner">${icon("eye")}owner</span>` : ""}${t.type === "bug" ? `<span class="tag">bug</span>` : ""}</li>`;
 
 // ---- Tasks view: one column per status, newest first ----
 function renderTasks() {
@@ -61,7 +61,7 @@ function renderTasks() {
   const so = sortOf();
   for (const [st, list] of by) by.set(st, sorted(list, TASK_KEYS[so.key], so.dir));
   return boardHtml(shownIds().filter((st) => by.has(st)).map((st) => {
-    const list = by.get(st), compact = st === "done" || st === "skipped";
+    const list = by.get(st), compact = st === "done" || st === "archived";
     const lim = compact && !state.more.includes(st) ? COMPACT_LIMIT : Infinity;
     const items = list.slice(0, lim).map(compact ? taskLine : taskCard).join("");
     const more = list.length > lim ? `<button class="more" data-more="${esc(st)}">Show all ${list.length} (${list.length - lim} more)</button>` : "";
@@ -71,7 +71,7 @@ function renderTasks() {
 const msText = (m) => `${label("ms", m)} ${m.name}`;
 function taskCard(t) {
   const m = idx.ms.get(t.milestone);
-  return `<div class="tc b-${SK[t.status]}${isSel("task:" + t.id)}" data-pick="task:${esc(t.id)}">
+  return `<div class="tc b-${skOf(t.status)}${isSel("task:" + t.id)}" data-pick="task:${esc(t.id)}">
     <div class="tc-top">${kc("task", `${t.spec}-${t.number}`)}<span class="tags">${t.ownerCheck ? `<span class="owner">${icon("eye")}owner check</span>` : ""}<span class="tag">${esc(t.type)}</span></span></div>
     <div class="tc-title">${esc(t.title)}</div>
     <div class="tc-meta" title="${esc(m ? msText(m) : t.milestone)}">${m ? icon("flag", "mi") : ""}${esc(m ? msText(m) : t.milestone)} · ${esc(m?.epic)}</div>
@@ -79,7 +79,7 @@ function taskCard(t) {
 }
 function taskLine(t) {
   const m = idx.ms.get(t.milestone);
-  return `<div class="tl ${SK[t.status]}${isSel("task:" + t.id)}" data-pick="task:${esc(t.id)}" title="${esc(t.title + (m ? "\n" + msText(m) + " · " + m.epic : "") + (t.reason ? "\n" + t.reason : ""))}">
+  return `<div class="tl ${skOf(t.status)}${isSel("task:" + t.id)}" data-pick="task:${esc(t.id)}" title="${esc(t.title + (m ? "\n" + msText(m) + " · " + m.epic : "") + (t.reason ? "\n" + t.reason : ""))}">
     ${kc("task", `${t.spec}-${t.number}`)}<span class="tl-t">${esc(t.title)}</span>${t.type === "bug" ? `<span class="tag">bug</span>` : ""}${m?.epic ? kc("epic", m.epic) : ""}</div>`;
 }
 
@@ -108,7 +108,7 @@ function qVisible() {
   }).map((p) => p[1]);
 }
 function qRow(x) {
-  return `<div class="qr ${SK[x.status] || "qo"}${isSel("q:" + x.id)}" data-pick="q:${esc(x.id)}" title="${esc(x.id + ". " + x.title)}">
+  return `<div class="qr ${skOf(x.status) || "qo"}${isSel("q:" + x.id)}" data-pick="q:${esc(x.id)}" title="${esc(x.id + ". " + x.title)}">
     <span class="q-id">${kc("queue", x.id)}</span><span class="q-t">${esc(x.title)}${qSub(x) ? `<span class="d-sub">${esc(qSub(x))}</span>` : ""}</span>
     <span class="q-dec">${x.decision ? kc("decision", x.decision) : ""}</span>
     <span class="q-st">${pill(x.status)}</span>
@@ -126,7 +126,7 @@ function renderQueue() {
 // Board columns in the saved layout order, each keeping the sorted order of qShown.
 const qCols = () => (state.view === "queue" ? shownIds() : QSTATUSES).filter((s) => !state.qstatus.length || state.qstatus.includes(s)).map((st) => [st, qShown.filter((x) => x.status === st)]);
 function qCard(x) {
-  return `<div class="tc qcard b-${SK[x.status] || "qo"}${isSel("q:" + x.id)}" data-pick="q:${esc(x.id)}" title="${esc(x.id + ". " + x.title)}">
+  return `<div class="tc qcard b-${skOf(x.status) || "qo"}${isSel("q:" + x.id)}" data-pick="q:${esc(x.id)}" title="${esc(x.id + ". " + x.title)}">
     <div class="tc-top">${kc("queue", x.id)}<span class="tags">${x.decision ? kc("decision", x.decision) : ""}</span></div>
     <div class="tc-title">${esc(x.title)}</div>
     ${qSub(x) ? `<span class="d-sub" style="margin-top:3px">${esc(qSub(x))}</span>` : ""}
