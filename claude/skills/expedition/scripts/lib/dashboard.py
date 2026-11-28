@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The data of the dashboard page of a release of format 2.2 (D14): status/data/dashboard.data.js
 and status/data/dashboard.json. Library, no CLI. The contract is the page README, section Data
-(board/README.md once the page is in the skill).
+(board/README.md).
 
 lib/queue.py write_data() calls write() after its blocked check, so the two files are written in
 every step that writes status.data.js (lib/status.py write_page_data runs write_data) or
@@ -14,7 +14,8 @@ dashboard.data.js is one line, "window.DASHBOARD_DATA = {...};", with release, u
 sources and rows. dashboard.json is the same data, indented, without roots: the file an agent
 reads. roots.plan and roots.status are both the release folder on this machine.
 
-One row per queue item (by number), per card of decisions.md (in file order), then per epic,
+One row per queue item (by number), per decision (with the board: per card of decisions.md, in
+file order; in the file form: per decision file, in the order of the numbers), then per epic,
 milestone and task (in the order of status/data/status.json). The fields of a row are FIELDS, in
 that order; "decision" is on queue rows only, "progress" on epic rows only. A text field with no
 value is "", ready is true or false. Where the values come from:
@@ -22,9 +23,15 @@ value is "", ready is true or false. Where the values come from:
   has stored "blocked" already); reason "Waits for <ids>" on a blocked item, the depends_on ids
   that are not done; depends_on and decision the lines as written; details the text under
   "## Details".
-- decision: the card (lib/decisions.py). status from its lane and tag (DECISION_STATUS; #deferred
-  is backlog and #superseded archived in the lane Done); never blocked, decider "" (D9 is not
-  built); reason its epic "E<n>"; details the lines of the card under its title.
+- decision, the file form (lib/decisions.py file_form, D9 and D16): the decision file. status
+  and decider are its stored lines (decider "" when the file has none); reason on a blocked
+  decision the words of lib/decisions.py blocked_reason ("Waits for E11, same file"), on every
+  other its "epic" line ("E<n>", "" when none); file "decisions/D<n>-<slug>.md"; details the body
+  of the file.
+- decision, the board (a release of format 2.2 not yet moved by scripts/migrate/v2.1-v2.2): the
+  card. status from its lane and tag (DECISION_STATUS; #deferred is backlog and #superseded
+  archived in the lane Done); never blocked, decider ""; reason its epic "E<n>"; file
+  decisions.md; details the lines of the card under its title.
 - epic, milestone, task: status, reason and decider as stored in the status file; nothing is
   mapped and no decider is worked out again.
 Worked out on every build and stored in no file: label, turn, ready, command, progress, root,
@@ -126,6 +133,8 @@ def queue_rows(folder):
 
 def decision_rows(folder):
     D = lib("decisions")
+    if D.file_form(folder):
+        return file_decision_rows(folder)
     out = []
     for c in D.read_cards(folder)["cards"]:
         st = DECISION_STATUS.get(c["lane"])
@@ -140,6 +149,26 @@ def decision_rows(folder):
         out.append(row(kind="decision", id=f"D{c['num']}", label=f"D{c['num']}", title=c["title"], status=st,
                        turn=turn("decision", st), ready=ready, command="compose" if ready else "",
                        reason=epic, root="plan", file=D.DECISIONS_MD, details="\n".join(c["body"]).strip()))
+    return out
+
+
+def file_decision_rows(folder):
+    """The decision rows of the file form: the stored status and decider of each file; the reason
+    of a blocked decision from lib/decisions.py blocked_reason, else the epic line."""
+    D = lib("decisions")
+    cards = D.file_cards(folder)
+    waits = D.status_and_waits(folder, cards)[1] if any(c["status"] == "blocked" for c in cards) else {}
+    out = []
+    for c in cards:
+        st = c["status"]
+        epic = f"E{c['epic']}" if c["epic"] else ""
+        reason = D.blocked_reason(waits[c["num"]])[0] if st == "blocked" and c["num"] in waits else \
+            "" if st == "blocked" else epic
+        ready = st == "to-do" and not epic
+        out.append(row(kind="decision", id=f"D{c['num']}", label=f"D{c['num']}", title=c["title"], status=st,
+                       turn=turn("decision", st), ready=ready, command="compose" if ready else "",
+                       decider=c["decider"], reason=reason, root="plan", file=c["file"],
+                       details="\n".join(c["body"])))
     return out
 
 
@@ -168,6 +197,12 @@ def plan_rows(folder, data):
     return out
 
 
+def decision_source(folder):
+    """The source of the decision rows: the folder "decisions/" in the file form, else decisions.md."""
+    D = lib("decisions")
+    return f"{D.DECISIONS_DIR}/" if D.file_form(folder) else D.DECISIONS_MD
+
+
 def build(folder):
     """The data of the two files, with roots, for a release of format 2.2; None below it."""
     folder = Path(folder)
@@ -179,7 +214,7 @@ def build(folder):
     return {"release": data.get("release") or lib("queue").release_of(folder),
             "updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
             "roots": {"plan": str(folder), "status": str(folder)},
-            "sources": {"queue": items, "decisions": lib("decisions").DECISIONS_MD, "status": st.FILE},
+            "sources": {"queue": items, "decisions": decision_source(folder), "status": st.FILE},
             "rows": queue_rows(folder) + decision_rows(folder) + plan_rows(folder, data)}
 
 

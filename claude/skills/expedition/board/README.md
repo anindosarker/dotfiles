@@ -52,7 +52,9 @@ Scripts are classic `<script src>` files that share one global scope, loaded in 
 
 The skill's Python scripts write both files from this section (v2.1.x D14), in the step that writes `status.data.js`. The Queue view reads its rows (`kind: queue`) from the same file, so the page needs no `queue.data.js`. Every item of every kind is one row. The builder maps no status word: it copies the stored one. It never reads `status/sprints.md` (D13). The writer is `scripts/lib/dashboard.py`; `scripts/lib/status.py` writes `status.data.js`. `scripts/sprints/refresh.py` writes both again after a hand edit.
 
-Until D9 is built, a decision row takes its `status` from the lane of its card in `decisions.md` (To do `to-do`, In progress `in progress`, Done `done`; Done with the tag `#deferred` `backlog`, with `#superseded` `archived`), is never `blocked`, and has `decider: ""`.
+A decision row copies the `status` line and the `decider` line of its decision file `decisions/D<n>-<slug>.md` (D9, D16); a file with no `decider` line gives `decider: ""` (a decision moved from a board has none until `scripts/decisions/decider.py` sets it). The rows are in the order of the numbers, and `sources` names the folder `decisions/`.
+
+Format 2.2 releases with the board: a release whose `decisions.md` is still a board (not yet moved by `scripts/migrate/v2.1-v2.2/`) takes a decision row's `status` from the lane of its card (To do `to-do`, In progress `in progress`, Done `done`; Done with the tag `#deferred` `backlog`, with `#superseded` `archived`). Such a row is never `blocked`, has `decider: ""`, and its file is `decisions.md`.
 
 Fields of every row. A text field with no value is `""`; `ready` is always `true` or `false`; `progress` is present on epics only, `decision` on queue rows only.
 
@@ -87,7 +89,7 @@ Rules that are worked out, in this order:
 
 1. Queue item, `blocked`: an item that is `to-do` and has a `depends_on` id that is not `done` is `blocked`, with `reason: "Waits for <the ids that are not done>"`. An id that is not in the queue counts as not done. When every id is `done` the item is `to-do` again. (In the new format the script `scripts/queue/item.py --depends` stores this status; the builder then only copies it and writes the reason.)
 2. Epic, `blocked` (a planned epic): the epic's stored status is `to-do`, its file `plan/epics/E<n>.md` has an Ownership table with at least one row, every row has a value in the Spec column and in the Milestone column ("the specs are ready"), and the front matter has no `starts:` value (the owner has not said `delegate`). Then `status: blocked`. In a release of format 2.2 the status file stores this status with the reason `waits for delegate`, and the row copies that reason. The lines `decisions:` and `specs:` of the front matter are not read (D12).
-3. Decision, `blocked`: stored, worked out by `scripts/epics/overlap.py`. `reason` is "Waits for E<n>, same file", the words of the `Blocked:` block of the `Epic ready` message (D10).
+3. Decision, `blocked`: stored in the `status` line of the decision file by the status rule of `scripts/lib/decisions.py`, which every refresh runs. `reason` is "Waits for E<n>, same file" (`blocked_reason` of `scripts/lib/decisions.py`), the words `scripts/epics/overlap.py` prints for it and the `Blocked:` block of the `Epic ready` message (D10).
 
 Turn. An item that is `done`, `archived` or `backlog` has `turn: ""`. For every other item, the first rule that fits:
 
@@ -113,11 +115,11 @@ Decider:
 | Kind | `decider` |
 |---|---|
 | queue | stored; written when the item is closed (`done` or `archived`); `""` on every other item. `agent` means it was fixed without a decision |
-| decision | `""` until D9 is built. Then stored on every decision: `you` (the owner said "record it"), `lead` (the lead settled it alone), `agent` (a run agent recorded a deviation) |
+| decision | stored: the `decider` line of its decision file, `you` (the owner said "record it"), `lead` (the lead settled it alone), `agent` (a run agent recorded a deviation); `""` when the file has no such line. A queue item that names the decision is not read for it |
 | epic | `you` |
 | milestone | stored in the status file by `scripts/lib/status.py`: the decider of the decision of its tasks, the first task that has one; `agent` when none has one |
-| task | stored in the status file by `scripts/lib/status.py`: the decider of the decision its module cites; `""` when the module cites none |
+| task | stored in the status file by `scripts/lib/status.py`: the decider of the decision its module cites; `""` when the module cites none or the decision has no decider |
 
-Reason: a queue item's comes from rule 1, an epic's from rule 2; a decision's, a milestone's and a task's blocked reason is stored. No other item has a reason, except the epic id on a decision.
+Reason: a queue item's comes from rule 1, an epic's from rule 2, a decision's from rule 3; a milestone's and a task's blocked reason is stored. No other item has a reason, except the epic id on a decision that is not `blocked`.
 
-Item files: a queue item's file is `<plan>/queue/Q<n>-*.md` (`root: plan`); a decision's is `decisions.md` (the storage of a decision's status and decider is not decided, queue item Q21); an epic's is `plan/epics/E<n>.md` and a task's is its task file (`root: status`); a milestone has none.
+Item files: a queue item's file is `<plan>/queue/Q<n>-*.md` (`root: plan`); a decision's is its decision file `decisions/D<n>-<slug>.md` (`root: plan`; `decisions.md` with the board); an epic's is `plan/epics/E<n>.md` and a task's is its task file (`root: status`); a milestone has none.
