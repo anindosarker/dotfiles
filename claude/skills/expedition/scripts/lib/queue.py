@@ -93,7 +93,7 @@ LANES = ("Open", "Decided", "Later", "Dropped", "Autofix")  # the lane words of 
 FRONT_KEYS = ("status", "decision", "option", "decider", "depends_on")
 DECIDERS = ("you", "lead", "agent")
 CLOSERS = {"archived": ("you", "lead"), "done": ("agent",)}  # the deciders of a --move to that status
-ID_RE = re.compile(r"^Q(\d+)$")
+ID_RE = re.compile(r"^Q([1-9]\d*)$")  # no leading zero: waits_for() compares the text
 FILE_RE = re.compile(r"^Q(\d+)-.*\.md$")
 TITLE_RE = re.compile(r"^# Q(\d+)\.\s+(.*?)\s*$")
 LIST_RE = re.compile(r"^- \[Q(\d+)\]\(")
@@ -304,11 +304,11 @@ def settle(folder):
 
 def check_depends(folder, num, ids):
     """The refusal of "--depends Q<num> <ids>", one line, or None: an id that is not like Q14
-    (a decision id among them), an id with no item file, the item itself, a ring of items that
-    wait for each other."""
+    (a decision id, an id with a leading zero among them), an id with no item file, the item
+    itself, a ring of items that wait for each other."""
     bad = [i for i in ids if not ID_RE.match(i)]
     if bad:
-        return f"bad id {', '.join(bad)}: depends_on names queue item ids only, like Q14"
+        return f"bad id {', '.join(bad)}: depends_on names queue item ids only, like Q14 (no leading zero)"
     files = item_files(folder)
     missing = [i for i in ids if int(i[1:]) not in files]
     if missing:
