@@ -154,7 +154,7 @@ Folded into stage 1: the run's items are queue items and come up through `queue/
 
 A release whose status file says `"format": "2.0"` is read as it is; no release is converted by itself. What differs there:
 
-- The queue is a kanban board, `queue.md`, and an item is a card on it: a title and facts, in five lanes (Open, Decided, Later, Dropped, Autofix). There is no `queue/` folder and no item file; the scripts read and write the board, with the same commands.
+- The queue is a kanban board, `queue.md`, and an item is a card on it: a title and facts, in five lanes (Open, Decided, Later, Dropped, Autofix). There is no `queue/` folder and no item file; the scripts read and write the board, with the same commands, except one flag: a decision is recorded with `queue/item.py <release> D "<title>" --source Q<n>` and no `--option`, because the script refuses `--option` on a board.
 - The options of an item are only in chat, in the form of [templates/item.md](templates/item.md) (filled: [example/item-examples.md](example/item-examples.md)); nothing of them is written to a file.
 - The rules of the board (lanes, ticks, tags, facts): [reference/old-form/queue-board.md](reference/old-form/queue-board.md).
 - To move the release to format 2.1: [scripts/migrate/v2.0-v2.1/README.md](scripts/migrate/v2.0-v2.1/README.md).
