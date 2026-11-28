@@ -405,6 +405,32 @@ def commit(root, paths, message):
     return True
 
 
+def commit_tree(root, folder, message):
+    """git add and commit every change under folder (changed, new and removed files that git does
+    not ignore) in one commit, by that path only: a change outside folder stays as it is. Returns
+    False when folder has nothing to commit. Dies with one line on a git failure. The repo and
+    the push are those of commit (plan_repo, push_plans). The sync of status/sync.py (D22)."""
+    repo, (path,) = plan_repo(root, [folder])
+    git_ = lambda *args: subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+    r = git_("add", "-A", "--", path)
+    if r.returncode:
+        die(f"git add failed: {(r.stderr or r.stdout).strip()}")
+    if not git_("diff", "--cached", "--name-only", "--", path).stdout.strip():
+        return False
+    r = git_("commit", "-q", "-m", message, "--only", "--", path)
+    if r.returncode:
+        die(f"git commit failed: {(r.stderr or r.stdout).strip()}")
+    # The check after the commit: a file written while the commit ran (an edit by hand that takes
+    # no lock) is named, and the next sync commits it.
+    left = git_("status", "--porcelain", "--", path).stdout.strip()
+    if left:
+        print(f"warning: {len(left.splitlines())} file(s) under {folder} changed during the commit "
+              f"and stay uncommitted, first: {left.splitlines()[0][3:]}; the next sync commits them",
+              file=sys.stderr)
+    push_plans(root, repo)
+    return True
+
+
 def template(name):
     """templates/<name> as a script writes it into a release: without its "<!-- ... -->" note,
     and for a board without the placeholder cards ("**D[n]**", "**Q[n]**") and their bullets."""
