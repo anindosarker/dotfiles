@@ -539,8 +539,9 @@ def floors(folder, milestones, assume=None):
 
 
 def set_starts(path, value):
-    """Write "Starts: <value>" under the Specs: line of an epic file. Returns the value kept when
-    one is already there, else None."""
+    """Write "Starts: <value>" under the Specs: line of an epic file; in a release of format 2.2,
+    which has no Specs: line (table_form), "starts: <value>" directly after the "status:" line.
+    Returns the value kept when one is already there, else None."""
     text = read(path)
     m = STARTS_RE.search(text)
     if m and m.group(1):
@@ -550,6 +551,9 @@ def set_starts(path, value):
     if m:
         i = text[:m.start()].count("\n")
         lines[i] = f"{lines[i].split(':')[0]}: {value}"
+    elif table_form(path.parent.parent.parent):
+        i = next((k for k, l in enumerate(lines) if low and l.startswith("status:")), 0)
+        lines.insert(i + 1, f"starts: {value}")
     else:
         i = next((k for k, l in enumerate(lines) if l.lower().startswith("specs:")), None)
         if i is None:
@@ -692,12 +696,27 @@ def epic_numbers(folder):
 
 def epic_decisions(text):
     """D numbers of the "Decisions:" line, in number order; ids in parentheses (cited, not run)
-    are left out."""
+    are left out. A release below format 2.2 only: see epic_decision_ids."""
     m = DECISIONS_LINE_RE.search(text)
     if not m:
         return []
     v = re.sub(r"\([^)]*\)", "", m.group(1))
     return sorted({int(x) for x in re.findall(r"\bD(\d+)\b", v)})
+
+
+def table_form(folder):
+    """True for a release of format 2.2 or higher (lib/status.py new_form): its epic files have
+    no "decisions:" and no "specs:" line, and the Ownership table is the one copy of both."""
+    return C.load("lib/status").new_form(folder)
+
+
+def epic_decision_ids(folder, text):
+    """D numbers of an epic, in number order, from its file text: the Decision column of its
+    Ownership table in a release of format 2.2 (table_form), else the "Decisions:" line."""
+    if not table_form(folder):
+        return epic_decisions(text)
+    rows, _ = read_table(text)
+    return sorted({r["decision"] for r in rows or [] if r["decision"] is not None})
 
 
 def section(lines, head):
@@ -964,7 +983,7 @@ def fill_epic(folder, n, given=None, quiet=False):
     old, err = read_table(text)
     if err:
         die(f"{path}: {err}")
-    decisions = epic_decisions(text)
+    decisions = epic_decision_ids(folder, text)
     if given:
         have = dict(spec_files(folder))
         bad = [g for g in given if g not in have]
@@ -1084,7 +1103,7 @@ def epic_gaps(folder, comp):
                 out.append(f"{rel}: no {OWN_HEAD} table, but E{n} has rows in {SPRINTS_MD}")
             continue
         have_d = {r["decision"] for r in rows}
-        for d in epic_decisions(text):
+        for d in ([] if table_form(folder) else epic_decisions(text)):
             if d not in have_d:
                 out.append(f"{rel}: D{d} on the Decisions line has no row")
         have_s = {r["spec"] for r in rows}

@@ -10,12 +10,14 @@ Steps, each skipped when already done, so a rerun after a failure picks up where
    cards ticked and tagged #E<n>. The epic's specs: its tagged specs, the Spec column of its
    table, and (before the Starts line exists) every untagged spec citing one of its decisions.
    Fails when a decision of the "Decisions:" line is cited by none of them. Done when every
-   spec and decision carries E<n> and Starts has a value.
+   spec and decision carries E<n> and Starts has a value. In a release of format 2.2 the
+   epic file has no "Decisions:" and no "Specs:" line: the decisions are the Decision column
+   of its table, and the go fails when one of them is cited by no spec of the epic.
 2. commit: the epic's spec files and their trackers, decisions.md, queue.md, <release>-plan.md
    and the epic file, when any of them changed.
 3. grid: sprints/refresh.py (the grid, the epic files' Sprint column, the decisions lanes, the
    queue sync, the swimlane data). Done when every milestone of the epic's specs has a row in status/sprints.md.
-4. epic file: the "Specs:" line and the final table (the epics/table.py fill, the Sprint column
+4. epic file: the "Specs:" line (none in format 2.2) and the final table (the epics/table.py fill, the Sprint column
    from the grid); commits the epic files (plan/epics/E<n>.md by number, nothing else in that
    folder), status/sprints.md, decisions.md and queue.md when any of them changed.
 5. close writer: runner.sh stop "<release> specs E<n>". Skipped when runner.sh list shows that
@@ -143,7 +145,7 @@ class Go:
 
     def specs(self):
         own, text = self.own, self.text()
-        decisions = own.epic_decisions(text)
+        decisions = own.epic_decision_ids(self.folder, text)
         specs, _ = own.epic_specs(self.folder, self.n, decisions)
         rows, _ = own.read_table(text)
         eps = own.spec_epics(self.folder)
@@ -161,7 +163,8 @@ class Go:
         own = self.own
         specs, decisions = self.specs()
         if not decisions:
-            raise StepFailed(f"{self.path.name} has no decision on its Decisions line")
+            where = "in its Ownership table" if own.table_form(self.folder) else "on its Decisions line"
+            raise StepFailed(f"{self.path.name} has no decision {where}")
         if not specs:
             raise StepFailed("no spec cites a decision of the epic")
         files = dict(own.spec_files(self.folder))
@@ -200,7 +203,7 @@ class Go:
         own = self.own
         specs, _ = self.specs()
         text = self.text()
-        new = own.set_field(text, "Specs", ", ".join(specs))
+        new = text if own.table_form(self.folder) else own.set_field(text, "Specs", ", ".join(specs))
         if new != text:
             self.path.write_text(new, encoding="utf-8")
         try:

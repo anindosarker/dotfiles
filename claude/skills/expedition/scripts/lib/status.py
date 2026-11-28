@@ -7,9 +7,16 @@ A release that has the file is read through it. A release without it (made befor
 is read as before: grid marks, tracker "Status:" lines. plan/new_release.py writes the first file.
 
 Five words (STATUSES): "not started", "in progress", "blocked", "done", "skipped". A blocked or
-skipped item carries a short reason. Stored: the status, reason, changed time and merge commit
+skipped item carries a short reason. A release of format 2.2 (new_form) stores and prints
+"to-do" for "not started" and "archived" for "skipped" (WORDS_22), in the file, in the "status:"
+lines and in every output; its key "statuses" is STATUSES_22. The code keeps the words of
+STATUSES: load gives them, dump and say turn them into the words of the release's format, and
+canon takes either set from a command, in every format. This is the one place that maps them. Stored: the status, reason, changed time and merge commit
 of each milestone, and the status, reason and changed time of each task. Counted on every
-write (rollup): the status of a spec, an epic and a sprint, from the milestones inside.
+write (rollup): the status of a spec, an epic and a sprint, from the milestones inside. In a
+release of format 2.2 an epic is counted so only once it has gone (a "starts:" value); before
+that it is to-do, and blocked with the reason DELEGATE_REASON while every row of its Ownership
+table has a Spec cell (epic_state). Its entry has "reason" there.
 Everything else in the file is rebuilt from the specs on every write (build), in the shape of
 the status board: release, updated, root, statuses, sprints, epics, specs, milestones, tasks.
 
@@ -54,6 +61,13 @@ WITH_REASON = ("blocked", "skipped")
 CLOSED = ("done", "skipped")
 MARKS = {"not started": "·", "in progress": "[ ]", "blocked": "[~]", "done": "[x]", "skipped": "[!]"}
 OWNER_REASON = "waits for the owner's look"
+NEW_FORMAT = (2, 2)
+DELEGATE_REASON = "waits for delegate"
+# Format 2.2 (spec 04, D11): the stored and printed words. The code keeps the words of STATUSES.
+WORDS_22 = {"not started": "to-do", "skipped": "archived"}
+ALIASES = {new: old for old, new in WORDS_22.items()}
+STATUSES_22 = ("to-do", "in progress", "blocked", "done", "backlog", "archived")
+KINDS = ("sprints", "epics", "specs", "milestones", "tasks")
 PENDING = "status/data/.pending"
 COMMIT_RE = re.compile(r"^[0-9a-f]{7,40}$")
 BOX_RE = re.compile(r"^\s*-\s*\[( |x|X)\]\s*(.*)$")
@@ -84,7 +98,36 @@ def load(folder):
         C.die(f"{path(folder)} is not valid JSON ({e}): restore it from git; no status was changed")
     if not (isinstance(data, dict) and isinstance(data.get("milestones"), list) and isinstance(data.get("tasks"), list)):
         C.die(f"{path(folder)} has no milestone and task lists: restore it from git; no status was changed")
+    if version(data.get("format")) >= NEW_FORMAT:
+        for kind in KINDS:
+            for e in data.get(kind) or []:
+                if isinstance(e, dict) and "status" in e:
+                    e["status"] = canon(e["status"])
+        data["statuses"] = list(STATUSES)
     return data
+
+
+def canon(word):
+    """The word of the code for a word of either format: "to-do" is "not started", "archived"
+    is "skipped"; any other word as it is."""
+    return ALIASES.get(word, word)
+
+
+def stored(data):
+    """data in the words of its own "format": for 2.2 and higher a copy with WORDS_22 and the key
+    "statuses" STATUSES_22; data itself for a lower format."""
+    if version(data.get("format")) < NEW_FORMAT:
+        return data
+    out = dict(data, statuses=list(STATUSES_22))
+    for kind in KINDS:
+        out[kind] = [dict(e, status=WORDS_22.get(e["status"], e["status"])) if "status" in e else e
+                     for e in data.get(kind) or []]
+    return out
+
+
+def dump(data):
+    """The text of status.json for data, in the words of its format."""
+    return json.dumps(stored(data), indent=2, ensure_ascii=False) + "\n"
 
 
 def write_json(p, text):
@@ -98,6 +141,40 @@ def write_json(p, text):
 def release_format(folder):
     """The format a release is in: the "format" key of its status file; "1.0" with no file."""
     return (load(folder) or {}).get("format") or "1.0"
+
+
+def version(text):
+    """A format or version string as a tuple to compare: "2.2" is (2, 2)."""
+    return tuple(int(x) for x in re.findall(r"\d+", text or "")) or (1, 0)
+
+
+def say(folder, word):
+    """The word a release stores and prints for the word of the code (STATUSES): in a release of
+    format 2.2 "to-do" for "not started" and "archived" for "skipped" (WORDS_22)."""
+    return WORDS_22.get(word, word) if new_form(folder) else word
+
+
+def words(folder):
+    """The five words a release of this format stores and prints, in the order of STATUSES."""
+    return [say(folder, w) for w in STATUSES]
+
+
+def stamp(folder, text):
+    """text of a new task, spec or epic file with the "status:" front matter line set to the
+    first word of the release's format, when that line holds a first word of either format."""
+    m = re.match(r"\A---\n(.*?)\n---\n", text, re.S)
+    if not m:
+        return text
+    lines = [f"status: {say(folder, STATUSES[0])}" if re.fullmatch(r"status:\s*(not started|to-do)\s*", l) else l
+             for l in m.group(1).split("\n")]
+    return "---\n" + "\n".join(lines) + "\n---\n" + text[m.end():]
+
+
+def new_form(folder):
+    """True for a release of format 2.2 or higher (spec 04): the words of WORDS_22 and the epic
+    file with its Ownership table as the one copy of its decisions and specs. The skill's own
+    version plays no part."""
+    return version(release_format(folder)) >= NEW_FORMAT
 
 
 def entries(folder):
@@ -234,14 +311,40 @@ def build(folder, release, stored=None):
         epics.append({"id": f"E{n}", "name": head.group(1) if head else (mine[0]["title"] if mine else ""),
                       "status": rollup(s["status"] for s in mine),
                       "specs": [s["id"] for s in mine]})
+    fmt = (load(folder) or {}).get("format") or C.skill_version()
+    if version(fmt) >= NEW_FORMAT:
+        for e in epics:
+            word, why = epic_state(o, folder, int(e["id"][1:]), e["status"], milestones, tasks)
+            specs_ = e.pop("specs")
+            e.update(status=word, reason=why, specs=specs_)
     sprints = []
     for c in sorted({int(m["sprint"][1:]) for m in milestones if m["sprint"]}):
         inside = [m["status"] for m in milestones if m["sprint"] == f"S{c}"]
         sprints.append({"id": f"S{c}", "status": rollup(inside),
                         "done": sum(1 for w in inside if w in CLOSED), "total": len(inside)})
-    return {"release": release, "format": (load(folder) or {}).get("format") or C.skill_version(),
+    return {"release": release, "format": fmt,
             "updated": now(), "statuses": list(STATUSES),
             "sprints": sprints, "epics": epics, "specs": specs, "milestones": milestones, "tasks": tasks}
+
+
+def epic_state(o, folder, n, counted, milestones, tasks):
+    """(status, reason) of epic n in a release of format 2.2, from its file: with a "starts:"
+    value (the owner said delegate) the status counted from its specs, blocked with the reason
+    of its first blocked milestone (else task); without one, blocked with DELEGATE_REASON when
+    its Ownership table has a row and every row has a Spec cell (the specs are ready), else not
+    started (the specs are being written)."""
+    if o.SPRINT_VALUE_RE.match(o.epic_starts(folder).get(n) or ""):
+        if counted != "blocked":
+            return counted, ""
+        mine = [m for m in milestones if m["epic"] == f"E{n}"]
+        ids = {m["id"] for m in mine}
+        held = [m for m in mine if m["status"] == "blocked"]
+        held += [t for t in tasks if t["milestone"] in ids and t["status"] == "blocked"]
+        return counted, next((x["reason"] for x in held if x["reason"]), "")
+    rows, _ = o.read_table(C.read(o.epic_path(folder, n)))
+    if rows and all(r["spec"] for r in rows):
+        return "blocked", DELEGATE_REASON
+    return STATUSES[0], ""
 
 
 def save(folder, data):
@@ -252,7 +355,7 @@ def save(folder, data):
     if old is not None and {**old, "updated": ""} == {**data, "updated": ""}:
         data = old
     else:
-        write_json(p, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+        write_json(p, dump(data))
         CHANGED.append(p)
     write_page_data(folder, data)
 
@@ -260,7 +363,7 @@ def save(folder, data):
 def write_page_data(folder, data=None):
     """status.data.js, the data of the page status/index.html: the stored file plus "root". For a
     release of format 2.1 also queue.data.js, the data of its Queue view (lib/queue.py)."""
-    data = data or load(folder)
+    data = stored(data or load(folder))
     page = {k: v for k, v in data.items() if k in ("release", "format", "updated")}
     page.update(root=str(folder), **{k: v for k, v in data.items() if k not in page})
     write_json(folder / SCRIPT, f"window.STATUS_DATA = {json.dumps(page, indent=2, ensure_ascii=False)};\n")
@@ -268,8 +371,10 @@ def write_page_data(folder, data=None):
 
 
 def mirror(folder, data):
-    """The "status:" front matter line of every task, spec and epic file, from data."""
+    """The "status:" front matter line of every task, spec and epic file, from data, in the words
+    of the release's format."""
     o = own()
+    data = stored(data)
     want = [(folder / t["file"], t["status"]) for t in data["tasks"] if t["file"]]
     want += [(folder / s["path"], s["status"]) for s in data["specs"]]
     want += [(o.epic_path(folder, int(e["id"][1:])), e["status"]) for e in data["epics"]]
@@ -285,7 +390,7 @@ def differences(folder):
     """[(file, its status line, the stored status)] of each front matter line that differs from
     status.json: a status edited by hand."""
     o = own()
-    data = load(folder) or {}
+    data = stored(load(folder) or {})
     want = [(folder / t["file"], t["status"]) for t in data.get("tasks", []) if t["file"]]
     want += [(folder / s["path"], s["status"]) for s in data.get("specs", [])]
     want += [(o.epic_path(folder, int(e["id"][1:])), e["status"]) for e in data.get("epics", [])]
@@ -345,7 +450,7 @@ def drop(folder, release, ident):
         left = [e for e in data[kind] if e["id"] != ident]
         if len(left) != len(data[kind]):
             data[kind] = left
-            write_json(path(folder), json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+            write_json(path(folder), dump(data))
             CHANGED.append(path(folder))
             return kind[:-1]
     return None
@@ -362,12 +467,14 @@ def find(data, ident):
 
 def set_status(folder, release, ident, status, reason="", commit="", locked=False, boxes_in=None):
     """Set one milestone or task and run the chain. Returns (kind, entry, the word stored), the
-    word None when nothing changed (then nothing is written). Dies on an unknown id, a spec or
-    an epic, a word that is not one of the five, a missing reason, a task set to done with an
-    open box that is not an "Owner:" line, a milestone set to done without a commit hash or
-    with a task that is not finished."""
+    word None when nothing changed (then nothing is written); the word is that of the release's
+    format (say), and status may be a word of either format (canon). Dies on an unknown id, a
+    spec or an epic, a word that is not one of the five, a missing reason, a task set to done
+    with an open box that is not an "Owner:" line, a milestone set to done without a commit hash
+    or with a task that is not finished."""
+    status = canon(status)
     if status not in STATUSES:
-        C.die(f"bad status '{status}': one of {', '.join(STATUSES)}")
+        C.die(f"bad status '{status}': one of {', '.join(words(folder))}")
     data = build(folder, release)
     kind, e = find(data, ident)
     if kind is None:
@@ -383,7 +490,7 @@ def set_status(folder, release, ident, status, reason="", commit="", locked=Fals
         if owner:
             status, reason = "blocked", OWNER_REASON
     if status in WITH_REASON and not reason:
-        C.die(f'{status} needs --reason "<text>"')
+        C.die(f'{say(folder, status)} needs --reason "<text>"')
     mine = [t for t in data["tasks"] if t["milestone"] == (ident if kind == "milestone" else e["milestone"])]
     if kind == "milestone" and status == "done":
         if not COMMIT_RE.match(commit):
@@ -408,9 +515,9 @@ def set_status(folder, release, ident, status, reason="", commit="", locked=Fals
             why = next((t["reason"] for t in mine if t["status"] == "blocked"), "") if word == "blocked" else ""
             if (m["status"], m["reason"]) != (word, why):
                 m.update(status=word, reason=why, changed=now())
-    write_json(path(folder), json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    write_json(path(folder), dump(data))
     CHANGED.append(path(folder))
     C.load("lib/grid").refresh(folder, release, quiet=True, locked=locked)
     if (folder / C.SPRINTS_MD).is_file():
         C.load("sprints/swimlanes").write(folder, release, quiet=True)
-    return kind, e, status
+    return kind, e, say(folder, status)

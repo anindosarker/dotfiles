@@ -1,7 +1,5 @@
 ---
-status: not started
-decisions: D[n], D[n]
-specs: [NN], [NN]
+status: to-do
 starts: S[n]
 ---
 # E[n]

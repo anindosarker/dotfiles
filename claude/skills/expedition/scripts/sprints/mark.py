@@ -68,16 +68,17 @@ def mark_status(a, st, root, folder, key, num, name):
     """A release with status/data/status.json: the verb is a status of that file (lib/status.py).
     launch: in progress. resume, on a blocked milestone only: in progress when it was launched
     before (a launch commit of this script is in the history of status/sprints.md), not started
-    when it never was. merge: done, with --commit (a commit hash), refused while a
+    (to-do in a release of format 2.2) when it never was. merge: done, with --commit (a commit hash), refused while a
     task of the milestone is not done, skipped or waiting for the owner's look. wait and stop:
     blocked, with --reason; a stop whose reason starts with a decision id ("D15 ...") is
-    skipped. It writes the one release folder the scripts keep their lock in, also when run from
+    skipped (archived in a release of format 2.2: lib/status.py stores and prints the word of the
+    release's format). It writes the one release folder the scripts keep their lock in, also when run from
     a milestone worktree that holds a copy of the plan folder."""
     word = {"launch": "in progress", "merge": "done"}.get(a.action, "blocked")
     if a.action == "resume":
         now = st.entries(folder)[0].get(key, {}).get("status", "not started")
         if now != "blocked":
-            C.die(f"{key}: {now}, not blocked: nothing to resume")
+            C.die(f"{key}: {st.say(folder, now)}, not blocked: nothing to resume")
         word = "in progress" if C.load("lib/grid").resume_mark(folder, key) == "[ ]" else "not started"
     if a.action == "stop" and re.match(r"^D\d+\b", a.reason.strip()):
         word = "skipped"
@@ -87,7 +88,7 @@ def mark_status(a, st, root, folder, key, num, name):
             _, e, stored = st.set_status(folder, a.release, key, word, a.reason, a.commit, locked=True)
         if stored is None:
             late = st.pending(folder) and st.commit(root, folder, [], f"docs(plan): {a.release} {key} {a.action}")
-            print(f"{key}: already {e['status']}, nothing changed" + ("; an earlier failed commit is made now" if late else ""))
+            print(f"{key}: already {st.say(folder, e['status'])}, nothing changed" + ("; an earlier failed commit is made now" if late else ""))
             return
         paths = [folder / C.SPRINTS_MD, folder / "decisions.md", *C.load("lib/queue").commit_paths(folder)]
         paths += sorted((folder / C.EPICS_DIR).glob("E*.md"))

@@ -8,7 +8,8 @@ A D id resolves to the specs citing it. Each named spec gets the line "- Epic: E
 under its title line; each decision those specs cite (and each named D id) gets the tag "#E<n>"
 on its card in decisions.md and moves to In progress (lib/decisions.py, under the .ids.lock
 lock, then the Done rule sync), and the spec's Deliverables row gets E<n> in
-its Epic cell, and plan/epics/E<n>.md gets "Starts: S<n>" under its Specs: line: the current
+its Epic cell, and plan/epics/E<n>.md gets "Starts: S<n>" under its Specs: line (in a release of
+format 2.2, which has no Specs: line, "starts: S<n>" directly after the "status:" line): the current
 sprint of status/sprints.md as it is at that moment (the first column holding a "[ ]", "[~]" or
 "·" cell of another epic's row, else the column after the last column holding another epic's row;
 S1 for an empty grid). An existing Epic line, epic tag or Starts value is kept and reported; a
@@ -19,7 +20,9 @@ progress is ticked and gets "#E<n>". A release of format 2.1 keeps its queue in 
 
 Refuses a superseded decision (heading "(superseded by D<n>)", or named by a later
 "- Supersedes D<n>." bullet): a named spec that cites one, or a named D id that is one.
-Commits nothing.
+Commits nothing. In a release of format 2.2 the status chain runs at the end (epics/table.py
+chain): with its "starts:" value the epic is counted from its specs, no longer "waits for
+delegate".
 """
 import argparse
 import fcntl
@@ -156,6 +159,7 @@ def main():
     root = C.repo_root(a.root, a.release)
     folder = C.release_folder(root, C.detect_owner(root, a.owner), a.release)
     tag_epic(folder, a.epic, items)
+    C.load("epics/table").chain(folder, a.release)
 
 
 if __name__ == "__main__":

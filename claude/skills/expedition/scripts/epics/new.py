@@ -17,11 +17,20 @@ rows are added, every other row kept as it is. Refuses, writing nothing, a decis
 missing from decisions.md, superseded, already tagged with another epic, or done with nothing to
 run (in Done without an epic tag).
 
+A release of format 2.2 (lib/status.py new_form): the front matter holds "status" and "starts"
+only, with no "decisions:" and no "specs:" line; the epic's decisions are the D ids of the
+Decision column of its table (the one copy). After the write of a stub or a start the status
+chain runs (lib/status.py sync), so status.json and the "status:" lines follow at once, and
+they are committed with the epic file.
+
 Note (--note): appends "- <text>" at the end of the "## Notes" section, creating the section at
 the end of the file when it is missing. An urgent note starts with "Urgent:".
 """
 import argparse
+import contextlib
+import fcntl
 import importlib.util
+import io
 import re
 import sys
 from pathlib import Path
@@ -44,10 +53,14 @@ die = C.die
 
 
 def stub(own, epic, folder):
-    """An empty epic file: front matter (status, decisions, specs, starts) in a release with
-    status/data/status.json, the "Decisions:", "Specs:", "Starts:" lines in an earlier one."""
+    """An empty epic file: front matter (status, starts) in a release of format 2.2, (status,
+    decisions, specs, starts) in a release with status/data/status.json below 2.2, the
+    "Decisions:", "Specs:", "Starts:" lines in an earlier one."""
     table = "\n".join([own.OWN_HEAD, ""] + own.render_table([])) + "\n"
-    if C.load("lib/status").active(folder):
+    st = C.load("lib/status")
+    if st.new_form(folder):
+        return f"---\nstatus: {st.say(folder, st.STATUSES[0])}\nstarts:\n---\n# {epic}\n\n" + table
+    if st.active(folder):
         return f"---\nstatus: not started\ndecisions:\nspecs:\nstarts:\n---\n# {epic}\n\n" + table
     return f"# {epic}\n\nDecisions:\nSpecs:\nStarts:\n\n" + table
 
@@ -77,12 +90,14 @@ def start(own, folder, path, epic, nums):
         die(f"{path}: {err}")
     rows = rows or []
     have = {r["decision"] for r in rows}
-    ids = sorted(set(own.epic_decisions(text)) | set(nums))
+    ids = sorted(set(own.epic_decision_ids(folder, text)) | set(nums))
     titles = own.decision_titles(folder)
     added = [d for d in ids if d not in have]
     rows += [{"decision": d, "title": titles.get(d, ""), "files": [], "spec": "",
               "milestone": "", "sprint": ""} for d in added]
-    new = own.put_table(own.set_field(text, "Decisions", ", ".join(f"D{d}" for d in ids)), rows)
+    if not own.table_form(folder):
+        text = own.set_field(text, "Decisions", ", ".join(f"D{d}" for d in ids))
+    new = own.put_table(text, rows)
     print(f"{epic}: Decisions {', '.join(f'D{d}' for d in ids)}; rows added: "
           f"{', '.join(f'D{d}' for d in added) or 'none'}")
     if path.is_file() and new == own.read(path):
@@ -139,13 +154,28 @@ def main():
         C.commit(root, [path], f"docs(plan): {a.release} {a.epic} note")
     elif items:
         if start(own, folder, path, a.epic, [int(D_RE.match(i).group(1)) for i in items]):
-            C.commit(root, [path], f"docs(plan): {a.release} {a.epic} epic started")
+            commit(root, folder, a.release, path, f"docs(plan): {a.release} {a.epic} epic started")
     else:
         if path.exists():
             die(f"refusing to overwrite {path}")
         path.write_text(stub(own, a.epic, folder), encoding="utf-8")
-        C.commit(root, [path], f"docs(plan): {a.release} {a.epic} epic file")
+        commit(root, folder, a.release, path, f"docs(plan): {a.release} {a.epic} epic file")
     print(path)
+
+
+def commit(root, folder, release, path, message):
+    """Commit the epic file. In a release of format 2.2 the status chain runs first (the epic's
+    status is counted from this file) and its writes go into the same commit."""
+    st = C.load("lib/status")
+    if not st.new_form(folder):
+        C.commit(root, [path], message)
+        return
+    with open(C.lock_file(folder), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        with contextlib.redirect_stdout(io.StringIO()):
+            st.sync(folder, release)
+        st.commit(root, folder, [path], message)
+        fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 if __name__ == "__main__":
