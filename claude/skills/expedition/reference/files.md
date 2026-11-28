@@ -15,16 +15,18 @@
 .ai/plans/v0.<n>.x/<owner>/
 ├── <release>-plan.md       ← authored: ## Goals, ## Deliverables
 ├── decisions.md            ← accepted decisions, a kanban board: D<n> cards in three lanes (To do, In progress, Done), lane by the Done rule
-├── queue.md                ← every card filed in the release, a kanban board: Q<n> cards in five lanes (Open, Decided, Later, Dropped, Autofix)
+├── queue.md                ← the list of every item filed in the release, one linked line per item file; written by the scripts only (in a release of format 2.0 or 1.0 a kanban board of Q<n> cards: old-form/queue-board.md)
+├── queue/Q<n>-<slug>.md    ← one item file per item: front matter (status, decision, option), # Q<n>. title, ## Notes (scripts), ## Details and ## Options: (the lead, when the item settles); format 2.1 only
 ├── process.md              ← this project's facts for the release, about ten P<n> rules, two to five explicit bullets each (branches, milestone branch and worktree, merge, release, checks on the shared machine, agent sandbox, public surface, commits, shared files, plans); copied from the previous release by plan/new_release.py, audited and rewritten rule by rule with the owner before the run (SKILL.md, Process notes)
 ├── plan/specs/NN-<slug>/   ← authored: one spec, NN-<slug>.md: modules in 1.6, task pointers in 2.1, one #### 2.2.N Milestone: <name> block per milestone in 2.2; tasks/NN-<slug>.md its task files
 ├── plan/epics/E<n>.md     ← one per epic, started by epics/new.py: Decisions, Specs and Starts lines, the Ownership table, Notes only when the specs cannot hold something, acked by the runner
 ├── run/trackers/NN-<slug>-tracker.md ← one per milestone: branch, check lines, staged attention items, notes; no status
 ├── run/handoffs/          ← write-handoff output
 ├── status/sprints.md       ← generated, like everything under status/ (never edited by hand); sprints/refresh.py, by run/go.py: the grid, one row per milestone, one column per sprint; its marks set by sprints/mark.py only
-├── status/index.html       ← the status page, a render, git-ignored, never committed: in a release of format 2.0 the task board, copied from board/task-board.html by plan/new_release.py and kept current by sprints/swimlanes.py; in a format 1.0 release the swimlane page from board/swimlanes.html
+├── status/index.html       ← the status page, a render, git-ignored, never committed: in a release of format 2.0 or 2.1 the task board (with its Queue view in 2.1), copied from board/task-board.html by plan/new_release.py and kept current by sprints/swimlanes.py; in a format 1.0 release the swimlane page from board/swimlanes.html
 ├── status/data/status.json ← the store of every status (epic, spec, milestone, task) and the data of the status board; written by status/status.py and sprints/mark.py only; committed
 ├── status/data/status.data.js ← the task board's data, rewritten with every status change; git-ignored, never committed. sprints.data.js and sprints.json, the swimlane page's data, are written only in a format 1.0 release
+├── status/data/queue.data.js ← the data of the task board's Queue view, written from the item files by queue/item.py and the refresh chain; format 2.1 only; git-ignored, never committed
 ├── status/data/go.log      ← run/go.py: one line per runner step done (the spec writer's window closed, the RUN line sent) per epic, so a rerun skips it; git-ignored
 ├── status/data/runs.json   ← run/runs.py: the Workflow run id of each milestone, written by the runner at launch, the newest id wins; read by run/check.py; git-ignored
 ├── status/data/.ids.lock   ← the write lock every writing script takes (ids, the queue, decisions, the grid and its marks); an empty file, git-ignored with the folder
@@ -97,7 +99,7 @@ The contract applies in all three: [plan.md](plan.md), The contract. The lines e
 
 ## Conventions
 
-- Citations: `(D7)` for a decision, `(Q3)` for a queue card, `(P2)` for a process rule, `(v0.4.x D9)` for a decision of another release. `status/report.py` also reads the older `(decision N)` form.
+- Citations: `(D7)` for a decision, `(Q3)` for a queue item, `(P2)` for a process rule, `(v0.4.x D9)` for a decision of another release. `status/report.py` also reads the older `(decision N)` form.
 - `<release>-plan.md` lists `#`, `Spec`, `Epic`, `Scope` only. No duration or size column.
 - No questions in plan files. They stay in chat until answered.
 - No em dashes in any release file.

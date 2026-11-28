@@ -1,14 +1,14 @@
 # Stage 4: triage
 
-Folded into stage 1: the run's cards in `queue.md` are queue cards like any other, read when the runner sends DONE or BLOCKED.
+Folded into stage 1: the run's items in the queue are queue items like any other, read when the runner sends DONE or BLOCKED.
 
 ## Steps
 
-1. Run `python3 -I <skill>/scripts/queue/next.py <release>` for the first card in Open.
-2. Run the screen ([discuss.md](discuss.md), Screen) on every card. Settle every card that is not a real choice first, without the owner (decision with its `Source:` line, follow-up routed, spec or process text fixed inline, or the Lead-side close). Post the settled list ([formats.md](formats.md), Settled list). Then go through the real choices one at a time. For each, give the facts and a recommendation. Use the item format from [discuss.md](discuss.md), Item format (`# Q<n>.` title sentence, bullets, `## Options:` with the recommended option first); the next item only after the explicit word on this one. The owner gives feedback. Discuss in chat, not in the file.
-3. Record a decision only on the explicit word (SKILL.md, Explicit word), with `queue/item.py <release> D "<title>" --source Q<n>`. The first decision of the triage adds `--new-round`, so it and the rest of the triage carry the next `#R<n>` in `decisions.md`. Numbering continues. Each decision ends with `- Source: Q<n>`, and the card moves to Decided. "later" moves it to Later, "drop it" to Dropped (`queue/item.py <release> --move Q<n> Later|Dropped`). Format: [formats.md](formats.md).
-4. A card the owner takes as it is still gets a short decision with its `Source:` line, on the explicit word, so the card is decided.
-5. File bugs found during triage in `queue.md` (`queue/item.py <release> Q`).
+1. Run `python3 -I <skill>/scripts/queue/next.py <release>` for the open item with the lowest number.
+2. Run the screen ([discuss.md](discuss.md), Screen) on every item. Settle every item that is not a real choice first, without the owner (decision with its `Source:` line, follow-up routed, spec or process text fixed inline, or the Lead-side close). Post the settled list ([formats.md](formats.md), Settled list). Then go through the real choices one at a time. For each, give the facts and a recommendation. Use the item format from [discuss.md](discuss.md), Item format (`# Q<n>.` title sentence, `Details`, `Options:` with the recommended option first, the `Say:` block); the next item only after the explicit word on this one. The owner gives feedback. Discuss in chat, not in the file; the item goes into its file when it settles ([discuss.md](discuss.md), Item format, Storing).
+3. Record a decision only on the explicit word (SKILL.md, Explicit word), with `queue/item.py <release> D "<title>" --source Q<n> --option <n>`. The first decision of the triage adds `--new-round`, so it and the rest of the triage carry the next `#R<n>` in `decisions.md`. Numbering continues. Each decision ends with `- Source: Q<n>`, and the item's `status` becomes `decided`. "later" sets it to `later`, "drop it" to `dropped` (`queue/item.py <release> --move Q<n> Later|Dropped`). Format: [formats.md](formats.md).
+4. An item the owner takes as it is still gets a short decision with its `Source:` line, on the explicit word, so the item is decided.
+5. File bugs found during triage as queue items (`queue/item.py <release> Q "<title>" --bullet "<first fact line>"`).
 6. A decision that changes an earlier one: [discuss.md](discuss.md), Changing a decision.
 7. Route each piece of follow-up work (rules below).
 8. The new decisions join the next epic ([discuss.md](discuss.md), Epics): the spec writer writes their specs.
