@@ -10,7 +10,7 @@ The chat form of an item in a release of format 2.0 or lower; in format 2.1 the 
   - <detail: code name, value>              optional
 ## Options:
 1. Recommended: <the proposal in a few words>
-   - <bullet>
+   - <bullet>                               bullets by default; a table or a code block only where bullets do not work
      - <detail>                             optional
 2..N. <another option>                      optional
    - <bullet>
