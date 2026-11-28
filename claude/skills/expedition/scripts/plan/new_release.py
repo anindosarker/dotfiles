@@ -11,6 +11,11 @@ status/index.html is copied from board/task-board.html. status/index.html and st
 are renders, never committed: the two .ai/plans/*/*/status/ lines are appended to the repo's
 .gitignore when missing. status/sprints.md and status/data/ are written later by sprints/refresh.py.
 
+The queue takes the form of the skill's version (SKILL.md), which is also the new release's
+format: below 2.1 the board stub from templates/queue.md; from 2.1 on queue.md from
+templates/queue-list.md, an empty list, and an empty queue/ folder for the item files
+(lib/queue.py).
+
 Usage: python3 -I plan/new_release.py <release> [--owner X] [--root PATH]
 """
 import argparse
@@ -109,7 +114,15 @@ def main():
     write_new(folder / f"{c}-plan.md", plan)
     today = datetime.date.today().isoformat()
     write_new(folder / "decisions.md", from_template("decisions.md", c, today))
-    write_new(folder / "queue.md", from_template("queue.md", c, today))
+    Q = C.load("lib/queue")
+    if Q.version(C.skill_version()) >= Q.ITEM_FORMAT:
+        text = "".join(l + "\n" for l in from_template("queue-list.md", c, today).splitlines()
+                       if not l.startswith("- [Q[n]]"))
+        write_new(folder / "queue.md", text.rstrip("\n") + "\n")
+        (folder / Q.QUEUE_DIR).mkdir()
+        print(folder / Q.QUEUE_DIR)
+    else:
+        write_new(folder / "queue.md", from_template("queue.md", c, today))
     st = C.load("lib/status")
     st.save(folder, st.build(folder, c, ({}, {})))
     print(st.path(folder))

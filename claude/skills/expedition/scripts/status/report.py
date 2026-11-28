@@ -21,7 +21,13 @@ marker line under a lane heading is tolerated), a card without a **Q<n>** token,
 a tag on a title line that is not #D<n> or #E<n>, a leftover "Decision:" sub-bullet, a Decided
 card without #D<n> or with a #D<n> naming a missing decision, a Decided card whose tick or #E<n>
 tag disagrees with the lane of its decision (the next queue/item.py, epics/tag.py or
-sprints/refresh.py run syncs it), a (Q<n>) or "Source: Q<n>" citation of a missing card. process.md (## P<n>) must
+sprints/refresh.py run syncs it), a (Q<n>) or "Source: Q<n>" citation of a missing card.
+A release of format 2.1 keeps its queue in item files (lib/queue.py): the Queue section counts
+the items per status and lists each with its status; its gaps: an item file with no "# Q<n>."
+title or a number that differs from its file name, a "status" outside open, decided, later,
+dropped and autofix, a decided item with no decision or one not in decisions.md, a queue.md
+that differs from the list the files give, a duplicate number, a citation of a missing item.
+process.md (## P<n>) must
 exist with no placeholder left; (P<n>) citations must be defined.
 
 Epics: the #E<n> tag of a decision card puts the decision in an epic. The summary lists deciding
@@ -252,6 +258,59 @@ def queue_report(folder, bd, text, docs, extra, dec_nums, tags):
     return [c["num"] for c in cards if c["lane"] == "Open"]
 
 
+def items_report(folder, Q, docs, extra, dec_nums):
+    """The Queue section of a release of format 2.1 (item files): the count per status, one row
+    per item with its citing specs and status, then gaps. Returns the open item numbers."""
+    its = Q.items(folder)
+    counts = collections.Counter(it["status"] for it in its)
+    print(f"Queue: {len(its)} items in {Q.QUEUE_DIR}/: "
+          + ", ".join(f"{s} {counts.get(s, 0)}" for s in Q.STATUSES))
+    texts = {num: read(p) for num, p in docs}
+    texts.update({key: first for key, _, first in extra})
+    cited = {num: q_cites(t) for num, t in texts.items()}
+    rows = []
+    for it in its:
+        n = it["file_num"]
+        citing = sorted((num for num, ci in cited.items() if n in ci), key=num_key)
+        rows.append((f"Q{n}", ", ".join(citing) or "-", it["status"] or "-"))
+    if rows:
+        w1 = max(len(r[0]) for r in rows) + 2
+        w2 = max(len(r[1]) for r in rows) + 2
+        for a, b, c in rows:
+            print(f"  {a.ljust(w1)}{b.ljust(w2)}{c}")
+    for it in its:
+        n, rel = it["file_num"], it["path"].relative_to(folder).as_posix()
+        if it["num"] is None:
+            print(f"  {rel}: no '# Q<n>. <title>' line")
+        elif it["num"] != n:
+            print(f"  {rel}: the title says Q{it['num']}, the file name Q{n}")
+        if it["status"] not in Q.STATUSES:
+            print(f"  {rel}: status '{it['status']}': only {', '.join(Q.STATUSES)}")
+        if it["status"] == "decided":
+            m = re.match(r"^D(\d+)$", it["decision"])
+            if not m:
+                print(f"  Q{n}: decided without a 'decision: D<n>' line")
+            elif int(m.group(1)) not in dec_nums:
+                print(f"  Q{n}: decision {it['decision']} is not in decisions.md")
+    if not Q.list_in_step(folder):
+        print(f"  {QUEUE_MD} differs from the item files: the next queue/item.py run writes it again")
+    have = {it["file_num"] for it in its}
+    sources = [folder / "decisions.md", folder / f"{folder.parent.name}-plan.md"]
+    sources += sorted((folder / TRACKERS_DIR).glob("*.md")) + sorted((folder / EPICS_DIR).glob("*.md"))
+    sources += [p for _, p in docs]
+    missing = collections.defaultdict(set)
+    for p in sources:
+        if p.is_file():
+            for n in q_cites(read(p)) - have:
+                missing[n].add(p.relative_to(folder).as_posix())
+    for n in sorted(missing):
+        print(f"  Q{n} cited but undefined: {', '.join(sorted(missing[n]))}")
+    dups = sorted(n for n in have if len(list((folder / Q.QUEUE_DIR).glob(f"Q{n}-*.md"))) > 1)
+    if dups:
+        print(f"  duplicate numbers: {', '.join(f'Q{n}' for n in dups)}")
+    return [it["file_num"] for it in its if it["status"] == "open"]
+
+
 def new_print(folder, plan, d, own):
     rows, docs, statuses = d["rows"], d["docs"], d["statuses"]
     print("Specs:")
@@ -461,8 +520,12 @@ def main():
     docs, statuses = d["docs"], d["statuses"]
 
     dec_cards, _ = decision_table(folder, decisions, docs)
-    open_q = queue_report(folder, bd, q_text, docs, d["extra"], {c["num"] for c in dec_cards},
-                          bd.decision_tags(own, folder))
+    Q = C.load("lib/queue")
+    if Q.item_form(folder):
+        open_q = items_report(folder, Q, docs, d["extra"], {c["num"] for c in dec_cards})
+    else:
+        open_q = queue_report(folder, bd, q_text, docs, d["extra"], {c["num"] for c in dec_cards},
+                              bd.decision_tags(own, folder))
 
     new_print(folder, plan, d, own)
 

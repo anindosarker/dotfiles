@@ -134,7 +134,7 @@ def main():
             late = st.pending(folder) and st.commit(root, folder, [], f"docs(plan): {a.release} {kind} {ident} {e['status']}")
             print(f"{kind} {ident}: already {e['status']}, nothing changed" + ("; an earlier failed commit is made now" if late else ""))
             return
-        paths = [folder / C.SPRINTS_MD, folder / "decisions.md", folder / C.QUEUE_MD]
+        paths = [folder / C.SPRINTS_MD, folder / "decisions.md", *C.load("lib/queue").commit_paths(folder)]
         paths += sorted((folder / C.EPICS_DIR).glob("E*.md"))
         st.commit(root, folder, paths, f"docs(plan): {a.release} {kind} {ident} {stored}")
         fcntl.flock(lock, fcntl.LOCK_UN)

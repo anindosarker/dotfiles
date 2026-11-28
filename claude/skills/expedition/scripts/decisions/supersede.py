@@ -8,7 +8,8 @@ the tag "#superseded", and moves to Done, ticked; the new card gets "- Supersede
 first bullet (kept when it is there already). Refuses an unknown id, the same id twice, and an
 old decision that is superseded already. Then the Done rule sync of decisions.md and the
 Decided-card sync of queue.md, and one commit, never pushed. Sending "NOTE D<old>: superseded by
-D<new>" to the other session stays a session step. Prints one line.
+D<new>" to the other session stays a session step. Prints one line. A release of format 2.1
+keeps its queue in item files (lib/queue.py): no queue sync there.
 """
 import argparse
 import fcntl
@@ -72,8 +73,10 @@ def main():
             text = "\n".join(lines)
         bd.write(path, text)
         dc.sync_file(folder)
-        bd.sync_file(folder / own.QUEUE_MD, bd.decision_tags(own, folder))
-        C.commit(root, [path, folder / own.QUEUE_MD], f"docs(plan): {a.release} {a.old} superseded by {a.new}")
+        Q = C.load("lib/queue")
+        if not Q.item_form(folder):  # format 2.1: a decided item holds its decision id only
+            bd.sync_file(folder / own.QUEUE_MD, bd.decision_tags(own, folder))
+        C.commit(root, [path, *Q.commit_paths(folder)], f"docs(plan): {a.release} {a.old} superseded by {a.new}")
         fcntl.flock(lock, fcntl.LOCK_UN)
     print(f"{a.old} superseded by {a.new}, to Done; committed")
 

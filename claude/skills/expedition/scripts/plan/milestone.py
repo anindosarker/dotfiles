@@ -36,7 +36,9 @@ decisions.md, superseded, or in another epic; a spec with no file; a done spec w
 an unknown --module; a milestone name already taken; milestones that no longer schedule. Then
 each cited card moves to Autofix; the refresh chain (lib/grid.py refresh, which also writes
 status.json) and the page data run; everything written is committed, never pushed. Prints one
-line naming the spec, the milestone, its sprint and its tracker.
+line naming the spec, the milestone, its sprint and its tracker. In a release of format 2.1
+(item files, lib/queue.py) a Q id is checked against the item files, and each cited item gets
+"status: autofix" (losing a "decision" and "option" line) and queue.md is written again.
 """
 import argparse
 import contextlib
@@ -176,10 +178,15 @@ def run(a, own, root, folder, ids, decision, want_epic, lock):
     sp, bd, st = load("lib/specs"), load("lib/board"), load("lib/status")
     fcntl.flock(lock, fcntl.LOCK_EX)
     queue = folder / own.QUEUE_MD
-    have = {c["num"] for c in bd.parse(own.read(queue))["cards"]} if queue.is_file() else set()
+    Q = load("lib/queue")
+    items = Q.item_form(folder)
+    if items:
+        have = set(Q.item_files(folder))
+    else:
+        have = {c["num"] for c in bd.parse(own.read(queue))["cards"]} if queue.is_file() else set()
     missing = [i for i in ids if int(i[1:]) not in have]
     if missing:
-        die(f"not in {queue.name}: {', '.join(missing)}")
+        die(f"not in {Q.QUEUE_DIR + '/' if items else queue.name}: {', '.join(missing)}")
     specs = dict(own.spec_files(folder))
     if a.spec not in specs:
         die(f"spec {a.spec} has no file in {own.SPECS_DIR}")
@@ -307,7 +314,12 @@ def run(a, own, root, folder, ids, decision, want_epic, lock):
             else:
                 p.write_text(t, encoding="utf-8")
         own.print_errors(comp["errors"], "the milestone does not schedule; nothing written")
-    if ids:
+    if ids and items:
+        for i in ids:
+            it = Q.find(folder, int(i[1:]))
+            Q.write_item(it["path"], Q.set_front(it["text"], status="autofix", decision=None, option=None))
+        Q.write_list(folder)
+    elif ids:
         q_text = own.read(queue)
         for i in ids:
             q_text = bd.move(q_text, int(i[1:]), "Autofix")
@@ -324,7 +336,7 @@ def run(a, own, root, folder, ids, decision, want_epic, lock):
         elif st.active(folder):
             st.sync(folder, a.release)
     paths = [str(p) for p in writes]
-    paths += [str(folder / own.SPRINTS_MD), str(folder / "decisions.md"), str(queue)]
+    paths += [str(folder / own.SPRINTS_MD), str(folder / "decisions.md")] + [str(p) for p in Q.commit_paths(folder)]
     paths += [str(p) for p in sorted((folder / own.EPICS_DIR).glob("E*.md"))]
     st.commit(root, folder, paths, f"docs(plan): {a.release} milestone {num} {a.name}")
     fcntl.flock(lock, fcntl.LOCK_UN)

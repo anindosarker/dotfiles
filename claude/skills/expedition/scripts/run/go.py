@@ -184,7 +184,7 @@ class Go:
         for s in specs:
             paths += sorted((self.folder / self.own.SPECS_DIR).glob(f"{s}-*"))
             paths += sorted((self.folder / self.own.TRACKERS_DIR).glob(f"{s}-*-tracker.md"))
-        paths += [self.folder / "decisions.md", self.folder / self.own.QUEUE_MD,
+        paths += [self.folder / "decisions.md", *C.load("lib/queue").commit_paths(self.folder),
                   self.folder / f"{self.release}-plan.md", self.path]
         return self.commit(paths, f"docs(plan): {self.release} E{self.n} go: specs, tags, plan rows, queue")
 
@@ -213,7 +213,7 @@ class Go:
         # status.json and the "status:" lines the refresh mirrored into this epic's spec folders.
         mirrored = [p for s in specs for p in sorted((self.folder / own.SPECS_DIR).glob(f"{s}-*"))]
         return self.commit([*epics, *mirrored, self.folder / C.load("lib/status").FILE, self.folder / own.SPRINTS_MD,
-                            self.folder / "decisions.md", self.folder / own.QUEUE_MD],
+                            self.folder / "decisions.md", *C.load("lib/queue").commit_paths(self.folder)],
                            f"docs(plan): {self.release} E{self.n} go: grid and epic file")
 
     def step_close(self):

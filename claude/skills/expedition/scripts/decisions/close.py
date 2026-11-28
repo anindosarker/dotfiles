@@ -8,7 +8,8 @@ Done while no epic that has gone has a row for it. Under the .ids.lock lock: ref
 that is not in decisions.md, carries an epic tag, or has a row in an epic that has gone (its
 work closes it on merge); a decision already in Done changes nothing. Then the Done rule sync of
 decisions.md and the Decided-card sync of queue.md (the card ticked without "#E"), and one
-commit of the files that changed, never pushed. Prints one line.
+commit of the files that changed, never pushed. Prints one line. A release of format 2.1 keeps
+its queue in item files (lib/queue.py): no queue sync there.
 """
 import argparse
 import fcntl
@@ -64,8 +65,10 @@ def main():
             die(f"{a.id} has a row in an epic that has gone: its work closes it on merge")
         bd.write(path, dc.move(text, num, dc.DONE, dc.head_line(card, dc.DONE)))
         dc.sync_file(folder)
-        bd.sync_file(folder / own.QUEUE_MD, bd.decision_tags(own, folder))
-        C.commit(root, [path, folder / own.QUEUE_MD], f"docs(plan): {a.release} {a.id} closed, nothing to run")
+        Q = C.load("lib/queue")
+        if not Q.item_form(folder):  # format 2.1: a decided item holds its decision id only
+            bd.sync_file(folder / own.QUEUE_MD, bd.decision_tags(own, folder))
+        C.commit(root, [path, *Q.commit_paths(folder)], f"docs(plan): {a.release} {a.id} closed, nothing to run")
         fcntl.flock(lock, fcntl.LOCK_UN)
     print(f"{a.id} to Done (nothing to run); committed")
 

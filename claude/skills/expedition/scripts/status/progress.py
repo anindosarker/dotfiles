@@ -13,7 +13,8 @@ reason, and an unfinished milestone with a task started adds " · <milestone> d/
 line, its tasks done of total with skipped tasks left out of both, and
 "(<task number> blocked: <reason>)" for a blocked task. With nothing unfinished: the last epic's
 line, then "Nothing running." and the unticked Decided cards of queue.md as
-"Ready for an epic: **Q<n>**, ...".
+"Ready for an epic: **Q<n>**, ...". In a release of format 2.1 (item files, lib/queue.py) the
+same line lists the decided items whose decision is in the To do lane of decisions.md.
 
 Sources, for each milestone whose grid cell is not "[x]":
 - the grid cell of status/sprints.md ("[ ]" running, "[~]" waiting, "·" not started, "[!]"
@@ -239,8 +240,16 @@ def print_progress(root, folder, plan, own, bd, q_text):
     if blocks:
         print("\n\n".join(blocks))
         return
-    ready = [f"**Q{c['num']}**" for c in bd.parse(q_text)["cards"]
-             if c["lane"] == "Decided" and c["box"] != "x"]
+    Q = C.load("lib/queue")
+    if Q.item_form(folder):
+        # a decided item whose decision is still in To do: the unticked Decided card of a board
+        lanes = bd.decision_tags(own, folder)
+        ready = [f"**Q{it['file_num']}**" for it in Q.items(folder) if it["status"] == "decided"
+                 and (m := re.match(r"^D(\d+)$", it["decision"]))
+                 and lanes.get(int(m.group(1)), {}).get("lane") == "To do"]
+    else:
+        ready = [f"**Q{c['num']}**" for c in bd.parse(q_text)["cards"]
+                 if c["lane"] == "Decided" and c["box"] != "x"]
     tail = "Nothing running." + (f" Ready for an epic: {', '.join(ready)}" if ready else "")
     if epics:
         last = max(epics)

@@ -164,7 +164,7 @@ try { const th = localStorage.getItem("taskboard-theme"); if (th) document.docum
     .pop:not([hidden]) { animation: tb-pop .15s ease-out; transform-origin: top right; }
     .pop.left:not([hidden]) { transform-origin: top left; }
     #board.fx-view > * { animation: tb-up .2s ease-out; }
-    #board.fx-fade .card, #board.fx-fade .tc, #board.fx-fade .tl, #board.fx-fade .mr, #board.fx-fade .fpill { animation: tb-fade .2s ease-out; }
+    #board.fx-fade .card, #board.fx-fade .tc, #board.fx-fade .tl, #board.fx-fade .mr, #board.fx-fade .fpill, #board.fx-fade .qr { animation: tb-fade .2s ease-out; }
     .reveal > .card, .reveal > .fpill { animation: tb-up .2s ease-out both; }
     .checklist.reveal > li { animation: tb-up .18s ease-out both; animation-delay: calc(var(--i, 0) * 25ms); }
     .pulse { animation: tb-ring .6s ease-out; }
@@ -179,7 +179,8 @@ try { const th = localStorage.getItem("taskboard-theme"); if (th) document.docum
   [data-tip]:hover::after, [data-tip]:focus-visible::after { opacity: 1; }
 
   /* Layout */
-  main { flex: 1; min-height: 0; display: flex; gap: 16px; padding: 16px; }
+  /* The board and panel stack in their own layer, so sticky board headers never cover the top-bar menus. */
+  main { flex: 1; min-height: 0; display: flex; gap: 16px; padding: 16px; isolation: isolate; }
   #board { flex: 1; min-width: 0; overflow: auto; border: 1px solid var(--ctp-surface0); border-radius: 12px; background: var(--ctp-mantle); box-shadow: 0 1px 2px #0000000d; position: relative; }
   #panel { flex: none; width: 380px; overflow: auto; border: 1px solid var(--ctp-surface0); border-radius: 12px; background: var(--ctp-mantle); padding: 14px 16px 18px; box-shadow: 0 1px 2px #0000000d; }
   .empty { padding: 40px 16px; text-align: center; color: var(--ctp-subtext0); font-size: 12px; }
@@ -390,6 +391,70 @@ try { const th = localStorage.getItem("taskboard-theme"); if (th) document.docum
   #panel code { overflow-wrap: anywhere; }
   .pnote { margin: 16px 0 0; font-size: 11px; color: var(--ctp-subtext0); }
   .files { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+
+  /* Queue view */
+  .c-qo { color: var(--ctp-blue); } .c-qd { color: var(--ctp-green); } .c-ql, .c-qx { color: var(--ctp-overlay0); } .c-qa { color: var(--ctp-teal); }
+  .s-qo { color: var(--ctp-blue); border-color: color-mix(in srgb, var(--ctp-blue) 50%, transparent); background: color-mix(in srgb, var(--ctp-blue) 14%, var(--ctp-mantle)); }
+  .s-qd { color: var(--ctp-green); border-color: color-mix(in srgb, var(--ctp-green) 40%, transparent); background: color-mix(in srgb, var(--ctp-green) 12%, var(--ctp-mantle)); }
+  .s-ql { color: var(--ctp-subtext0); border-color: var(--ctp-surface1); background: color-mix(in srgb, var(--ctp-surface0) 60%, var(--ctp-mantle)); }
+  .s-qx { color: var(--ctp-overlay0); border-color: var(--ctp-surface1); border-style: dashed; background: transparent; text-decoration: line-through; }
+  .s-qa { color: var(--ctp-teal); border-color: color-mix(in srgb, var(--ctp-teal) 45%, transparent); background: color-mix(in srgb, var(--ctp-teal) 12%, var(--ctp-mantle)); }
+  .qopen { font-size: 12px; color: var(--ctp-subtext0); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .qgrp { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--ctp-crust); border-bottom: 1px solid var(--ctp-surface0);
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--ctp-subtext0); }
+  /* Each group is the sticky header's container: the next header pushes the stuck one off instead of sliding over it. */
+  .qsec { display: block; }
+  .qgrp .frac { font-weight: 400; letter-spacing: normal; text-transform: none; }
+  .qr { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 6px 12px; cursor: pointer; border-bottom: 1px solid color-mix(in srgb, var(--ctp-surface0) 60%, transparent); border-left: 3px solid transparent; }
+  .qr:hover { background: color-mix(in srgb, var(--ctp-surface0) 45%, var(--ctp-mantle)); }
+  .qr.cur { border-left-color: var(--ctp-mauve); }
+  .qr.sel { box-shadow: none !important; background: color-mix(in srgb, var(--ctp-mauve) 10%, var(--ctp-mantle)); }
+  .qr .q-id { width: 30px; flex: none; font-weight: 600; }
+  .qr .q-t { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.4; }
+  .qr.qx .q-t { text-decoration: line-through; color: var(--ctp-subtext0); }
+  .qr.ql .q-t { color: var(--ctp-subtext1); }
+  .qr .q-dec { width: 36px; flex: none; text-align: right; }
+  .qr .q-st { width: 84px; flex: none; display: flex; justify-content: flex-end; }
+  .qr .q-ch { width: 64px; flex: none; text-align: right; }
+  @media (max-width: 700px) { .qr .q-ch, .qr .q-dec { display: none; } }
+  .qfoot { padding: 10px 12px; font-size: 11px; color: var(--ctp-subtext0); }
+  kbd { font: 500 10px/1 "JetBrains Mono", ui-monospace, monospace; padding: 1px 4px; border: 1px solid var(--ctp-surface1); border-bottom-width: 2px; border-radius: 4px; color: var(--ctp-subtext1); }
+  .tag.dec { font-family: "JetBrains Mono", ui-monospace, monospace; color: var(--ctp-green); border-color: color-mix(in srgb, var(--ctp-green) 40%, transparent); }
+  .tag.rec { color: var(--ctp-mauve); border-color: color-mix(in srgb, var(--ctp-mauve) 45%, transparent); }
+  .tag.pick { display: inline-flex; align-items: center; gap: 3px; color: var(--ctp-green); border-color: color-mix(in srgb, var(--ctp-green) 50%, transparent); background: color-mix(in srgb, var(--ctp-green) 14%, transparent); font-weight: 600; }
+  .tag.pick .i { width: 10px; height: 10px; stroke-width: 3px; }
+  .p-sec .none { margin: 0; font-size: 12px; color: var(--ctp-overlay0); }
+  .md { font-size: 12.5px; line-height: 1.55; }
+  .md p { margin: 0 0 6px; }
+  .md ul, .md ol { margin: 0 0 6px; padding-left: 18px; }
+  .md li { margin: 2px 0; }
+  .md li > ul, .md li > ol { margin: 2px 0 0; }
+  .md h4 { margin: 8px 0 4px; font-size: 12.5px; }
+  .md :not(pre) > code { padding: 0 3px; border-radius: 3px; background: var(--ctp-base); border: 1px solid var(--ctp-surface0); font-size: 11.5px; }
+  .md pre { margin: 0 0 6px; padding: 6px 8px; border-radius: 5px; background: var(--ctp-base); border: 1px solid var(--ctp-surface0); overflow: auto; font-size: 11.5px; }
+  .md a { color: var(--ctp-blue); }
+  .md > :last-child { margin-bottom: 0; }
+  .opts { display: flex; flex-direction: column; gap: 8px; }
+  .opt { padding: 8px 10px; border: 1px solid var(--ctp-surface0); border-radius: 8px; background: var(--ctp-base); }
+  .opt-h { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
+  .opt-k { flex: none; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12px; font-weight: 600; color: var(--ctp-subtext0); }
+  .opt-t { flex: 1; min-width: 0; font-weight: 600; font-size: 12.5px; }
+  .opt-tags { display: flex; gap: 4px; align-self: center; }
+  .opt .md { color: var(--ctp-subtext1); }
+  .opt.picked { border-color: color-mix(in oklab, var(--ctp-green) 60%, transparent); background: color-mix(in srgb, var(--ctp-green) 10%, var(--ctp-base)); box-shadow: inset 3px 0 0 var(--ctp-green); }
+  .opt.picked .opt-k { color: var(--ctp-green); }
+  .opt.faded { opacity: .7; }
+  .qcard.cur { border-color: var(--ctp-mauve); }
+  .tc.b-qo { border-left-color: var(--ctp-blue); } .tc.b-qa { border-left-color: var(--ctp-teal); } .tc.b-ql { border-left-color: var(--ctp-surface2); }
+  .tc.b-qd { border-left-color: var(--ctp-green); } .tc.b-qx { border-left-color: var(--ctp-overlay0); border-left-style: dashed; }
+  .qcard .tc-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .qcard.b-qx .tc-title { text-decoration: line-through; color: var(--ctp-subtext0); }
+  .qcard .q-ch { margin-top: 3px; display: block; }
+  /* Queue board: columns keep room for a few words per line; the board scrolls sideways when they do not fit. */
+  .kb.qkb { min-width: min-content; }
+  .kb.qkb .kb-col { min-width: 24ch; }
+  #panel.wide { width: 520px; }
+  @media (max-width: 900px) { #panel.wide { width: auto; } }
 </style>
 </head>
 <body>
@@ -427,6 +492,9 @@ try { const th = localStorage.getItem("taskboard-theme"); if (th) document.docum
   <symbol id="ic-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
   <symbol id="ic-fold-all" viewBox="0 0 24 24"><path d="m7 20 5-5 5 5"/><path d="m7 4 5 5 5-5"/></symbol>
   <symbol id="ic-unfold-all" viewBox="0 0 24 24"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></symbol>
+  <symbol id="ic-inbox" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+  <symbol id="ic-circle-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/></symbol>
+  <symbol id="ic-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
 </svg>
 
 <header>
@@ -435,6 +503,7 @@ try { const th = localStorage.getItem("taskboard-theme"); if (th) document.docum
       <span class="rel" id="rel"></span>
       <h1 id="title">Task Board</h1>
       <span class="tdone" id="tdone"></span>
+      <span class="qopen" id="qopen" hidden></span>
 
     </div>
 
@@ -443,6 +512,7 @@ try { const th = localStorage.getItem("taskboard-theme"); if (th) document.docum
       <button data-view="tasks" aria-pressed="false" data-tip="Tasks by status"><svg class="i"><use href="#ic-kanban"/></svg>Tasks</button>
       <button data-view="sprints" aria-pressed="false" data-tip="Sprints, newest on top"><svg class="i"><use href="#ic-columns"/></svg>Sprints</button>
       <button data-view="milestones" aria-pressed="false" data-tip="Milestone rows by sprint"><svg class="i"><use href="#ic-list"/></svg>Milestones</button>
+      <button data-view="queue" aria-pressed="false" data-tip="Queue items, open first"><svg class="i"><use href="#ic-inbox"/></svg>Queue</button>
     </div>
 
     <div class="popwrap" id="filter-wrap">
@@ -464,6 +534,10 @@ try { const th = localStorage.getItem("taskboard-theme"); if (th) document.docum
     <div class="sortbox">
       <label class="sortsel"><svg class="i"><use href="#ic-sort"/></svg><select id="sort" aria-label="Sort by"></select><svg class="i chev"><use href="#ic-chevron"/></svg></label>
       <button class="ibtn" id="sortdir" data-tip="Ascending" aria-label="Sort direction"><svg class="i"><use href="#ic-sort-asc"/></svg></button>
+    </div>
+    <div class="seg" role="group" aria-label="Queue layout" id="qmode" hidden>
+      <button data-qmode="list" aria-pressed="true" aria-label="List" data-tip="List"><svg class="i"><use href="#ic-list"/></svg></button>
+      <button data-qmode="board" aria-pressed="false" aria-label="Board" data-tip="Board by status"><svg class="i"><use href="#ic-kanban"/></svg></button>
     </div>
 
     <div class="tools">
@@ -500,10 +574,16 @@ try { const th = localStorage.getItem("taskboard-theme"); if (th) document.docum
 
 <script>
 const STATUSES = ["not started", "in progress", "blocked", "done", "skipped"];
-const SK = { "not started": "ns", "in progress": "prog", "blocked": "block", "done": "done", "skipped": "skip" };
-const SICON = { "not started": "circle", "in progress": "clock", "blocked": "stop", "done": "check-circle", "skipped": "ban" };
-const VIEWS = ["epics", "tasks", "sprints", "milestones"];
-const KIND_LABEL = { epic: "Epic", spec: "Spec", ms: "Milestone", task: "Task", sprint: "Sprint" };
+// Queue statuses share these maps; their words do not overlap the task statuses.
+const QSTATUSES = ["open", "autofix", "later", "decided", "dropped"];
+const SK = { "not started": "ns", "in progress": "prog", "blocked": "block", "done": "done", "skipped": "skip",
+  open: "qo", autofix: "qa", later: "ql", decided: "qd", dropped: "qx" };
+const SICON = { "not started": "circle", "in progress": "clock", "blocked": "stop", "done": "check-circle", "skipped": "ban",
+  open: "circle-dot", autofix: "wrench", later: "clock", decided: "check-circle", dropped: "ban" };
+const VIEWS = ["epics", "tasks", "sprints", "milestones", "queue"];
+const KIND_LABEL = { epic: "Epic", spec: "Spec", ms: "Milestone", task: "Task", sprint: "Sprint", q: "Queue item" };
+// Folder of status.data.js and queue.data.js, relative to this page.
+const DATA_DIR = "data/";
 const CHILD = { epic: "spec", spec: "ms", ms: "task", sprint: "ms" };
 // Done and skipped columns in the Tasks view show this many compact rows until "Show all".
 const COMPACT_LIMIT = 60;
@@ -516,15 +596,18 @@ const SORTS = {
   tasks: { opts: [["newest", "Newest"], ["ref", "Milestone ref"], ["epic", "Epic"], ["changed", "Last change"], ["type", "Type"]], def: { key: "newest", dir: 1 } },
   sprints: { opts: [["plan", "Plan order"], ["ref", "Milestone ref"], ["status", "Status"], ["progress", "Progress"]], def: { key: "plan", dir: -1 } },
   milestones: { opts: [["plan", "Plan order"], ["ref", "Milestone ref"], ["status", "Status"], ["progress", "Progress"], ["changed", "Last change"]], def: { key: "plan", dir: 1 } },
+  queue: { opts: [["status", "Status"], ["number", "Number"], ["changed", "Last change"]], def: { key: "status", dir: 1 } },
 };
 const defSorts = () => Object.fromEntries(Object.entries(SORTS).map(([v, o]) => [v, { ...o.def }]));
-const DEFAULTS = { view: "epics", status: [], q: "", more: [], sorts: defSorts(), arrows: true, crit: false, compact: true, zoom: 100, fill: true };
-const state = { ...DEFAULTS, sel: null, open: { c: new Set(), sp: new Set(), le: new Set(), lm: new Set() } };
+const DEFAULTS = { view: "epics", status: [], qstatus: [], qmode: "list", q: "", more: [], sorts: defSorts(), arrows: true, crit: false, compact: true, zoom: 100, fill: true };
+const state = { ...DEFAULTS, sel: null, qcur: null, open: { c: new Set(), sp: new Set(), le: new Set(), lm: new Set() } };
 try {
   const ui = JSON.parse(localStorage.getItem("taskboard-ui") || "{}");
   for (const k of Object.keys(DEFAULTS)) if (k in ui) state[k] = ui[k];
   if (!VIEWS.includes(state.view)) state.view = DEFAULTS.view;
   if (!Array.isArray(state.status)) state.status = [];
+  if (!Array.isArray(state.qstatus)) state.qstatus = [];
+  if (state.qmode !== "board") state.qmode = "list";
   const saved = state.sorts && typeof state.sorts === "object" ? state.sorts : {};
   state.sorts = defSorts();
   for (const v of Object.keys(SORTS)) {
@@ -634,7 +717,7 @@ function load(data) {
   showUpdated();
   if (state.sel && !get(state.sel)) state.sel = null;
 }
-const get = (pick) => { const i = pick.indexOf(":"); return idx[pick.slice(0, i)]?.get(pick.slice(i + 1)); };
+const get = (pick) => { const i = pick.indexOf(":"), k = pick.slice(0, i); return (k === "q" ? qIdx : idx[k])?.get(pick.slice(i + 1)); };
 // A milestone shows its ref, "<spec>.<number>"; older data without it falls back to the spec id.
 const label = (kind, o) => kind === "task" ? `${o.spec}-${o.number}` : kind === "ms" ? (o.ref || o.spec) : o.id;
 const title = (kind, o) => o.name || o.title || o.id;
@@ -992,6 +1075,154 @@ function taskLine(t) {
     <span class="num">${esc(t.spec)}-${esc(t.number)}</span><span class="tl-t">${esc(t.title)}</span>${t.type === "bug" ? `<span class="tag">bug</span>` : ""}<span class="num">${esc(m?.epic)}</span></div>`;
 }
 
+// ---- Queue view: one row per queue item, from queue.data.js ----
+let QD = null, qIdx = new Map(), qHay = new Map(), qShown = [];
+function loadQueue(data) {
+  QD = data && Array.isArray(data.items) ? data : null;
+  qIdx = new Map((QD ? QD.items : []).map((x) => [x.id, x]));
+  qHay = new Map((QD ? QD.items : []).map((x) => [x, [x.id, x.title, x.status, x.decision, x.notes, x.details,
+    ...(x.options || []).flatMap((o) => [o.title, o.body])].join("\n").toLowerCase()]));
+  if (state.sel?.startsWith("q:") && !get(state.sel)) state.sel = null;
+  if (state.qcur && !qIdx.has(state.qcur)) state.qcur = null;
+}
+const timeOf = (txt) => { const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(txt || ""); return m ? new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5]).getTime() : null; };
+const Q_KEYS = {
+  status: (x) => [QSTATUSES.indexOf(x.status) < 0 ? QSTATUSES.length : QSTATUSES.indexOf(x.status), x.number ?? 0],
+  number: (x) => x.number ?? null,
+  changed: (x) => timeOf(x.changed),
+};
+function qVisible() {
+  if (!QD) return [];
+  const st = state.qstatus.length ? new Set(state.qstatus) : null;
+  const list = QD.items.filter((x) => (!st || st.has(x.status)) && terms.every((t) => qHay.get(x).includes(t)));
+  const so = sortOf(), key = Q_KEYS[so.key] || Q_KEYS.status;
+  // Last change: newest first on the ascending arrow; a missing time sorts last.
+  const dir = so.key === "changed" ? -so.dir : so.dir;
+  return list.map((x, i) => [key(x), x, i]).sort((p, q) => {
+    if (p[0] == null || q[0] == null) return p[0] == null && q[0] == null ? p[2] - q[2] : p[0] == null ? 1 : -1;
+    return (cmp(p[0], q[0]) || (p[1].number ?? 0) - (q[1].number ?? 0)) * dir;
+  }).map((p) => p[1]);
+}
+function qRow(x) {
+  return `<div class="qr ${SK[x.status] || "qo"}${isSel("q:" + x.id)}${state.qcur === x.id ? " cur" : ""}" data-pick="q:${esc(x.id)}" title="${esc(x.id + ". " + x.title)}">
+    <span class="num q-id">${esc(x.id)}</span><span class="q-t">${esc(x.title)}</span>
+    <span class="q-dec">${x.decision ? `<span class="tag dec">${esc(x.decision)}</span>` : ""}</span>
+    <span class="q-st">${pill(x.status)}</span>
+    <span class="frac q-ch" title="${esc(x.changed ? "Status changed " + x.changed : "")}">${x.changed ? esc(relTime(x.changed)) : ""}</span></div>`;
+}
+function renderQueue() {
+  if (!QD) { qShown = []; return `<div class="empty">No queue data. The page reads queue.data.js next to status.data.js.</div>`; }
+  qShown = qVisible();
+  if (!qShown.length) return `<div class="empty">${QD.items.length ? "No queue item matches the filter." : "The queue is empty."}</div>`;
+  if (state.qmode === "board") return `<div class="kb qkb">${qCols().map(([st, list]) => `<section class="kb-col"><div class="kb-head">${sicon(st)}<span>${esc(st[0].toUpperCase() + st.slice(1))}</span><span class="frac">${list.length}</span></div>
+    <div class="kb-list" data-sk="qkb-${SK[st]}">${list.map(qCard).join("") || `<div class="empty" style="padding:16px">Nothing here</div>`}</div></section>`).join("")}</div>`;
+  let h = "", grp = null, grpOpen = false;
+  for (const x of qShown) {
+    if (sortOf().key === "status" && x.status !== grp) {
+      grp = x.status;
+      h += `${grpOpen ? "</section>" : ""}<section class="qsec"><div class="qgrp">${sicon(grp)}${esc(grp)}<span class="frac">${qShown.filter((y) => y.status === grp).length}</span></div>`;
+      grpOpen = true;
+    }
+    h += qRow(x);
+  }
+  if (grpOpen) h += "</section>";
+  return h + `<div class="qfoot"><kbd>j</kbd> <kbd>k</kbd> move · <kbd>Enter</kbd> open · <kbd>Esc</kbd> close · <kbd>/</kbd> search</div>`;
+}
+// Board columns: the filtered statuses in list order, each keeping the sorted order of qShown.
+const qCols = () => (state.qstatus.length ? QSTATUSES.filter((s) => state.qstatus.includes(s)) : QSTATUSES).map((st) => [st, qShown.filter((x) => x.status === st)]);
+function qCard(x) {
+  return `<div class="tc qcard b-${SK[x.status] || "qo"}${isSel("q:" + x.id)}${state.qcur === x.id ? " cur" : ""}" data-pick="q:${esc(x.id)}" title="${esc(x.id + ". " + x.title)}">
+    <div class="tc-top"><span class="num">${esc(x.id)}</span><span class="tags">${x.decision ? `<span class="tag dec">${esc(x.decision)}</span>` : ""}</span></div>
+    <div class="tc-title">${esc(x.title)}</div>
+    ${x.changed ? `<span class="frac q-ch" title="${esc("Status changed " + x.changed)}">${esc(relTime(x.changed))}</span>` : ""}</div>`;
+}
+// n moves within the list (or the board column); col moves between board columns.
+function qStep(n, col = 0) {
+  if (!qShown.length) return;
+  const curId = state.qcur || (state.sel?.startsWith("q:") ? state.sel.slice(2) : null);
+  let next;
+  if (state.qmode === "board") {
+    const cols = qCols().map((c) => c[1]).filter((l) => l.length);
+    let ci = cols.findIndex((l) => l.some((x) => x.id === curId)), ri = ci < 0 ? -1 : cols[ci].findIndex((x) => x.id === curId);
+    if (ci < 0) { ci = 0; ri = 0; }
+    else if (col) { ci = Math.max(0, Math.min(cols.length - 1, ci + col)); ri = Math.min(ri, cols[ci].length - 1); }
+    else ri = Math.max(0, Math.min(cols[ci].length - 1, ri + n));
+    next = cols[ci][ri];
+  } else {
+    if (col) return;
+    const at = qShown.findIndex((x) => x.id === curId);
+    next = qShown[at < 0 ? (n > 0 ? 0 : qShown.length - 1) : Math.max(0, Math.min(qShown.length - 1, at + n))];
+  }
+  state.qcur = next.id;
+  if (state.sel?.startsWith("q:")) { if (state.sel !== "q:" + next.id) select("q:" + next.id); }
+  board.querySelectorAll('[data-pick^="q:"]').forEach((el) => el.classList.toggle("cur", el.dataset.pick === "q:" + next.id));
+  board.querySelector(`[data-pick="q:${CSS.escape(next.id)}"]`)?.scrollIntoView({ block: "nearest" });
+}
+
+// Markdown, a safe subset: paragraphs, nested lists, headings, fenced code, `code`, **bold**, *italic*, http(s) links.
+function mdInline(s) {
+  return String(s).split(/(`[^`]*`)/).map((p, i) => i % 2 ? `<code>${esc(p.slice(1, -1))}</code>` : esc(p)
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[\s(])\*([^*\s][^*]*?)\*(?=[\s).,;:!?]|$)/g, "$1<em>$2</em>")).join("");
+}
+function md(src) {
+  const lines = String(src || "").replace(/\r/g, "").split("\n"), stack = [];
+  let out = "", para = [], fence = null;
+  const flush = () => { if (para.length) { out += `<p>${mdInline(para.join(" "))}</p>`; para = []; } };
+  const closeTo = (ind) => { while (stack.length && stack[stack.length - 1].ind > ind) out += `</li></${stack.pop().type}>`; };
+  for (const line of lines) {
+    if (fence) { if (/^\s*```/.test(line)) { out += `<pre><code>${esc(fence.join("\n"))}</code></pre>`; fence = null; } else fence.push(line); continue; }
+    if (/^\s*```/.test(line)) { flush(); closeTo(-1); fence = []; continue; }
+    if (!line.trim()) { flush(); continue; }
+    const li = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/.exec(line);
+    if (li) {
+      flush();
+      const ind = li[1].replace(/\t/g, "    ").length, type = /\d/.test(li[2]) ? "ol" : "ul";
+      closeTo(ind);
+      const top = stack[stack.length - 1];
+      if (top && top.ind === ind && top.type === type) out += "</li><li>";
+      else {
+        if (top && top.ind === ind) out += `</li></${stack.pop().type}>`;
+        out += `<${type}${type === "ol" ? ` start="${parseInt(li[2], 10)}"` : ""}><li>`;
+        stack.push({ type, ind });
+      }
+      out += mdInline(li[3]);
+      continue;
+    }
+    const h = /^#{1,6}\s+(.*)$/.exec(line);
+    if (h) { flush(); closeTo(-1); out += `<h4>${mdInline(h[1])}</h4>`; continue; }
+    if (stack.length && /^\s/.test(line)) { out += " " + mdInline(line.trim()); continue; }
+    closeTo(-1);
+    para.push(line.trim());
+  }
+  if (fence) out += `<pre><code>${esc(fence.join("\n"))}</code></pre>`;
+  flush(); closeTo(-1);
+  return out;
+}
+function queuePanel(x) {
+  const abs = QD.root && x.file ? QD.root.replace(/\/+$/, "") + "/" + x.file : "";
+  const qsec = (h, body, none) => `<div class="p-sec"><h3>${h}</h3>${body || `<p class="none">${none}</p>`}</div>`;
+  const pos = qShown.findIndex((y) => y.id === x.id), picked = x.option ? String(x.option) : "", opts = x.options || [];
+  let h = `<div class="p-top"><div class="crumbs"><span class="cur">${esc(QD.release || "")} queue${pos >= 0 ? ` · ${pos + 1} of ${qShown.length}` : ""}</span></div>
+    <button class="ibtn sm" data-close aria-label="Close" data-tip="Close (Esc)" data-tip-end>${icon("x")}</button></div>
+    <div class="p-kind">${KIND_LABEL.q} ${esc(x.id)}</div><h2>${esc(x.title)}</h2>
+    <div class="p-row">${pill(x.status)}${x.decision ? `<span class="tag dec">${esc(x.decision)}</span>` : ""}${picked ? `<span class="tag pick">${icon("check")}option ${esc(picked)} picked</span>` : ""}</div>
+    <div class="p-sec"><dl class="kv"><dt>Decision</dt><dd>${x.decision ? `<code>${esc(x.decision)}</code>${picked ? `, option ${esc(picked)}` : ""}` : `<span class="frac">none</span>`}</dd>
+      ${x.changed ? `<dt>Changed</dt><dd>${esc(x.changed)}</dd>` : ""}</dl></div>`;
+  h += qsec("Item file", x.file ? `<div class="lnk"><code class="path">${esc(x.file)}</code>${abs ? `<a class="fbtn" href="${esc(vscodeUrl(abs))}" title="${esc(abs)}">VS Code</a><a class="fbtn" href="${esc(fileUrl(abs))}" target="_blank" title="${esc(abs)}">Browser</a>` : ""}</div>` : "", "No file.");
+  h += qsec("Notes", x.notes ? `<div class="md">${md(x.notes)}</div>` : "", "No notes.");
+  h += qsec("Details", x.details ? `<div class="md">${md(x.details)}</div>` : "", "No details.");
+  h += qsec(`Options${opts.length ? ` (${opts.length})` : ""}`, opts.length ? `<div class="opts">${opts.map((o) => {
+    const isPick = picked && String(o.key) === picked;
+    return `<div class="opt${isPick ? " picked" : picked ? " faded" : ""}"><div class="opt-h"><span class="opt-k">${esc(o.key)}.</span><span class="opt-t">${mdInline(o.title || "")}</span>
+      <span class="opt-tags">${o.recommended ? `<span class="tag rec">recommended</span>` : ""}${isPick ? `<span class="tag pick">${icon("check")}picked</span>` : ""}</span></div>
+      ${o.body ? `<div class="md">${md(o.body)}</div>` : ""}</div>`;
+  }).join("")}</div>` : "", "No options in this item.");
+  h += `<p class="pnote">Paths are relative to the queue folder${QD.root ? `: <code>${esc(QD.root)}</code>` : ""}.</p>`;
+  return h;
+}
+
 // ---- Side panel ----
 const encPath = (p) => p.split("/").map(encodeURIComponent).join("/");
 const absPath = (rel) => D.root ? D.root.replace(/\/+$/, "") + "/" + rel : "";
@@ -1036,6 +1267,14 @@ function renderPanel(scrollTop) {
   const kind = state.sel.slice(0, state.sel.indexOf(":"));
   const wasHidden = panel.hidden, changed = state.sel !== lastPanelSel;
   lastPanelSel = state.sel;
+  panel.classList.toggle("wide", kind === "q");
+  if (kind === "q") {
+    panel.hidden = false;
+    panel.innerHTML = `<div class="p-body${changed && !wasHidden ? " fx" : ""}">${queuePanel(o)}</div>`;
+    if (wasHidden) fxClass(panel, "fx-in");
+    panel.scrollTop = scrollTop || 0;
+    return;
+  }
   let h = `<div class="p-top"><nav class="crumbs" aria-label="Breadcrumb">${crumbs(kind, o)}</nav>
     <button class="ibtn sm" data-close aria-label="Close" data-tip="Close (Esc)" data-tip-end>${icon("x")}</button></div>
     <div class="p-kind">${kind === "ms" ? icon("flag", "mi") : ""}${KIND_LABEL[kind]} ${esc(label(kind, o))}</div><h2>${esc(title(kind, o))}</h2>
@@ -1087,7 +1326,7 @@ function renderPanel(scrollTop) {
 }
 
 // ---- Render ----
-const RENDER = { sprints: renderSprints, epics: renderLanes, milestones: renderLanes, tasks: renderTasks };
+const RENDER = { sprints: renderSprints, epics: renderLanes, milestones: renderLanes, tasks: renderTasks, queue: renderQueue };
 function syncControls() {
   document.querySelectorAll("[data-view]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.view === state.view));
   // The active tab's pill slides between tabs.
@@ -1106,7 +1345,15 @@ function syncControls() {
   const db = $("#sortdir"); db.dataset.tip = dt; db.setAttribute("aria-label", dt);
   db.querySelector("use").setAttribute("href", so.dir < 0 ? "#ic-sort-desc" : "#ic-sort-asc");
   $("#q-clear").hidden = !state.q;
-  const fsel = state.status, fb = $("#filter-btn");
+  const isQ = state.view === "queue";
+  const fsel = isQ ? state.qstatus : state.status, fb = $("#filter-btn");
+  $("#tdone").hidden = isQ;
+  $("#qmode").hidden = !isQ;
+  document.querySelectorAll("#qmode [data-qmode]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.qmode === state.qmode));
+  const qo = $("#qopen"), nOpen = QD ? QD.items.filter((x) => x.status === "open").length : 0;
+  qo.hidden = !isQ || !QD;
+  qo.textContent = `${nOpen} open`;
+  qo.title = QD ? `${nOpen} of ${QD.items.length} queue items open` : "";
   $("#filter-label").textContent = !fsel.length ? "All statuses" : fsel.length === 1 ? fsel[0][0].toUpperCase() + fsel[0].slice(1) : `${fsel.length} statuses`;
   $("#filter-ic").setAttribute("class", "i" + (fsel.length === 1 ? " c-" + SK[fsel[0]] : ""));
   $("#filter-ic use").setAttribute("href", fsel.length === 1 ? "#ic-" + SICON[fsel[0]] : "#ic-filter");
@@ -1189,6 +1436,7 @@ function toLatest(animate) {
 
 function select(pick) {
   state.sel = state.sel === pick ? null : pick;
+  if (pick?.startsWith("q:")) state.qcur = pick.slice(2);
   // Swimlanes dim and highlight the dependency chain of the selected card, so they draw again.
   if (LANE_VIEWS.has(state.view)) { render(); panel.scrollTop = 0; return; }
   board.querySelectorAll(".sel").forEach((el) => el.classList.remove("sel"));
@@ -1321,12 +1569,16 @@ $("#vm").addEventListener("keydown", (e) => {
   if (e.key === "Escape") { e.stopPropagation(); openVm(false); $("#vm-btn").focus(); }
 });
 // Status filter menu: "All statuses" plus the five statuses, multi-select, task counts from the whole release.
+// In the Queue view the same menu lists the queue statuses and counts queue items.
+const fKey = () => state.view === "queue" ? "qstatus" : "status";
+const fList = () => state.view === "queue" ? QSTATUSES : STATUSES;
 function renderFilterPop() {
   const pop = $("#filter-pop"), focused = document.activeElement?.dataset?.fs;
-  const n = (st) => D ? D.tasks.filter((t) => t.status === st).length : 0;
+  const items = state.view === "queue" ? (QD ? QD.items : []) : D ? D.tasks : [], sel = state[fKey()];
+  const n = (st) => items.filter((t) => t.status === st).length;
   const row = (st, ic, name, count, on) => `<button class="frow" role="menuitemcheckbox" aria-checked="${on}" data-fs="${esc(st)}" tabindex="-1"><span class="cbx">${on ? icon("check") : ""}</span>${ic}<span>${esc(name)}</span><span class="n">${count}</span></button>`;
-  pop.innerHTML = row("all", icon("filter", "c-ns"), "All statuses", D ? D.tasks.length : 0, !state.status.length) + `<div class="fsep"></div>`
-    + STATUSES.map((st) => row(st, sicon(st), st[0].toUpperCase() + st.slice(1), n(st), state.status.includes(st))).join("");
+  pop.innerHTML = row("all", icon("filter", "c-ns"), "All statuses", items.length, !sel.length) + `<div class="fsep"></div>`
+    + fList().map((st) => row(st, sicon(st), st[0].toUpperCase() + st.slice(1), n(st), sel.includes(st))).join("");
   if (focused) pop.querySelector(`[data-fs="${CSS.escape(focused)}"]`)?.focus();
 }
 function openFilter(open) {
@@ -1339,11 +1591,11 @@ $("#filter-btn").addEventListener("click", () => openFilter($("#filter-pop").hid
 $("#filter-pop").addEventListener("click", (e) => {
   const r = e.target.closest("[data-fs]");
   if (!r) return;
-  const st = r.dataset.fs;
+  const st = r.dataset.fs, k = fKey();
   r.focus();
-  if (st === "all") state.status = [];
-  else state.status = state.status.includes(st) ? state.status.filter((x) => x !== st) : [...state.status, st];
-  if (state.status.length === STATUSES.length) state.status = [];
+  if (st === "all") state[k] = [];
+  else state[k] = state[k].includes(st) ? state[k].filter((x) => x !== st) : [...state[k], st];
+  if (state[k].length === fList().length) state[k] = [];
   fx.filter = true;
   render(true);
 });
@@ -1368,6 +1620,11 @@ $("#legend-btn").addEventListener("click", () => {
   document.body.classList.toggle("popover-open", open);
 });
 $("#sort").addEventListener("change", (e) => { state.sorts[state.view] = { ...sortOf(), key: e.target.value }; render(); });
+$("#qmode").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-qmode]");
+  if (!b || b.dataset.qmode === state.qmode) return;
+  state.qmode = b.dataset.qmode; fx.filter = true; render(true);
+});
 $("#sortdir").addEventListener("click", () => { const so = sortOf(); state.sorts[state.view] = { ...so, dir: -so.dir }; render(); });
 $("#fold").addEventListener("click", () => {
   const any = D.sprints.some((s) => !spCollapsed(s));
@@ -1389,8 +1646,15 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closePopovers();
   if (e.key === "Escape" && state.sel) select(state.sel);
   if (e.key === "/" && !e.metaKey && !e.ctrlKey) { e.preventDefault(); $("#q").focus(); }
-  const n = "1234".indexOf(e.key);
+  const n = "12345".indexOf(e.key);
   if (n >= 0 && !e.metaKey && !e.ctrlKey && !e.altKey && state.view !== VIEWS[n]) { state.view = VIEWS[n]; fx.view = true; render(true, true); }
+  if (state.view === "queue" && !e.metaKey && !e.ctrlKey && !e.altKey && $("#filter-pop").hidden && !e.target.closest("select")) {
+    if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); qStep(1); }
+    else if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); qStep(-1); }
+    else if (state.qmode === "board" && (e.key === "h" || e.key === "ArrowLeft")) { e.preventDefault(); qStep(0, -1); }
+    else if (state.qmode === "board" && (e.key === "l" || e.key === "ArrowRight")) { e.preventDefault(); qStep(0, 1); }
+    else if (e.key === "Enter" && !e.target.closest("button, a") && (state.qcur || qShown[0])) { e.preventDefault(); const p = "q:" + (state.qcur || qShown[0].id); state.qcur = p.slice(2); if (state.sel !== p) select(p); }
+  }
 });
 $("#theme").addEventListener("click", () => {
   const root = document.documentElement;
@@ -1399,14 +1663,14 @@ $("#theme").addEventListener("click", () => {
   try { localStorage.setItem("taskboard-theme", root.dataset.theme); } catch (e) {}
   syncControls();
 });
-$("#reload").addEventListener("click", () => loadScript(true));
+$("#reload").addEventListener("click", () => { loadScript(true); loadQueueScript(true); });
 
 // The reload button and the 30 second timer share this path. Unchanged data is not drawn again;
 // changed data keeps the view, the filters, the open rows, the selection and the scroll position.
 let dataText = null;
 function loadScript(bust) {
   const s = document.createElement("script");
-  s.src = "data/status.data.js" + (bust ? `?t=${Date.now()}` : "");
+  s.src = DATA_DIR + "status.data.js" + (bust ? `?t=${Date.now()}` : "");
   s.onload = () => {
     s.remove();
     const text = JSON.stringify(window.STATUS_DATA);
@@ -1426,9 +1690,33 @@ function loadScript(bust) {
   s.onerror = () => { s.remove(); if (!D) board.innerHTML = `<div class="empty">status.data.js not found next to this page.</div>`; };
   document.head.appendChild(s);
 }
+// queue.data.js is optional: without it the Queue view shows an empty state.
+let queueText = null;
+function loadQueueScript(bust) {
+  const s = document.createElement("script");
+  s.src = DATA_DIR + "queue.data.js" + (bust ? `?t=${Date.now()}` : "");
+  s.onload = () => {
+    s.remove();
+    const text = JSON.stringify(window.QUEUE_DATA ?? null);
+    if (text === queueText) return;
+    const first = queueText === null;
+    queueText = text;
+    const prev = QD ? new Map(QD.items.map((x) => [x.id, x.status])) : null;
+    loadQueue(window.QUEUE_DATA);
+    if (!D) return;
+    render();
+    if (prev && state.view === "queue") QD?.items.forEach((x) => {
+      if (prev.has(x.id) && prev.get(x.id) !== x.status) board.querySelectorAll(`[data-pick="q:${CSS.escape(x.id)}"]`).forEach((el) => fxClass(el, "pulse", 700));
+    });
+    if (!first && state.view === "queue") fxClass($("#upd"), "fresh", 900);
+  };
+  s.onerror = () => { s.remove(); if (queueText === null && D && state.view === "queue") render(); };
+  document.head.appendChild(s);
+}
 syncControls();
+loadQueueScript(false);
 loadScript(false);
-setInterval(() => { if (!document.hidden) loadScript(true); }, 30000);
+setInterval(() => { if (!document.hidden) { loadScript(true); loadQueueScript(true); } }, 30000);
 </script>
 </body>
 </html>

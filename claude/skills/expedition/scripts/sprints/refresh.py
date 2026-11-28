@@ -5,14 +5,15 @@ refresh(), then the swimlane data, in this order:
 1. the status/sprints.md grid (sprints/grid.py),
 2. the Sprint column of every unfinished epic's table (sprints/sync_epic_sprints.py),
 3. the cards of decisions.md moved to the lanes of the Done rule (lib/decisions.py sync),
-4. the Decided cards of queue.md synced with those lanes (queue/sync.py),
+4. the Decided cards of queue.md synced with those lanes (queue/sync.py; nothing in a release
+   of format 2.1, whose queue is in item files),
 5. status/data/sprints.data.js and sprints.json (sprints/swimlanes.py).
 
 Usage: python3 -I sprints/refresh.py <release> [--owner X] [--root PATH]
 
 Runs under the .ids.lock lock, so it never interleaves with sprints/mark.py. Prints what each
 step prints. Commits nothing: the caller commits the grid together with the epic files,
-decisions.md and queue.md the chain changed (run/go.py does).
+decisions.md and queue.md (with queue/ in format 2.1) the chain changed (run/go.py does).
 """
 import argparse
 import fcntl

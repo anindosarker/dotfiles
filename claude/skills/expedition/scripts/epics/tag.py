@@ -14,7 +14,8 @@ sprint of status/sprints.md as it is at that moment (the first column holding a 
 S1 for an empty grid). An existing Epic line, epic tag or Starts value is kept and reported; a
 missing epic file is refused. Each file is read right before its write. Then the Decided cards
 of queue.md are synced with the lanes (lib/board.py sync): each card whose decision is now In
-progress is ticked and gets "#E<n>".
+progress is ticked and gets "#E<n>". A release of format 2.1 keeps its queue in item files
+(lib/queue.py): nothing is synced there, and the line reports none.
 
 Refuses a superseded decision (heading "(superseded by D<n>)", or named by a later
 "- Supersedes D<n>." bullet): a named spec that cites one, or a named D id that is one.
@@ -132,7 +133,8 @@ def tag_epic(folder, epic, items):
     if kept:
         print(f"kept: {', '.join(sorted(kept, key=lambda k: int(k.split()[0][1:])))}")
     bd = C.load("lib/board")
-    changed = bd.sync_file(folder / own.QUEUE_MD, bd.decision_tags(own, folder), C.lock_file(folder))
+    changed = [] if C.load("lib/queue").item_form(folder) else \
+        bd.sync_file(folder / own.QUEUE_MD, bd.decision_tags(own, folder), C.lock_file(folder))
     print(f"queue.md cards ticked and tagged: {', '.join(f'Q{n}' for n in changed) or 'none'}")
 
 def main():

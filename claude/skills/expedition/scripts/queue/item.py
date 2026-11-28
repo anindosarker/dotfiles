@@ -2,7 +2,7 @@
 """Allocate the next D or Q id of a release and file the item under it, so two sessions
 on one checkout never pick the same number.
 
-Usage: python3 -I queue/item.py <release> D|Q "<title>" [--source Q<n>]
+Usage: python3 -I queue/item.py <release> D|Q "<title>" [--source Q<n>] [--option <n>]
        [--bullet "<text>"] [--new-round] [--owner X] [--root PATH]
        python3 -I queue/item.py <release> --move Q<n> Open|Later|Dropped|Autofix
        python3 -I queue/item.py <release> --fact Q<n> "<text>"
@@ -29,7 +29,23 @@ sync) and syncs the Decided cards with those lanes (lib/board.py sync: the tick 
 tag), and commits decisions.md when the sync changed it.
 
 queue.md is created from templates/queue.md when missing. Commits the files it wrote and
-prints the id alone, e.g. Q11.
+prints the id alone, e.g. Q11. --option is refused in this form: a card holds no option.
+
+A release of format 2.1 and higher (lib/queue.py) keeps each item in queue/Q<n>-<slug>.md and
+queue.md as a list the script writes again after each change; nothing is synced into the queue:
+
+- Q: a new item file with "status: open", the title and the --bullet text under "## Notes";
+  <n> is one above every item file and every line of queue.md.
+- --fact: one bullet at the end of "## Notes"; no other line of the file changes.
+- --move: "status" set to the lane word in lower case; an item leaving decided loses its
+  "decision" and "option" lines.
+- D: the decision card as above; with --source, the item gets "status: decided",
+  "decision: D<n>" (an item already decided keeps the highest decision number) and, with
+  --option, "option: <n>". An option number the item's "## Options:" does not have is refused
+  before anything is written; --option needs --source.
+
+It writes the item file, queue.md and status/data/queue.data.js (the Queue view of the task
+board, git-ignored), commits the item file, queue.md and decisions.md, and prints the id alone.
 """
 import argparse
 import fcntl
@@ -64,7 +80,7 @@ class _Once(argparse.Action):
 
 def main():
     ap = argparse.ArgumentParser(
-        usage='queue/item.py <release> D|Q "<title>" [--source Q<n>] [--bullet "<text>"] [--new-round] | '
+        usage='queue/item.py <release> D|Q "<title>" [--source Q<n>] [--option <n>] [--bullet "<text>"] [--new-round] | '
               '<release> --move Q<n> Open|Later|Dropped|Autofix | <release> --fact Q<n> "<text>" '
               '[--owner X] [--root PATH]'
     )
@@ -74,6 +90,7 @@ def main():
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: found from the cwd)")
     ap.add_argument("--source")
+    ap.add_argument("--option", help="2.1: the number of the option the owner picked (D --source)")
     ap.add_argument("--bullet", action=_Once)
     ap.add_argument("--move", nargs=2, metavar=("Q<n>", "LANE"))
     ap.add_argument("--fact", nargs=2, metavar=("Q<n>", "TEXT"))
@@ -85,7 +102,7 @@ def main():
     if a.move and a.fact:
         die("--move and --fact are separate calls")
     if card_op:
-        if a.kind or a.title or a.source or a.bullet or a.new_round:
+        if a.kind or a.title or a.source or a.bullet or a.new_round or a.option:
             die("--move and --fact take only a Q id and a lane or a text")
         if not SOURCE_RE.match(card_op[0]):
             die(f"bad id '{card_op[0]}', expected like Q3")
@@ -94,8 +111,12 @@ def main():
     else:
         if a.kind not in ("D", "Q"):
             die(f"bad kind '{a.kind}': the kinds are D and Q")
-        if a.kind == "Q" and (a.source or a.new_round):
-            die("--source and --new-round are for a D item")
+        if a.kind == "Q" and (a.source or a.new_round or a.option):
+            die("--source, --option and --new-round are for a D item")
+        if a.option is not None and not re.fullmatch(r"[1-9]\d*", a.option):
+            die(f"bad option '{a.option}', expected a number like 2")
+        if a.option is not None and not a.source:
+            die("--option needs --source: it is the option picked on that item")
         if not (a.title or "").strip():
             die("empty title")
         if a.source and not SOURCE_RE.match(a.source):
@@ -115,6 +136,11 @@ def main():
     queue = folder / own.QUEUE_MD
     dc = C.load("lib/decisions")
     target = folder / "decisions.md"
+    Q = C.load("lib/queue")
+    if Q.item_form(folder):
+        return items(a, root, folder, Q, dc, target, card_op, title, fact)
+    if a.option is not None:
+        die(f"--option needs a release of format 2.1 or higher: {a.release} keeps its queue on a board")
 
     with open(C.lock_file(folder), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -178,6 +204,85 @@ def main():
         if target not in written and target.is_file():
             paths.append(str(target))
         C.commit(root, paths, f"docs(plan): {a.release} {subject}")
+        fcntl.flock(lock, fcntl.LOCK_UN)
+    print(ident)
+
+
+def items(a, root, folder, Q, dc, target, card_op, title, fact):
+    """The commands on a release of format 2.1 and higher (item files, lib/queue.py)."""
+    bd = C.load("lib/board")
+    with open(C.lock_file(folder), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        written = []
+        if card_op:
+            ident = card_op[0]
+            item = Q.find(folder, int(ident[1:]))
+            if item is None:
+                die(f"{ident} is not in {folder / Q.QUEUE_DIR}")
+            if a.move:
+                word = Q.lane_status(a.move[1])
+                gone = {"decision": None, "option": None} if word != "decided" else {}
+                new = Q.set_front(item["text"], status=word, **gone)
+                subject = f"{ident} to {a.move[1]}"
+            else:
+                new = Q.add_note(item["text"], fact)
+                subject = f"{ident} fact"
+            if new != item["text"]:
+                Q.write_item(item["path"], new)
+                written.append(item["path"])
+        elif a.kind == "Q":
+            ident = f"Q{Q.next_number(folder)}"
+            path = Q.item_path(folder, int(ident[1:]), title)
+            if path.exists():
+                die(f"refusing to overwrite {path}")
+            Q.write_item(path, Q.new_item(int(ident[1:]), title, a.bullet))
+            written.append(path)
+            subject = f"{ident} {title}"
+        else:
+            if not target.is_file():
+                die(f"missing: {target}")
+            item = Q.find(folder, int(a.source[1:])) if a.source else None
+            if a.source and item is None:
+                die(f"{a.source} is not in {folder / Q.QUEUE_DIR}")
+            if a.option is not None:
+                keys = [o["key"] for o in Q.options(item["text"])]
+                if a.option not in keys:
+                    die(f"{a.source} has no option {a.option}: its options are "
+                        f"{', '.join(keys) if keys else 'not written yet (no ## Options: section)'}")
+            d_text = target.read_text(encoding="utf-8")
+            cards = dc.parse(d_text)["cards"]
+            ident = f"D{dc.highest(cards) + 1}"
+            rnd = max(dc.highest_round(cards), 1) + (1 if a.new_round and dc.highest_round(cards) else 0)
+            bullets = ([a.bullet] if a.bullet else []) + ([f"Source: {a.source}"] if a.source else [])
+            block = dc.new_card(int(ident[1:]), title, rnd, bullets)
+            bd.write(target, bd.insert_card(d_text, dc.TODO, block, int(ident[1:]), "D"))
+            written.append(target)
+            if item is not None:
+                m = re.match(r"^D(\d+)$", item["decision"]) if item["status"] == "decided" else None
+                old = int(m.group(1)) if m else None
+                if old and old > int(ident[1:]):
+                    print(f"{a.source} keeps D{old}", file=sys.stderr)
+                    new = Q.set_front(item["text"], status="decided")
+                else:
+                    new = Q.set_front(item["text"], status="decided", decision=ident, option=a.option)
+                if new != item["text"]:
+                    Q.write_item(item["path"], new)
+                    written.append(item["path"])
+            subject = f"{ident} {title}"
+
+        moved = dc.sync_file(folder)
+        if moved:
+            print(f"decisions.md lanes synced: {dc.moved_text(moved)}", file=sys.stderr)
+        queue = folder / C.QUEUE_MD
+        if not Q.list_in_step(folder):
+            Q.write_list(folder)
+            written.append(queue)
+        paths = [str(p) for p in written]
+        for p in (target, queue):
+            if p not in written and p.is_file():
+                paths.append(str(p))
+        C.commit(root, paths, f"docs(plan): {a.release} {subject}")
+        Q.write_data(folder)  # after the commit: "changed" is read from git
         fcntl.flock(lock, fcntl.LOCK_UN)
     print(ident)
 

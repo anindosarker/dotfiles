@@ -89,7 +89,7 @@ def mark_status(a, st, root, folder, key, num, name):
             late = st.pending(folder) and st.commit(root, folder, [], f"docs(plan): {a.release} {key} {a.action}")
             print(f"{key}: already {e['status']}, nothing changed" + ("; an earlier failed commit is made now" if late else ""))
             return
-        paths = [folder / C.SPRINTS_MD, folder / "decisions.md", folder / C.QUEUE_MD]
+        paths = [folder / C.SPRINTS_MD, folder / "decisions.md", *C.load("lib/queue").commit_paths(folder)]
         paths += sorted((folder / C.EPICS_DIR).glob("E*.md"))
         st.commit(root, folder, paths, f"docs(plan): {a.release} {key} {a.action}")
         fcntl.flock(lock, fcntl.LOCK_UN)
@@ -138,7 +138,7 @@ def main():
         with contextlib.redirect_stdout(io.StringIO()):
             g.refresh(folder, a.release, quiet=True, locked=True)
             C.load("sprints/swimlanes").write(folder, a.release, quiet=True)
-        paths = [grid, folder / "decisions.md", folder / C.QUEUE_MD] + sorted((folder / C.EPICS_DIR).glob("E*.md"))
+        paths = [grid, folder / "decisions.md", *C.load("lib/queue").commit_paths(folder)] + sorted((folder / C.EPICS_DIR).glob("E*.md"))
         C.commit(root, paths, f"docs(plan): {a.release} {key} {a.action}")
         fcntl.flock(lock, fcntl.LOCK_UN)
     print(f"{key}: {old} to {mark} ({num} {name}); committed")

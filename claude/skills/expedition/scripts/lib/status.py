@@ -18,7 +18,8 @@ task is "<spec>-<number>" ("27-03"), a spec its number, an epic "E11".
 
 set_status changes one milestone or task, then runs the chain: the roll-up of a task into its
 milestone, the JSON file, the grid (lib/grid.py refresh, which draws status/sprints.md from this
-file and ends in sync), status.data.js, and the "status:" front matter line of every task, spec
+file and ends in sync), status.data.js (and, for a release of format 2.1, queue.data.js, the
+queue data of the page, lib/queue.py), and the "status:" front matter line of every task, spec
 and epic file (mirror). Nobody writes a status by hand.
 - A task set to done with an open "Owner:" box in its Verification list becomes blocked with
   the reason OWNER_REASON; with any other open box the change is refused.
@@ -257,11 +258,13 @@ def save(folder, data):
 
 
 def write_page_data(folder, data=None):
-    """status.data.js, the data of the page status/index.html: the stored file plus "root"."""
+    """status.data.js, the data of the page status/index.html: the stored file plus "root". For a
+    release of format 2.1 also queue.data.js, the data of its Queue view (lib/queue.py)."""
     data = data or load(folder)
     page = {k: v for k, v in data.items() if k in ("release", "format", "updated")}
     page.update(root=str(folder), **{k: v for k, v in data.items() if k not in page})
     write_json(folder / SCRIPT, f"window.STATUS_DATA = {json.dumps(page, indent=2, ensure_ascii=False)};\n")
+    C.load("lib/queue").write_data(folder)
 
 
 def mirror(folder, data):
