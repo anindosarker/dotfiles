@@ -86,6 +86,9 @@ the old queue files too (migrate/pre-v1.0/queue.py), a decisions.md in the headi
 (migrate/pre-v1.0/epics.py), a folder that still has run/trackers/fix-*-tracker.md too (migrate/pre-v1.0/fixes.py).
 A tracker Status of done (or the old merged) counts as done. A tracker no milestone owns counts as citing the
 queue cards named on its first line.
+After the "Release" line, when the release folder has uncommitted changes (in format 2.2 a
+status change makes no commit, D22): "Uncommitted: <n> file(s) in the release folder: run
+status/sync.py <release>"; no such line with a clean folder.
 The last line, for a release in a lower format than the skill: the README.md of the migration
 folder (skill below 2.2), or the chain of folders under scripts/migrate/ from the release's format
 up, in the order to run them (skill 2.2 and higher, migration_chain); it names only folders that
@@ -95,6 +98,7 @@ import argparse
 import collections
 import importlib.util
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -782,6 +786,12 @@ def main():
     rules = C.find_rules(root)
     print(f"Planning rules: {', '.join(rules) if rules else 'none, bundled default'}")
     print(f"Release {a.release} ({rel})")
+    # D22: in format 2.2 a status change makes no commit; the folder is dirty until the next sync.
+    repo, (where,) = C.plan_repo(root, [folder])
+    dirty = subprocess.run(["git", "-C", str(repo), "status", "--porcelain", "--untracked-files=all", "--", where],
+                           capture_output=True, text=True).stdout.splitlines()
+    if dirty:
+        print(f"Uncommitted: {len(dirty)} file(s) in the release folder: run status/sync.py {a.release}")
 
     plan = folder / f"{a.release}-plan.md"
     index = plan

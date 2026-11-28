@@ -550,6 +550,16 @@ def record(root, folder, extra, message):
     return commit(root, folder, extra, message)
 
 
+def finish(root, folder, extra, message, sync=False, done_before=()):
+    """The end of a status command that changed something, under the lock. Below format 2.2: the
+    commit of the change (commit). Format 2.2: the sync (sync_commit) with message when sync is
+    true (sprints/mark.py merge) or an epic became done (its id is in done_epics now and not in
+    done_before); else no commit (record). Returns True when a commit was made."""
+    if deferred(folder) and (sync or done_epics(folder) - set(done_before)):
+        return sync_commit(root, folder, message)
+    return record(root, folder, extra, message)
+
+
 def done_epics(folder):
     """The ids of the epics whose stored status is done."""
     return {e["id"] for e in (load(folder) or {}).get("epics", []) if e["status"] == "done"}
