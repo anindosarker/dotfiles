@@ -111,7 +111,7 @@ A release of format 1.0 has no status file: the grid is its only status. A miles
 - `sprints/mark.py` sets the cell: `launch` `[ ]`, `wait` `[~]` (from `·` only for a lead hold), `merge` `[x]`, `stop` `[!]`. `launch` on a `[~]` cell resumes the milestone. The reason stays in the tracker: the `Status:` brackets and `## Attention`.
 - `resume` ends a hold: on a `[~]` cell it sets `[ ]` when the milestone was launched before and `·` when it never was. Launched before means a commit `docs(plan): <release> <milestone> launch` of `mark.py` is in the history of `status/sprints.md`; the tracker cannot tell, since the main checkout's copy may lack the `Branch` line until the merge.
 - A `[~]` row counts as started and unfinished, like `[ ]`: it keeps its sprint and its epic is not finished. A `[~]` row never launched moves like a `·` row and does not make its spec built. Only `[x]` meets a dependency, so the dependents of a waiting milestone are not launched and not stopped.
-- Trackers written before this set say `merged (<commit>)` or `skipped (D<n>)`. The scripts read them as done and stopped; nothing writes them. `migrate/pre-v1.0/statuses.py <release>` converts a folder.
+- Trackers written before this set say `merged (<commit>)` or `skipped (D<n>)`. The scripts read them as done and stopped; nothing writes them.
 - The tracker `Status:` line is one of the five, its detail in brackets. `stopped (D<n>)` is a SKIP, `D<n>` the superseding decision. `waiting` is a milestone that is built and stopped until the lead or the owner acts; whoever stops the milestone writes it, in the tracker copy it already writes.
 
 ## Files and pages
