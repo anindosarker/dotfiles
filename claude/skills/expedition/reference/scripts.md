@@ -42,7 +42,7 @@ For any session that is about to run a command of the skill: how to run them, th
 - `queue/next.py <release>`: the `to-do` item with the lowest number, or `none`. `queue/list.py <release> [word] [--facts]`: the items of a lane word or a status word.
 - `decisions/close.py <release> D<n> [--backlog]`: a decision with nothing to run; with `--backlog`, a decision that moves to another release.
 - `decisions/supersede.py <release> D<old> D<new>`: supersede a built decision.
-- `decisions/decider.py <release> D<n> you|lead|agent`: the decider of a decision file that has none.
+- `decisions/decider.py <release> D<n> you|lead|agent [--change]`: the decider of a decision file that has none; `--change` replaces an existing one.
 - `status/report.py <release>`: state and gaps.
 - `status/progress.py <release>`: the progress reply for the owner (formats.md, Progress reply and reports).
 - The runner's own: `run/runs.py` (the run id record) and `run/check.py` (the wake check).
@@ -322,10 +322,11 @@ For any session that is about to run a command of the skill: how to run them, th
 
 ### decisions/decider.py
 
-- Command: `python3 -I <skill>/scripts/decisions/decider.py v0.<n>.x D<n> you|lead|agent`
+- Command: `python3 -I <skill>/scripts/decisions/decider.py v0.<n>.x D<n> you|lead|agent [--change]`
 - Does: under the `.ids.lock` lock: writes the `decider` line after the `status` line of a decision file that has none (a decision recorded before its release moved to decision files); nothing else of the file changes. Then the status rule, the list, one commit, and the dashboard data. Prints `D<n> decider <word>; committed`.
-- Refuses, writing nothing: a word that is not `you`, `lead` or `agent`, an id with no file, a file that has a `decider` line (`D<n> has decider <word>: nothing changed`), and a decision board, with one line that names `scripts/migrate/v2.1-v2.2`.
-- When: `status/report.py` counts decision files with no decider, and the lead knows who made the call
+- `--change`: replaces the `decider` line of a file that has one, in the same place; prints `D<n> decider <old> to <word>; committed`. On a file with no `decider` line it writes the line, as without the flag.
+- Refuses, writing nothing: a word that is not `you`, `lead` or `agent`, an id with no file, without `--change`, a file that has a `decider` line (`D<n> has decider <word>: nothing changed`); with `--change`, a file whose `decider` line holds the word already (`D<n> has decider <word> already: nothing changed`); and a decision board, with one line that names `scripts/migrate/v2.1-v2.2`.
+- When: `status/report.py` counts decision files with no decider, and the lead knows who made the call; with `--change`, when a recorded decider is wrong
 
 ### plan/find_rules.py
 
