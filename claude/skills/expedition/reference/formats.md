@@ -9,7 +9,7 @@
 - Progress reply and reports
 - decisions.md
 - Epic file
-- status/sprints.md
+- The grid
 - Milestone status
 - Tracker
 - Status
@@ -30,7 +30,7 @@ Every item has an ID: the `# Q<n>.` title of an item file, the `**D<n>**` token 
 - Ids come only from `python3 -I <skill>/scripts/queue/item.py <release> D|Q "<title>"`, never typed. It locks, appends the decision card or writes the item file, commits and prints the id; the session then writes a decision's bullets under its card, each indented with one tab.
 - No id is mentioned in chat or a tracker before it is allocated: refer to the item by its title.
 - An id never changes after allocation.
-- A duplicate filed twice keeps both ids. The later item gets the fact `Same as Q<n>.` and its `status` becomes `dropped`.
+- A duplicate filed twice keeps both ids. The later item gets the fact `Same as Q<n>.` and is closed with `queue/item.py <release> --move Q<n> Dropped --decider lead` (`status: archived`).
 - Fallback rule: a session that finds its own id taken renumbers its own item only, never the other's. With `queue/item.py` this no longer happens.
 - Agents on milestone branches never edit `decisions.md`.
 
@@ -47,7 +47,7 @@ One file per release, in the release folder root, template [../templates/queue-l
 
 - One line per item file, in the order of the numbers, linked to the file. No status, no decision, no tag: those are in the item file.
 - The scripts write the whole file again after each change of an item (`queue/item.py`, `plan/milestone.py`). Nobody edits it by hand; `status/report.py` flags a `queue.md` out of step with the item files.
-- The owner sees the queue in the Queue view of the task board (Status).
+- The owner sees the queue in the Queue view of the dashboard page (Status).
 
 ## Item file
 
@@ -55,9 +55,10 @@ One file per release, in the release folder root, template [../templates/queue-l
 
 ```md
 ---
-status: decided
+status: done
 decision: D62
 option: 1
+decider: you
 ---
 # Q49. A select menu in the sidebar turns translucent after a short scroll
 
@@ -81,26 +82,34 @@ option: 1
 
 | Part | Written by | Notes |
 |---|---|---|
-| front matter `status` | scripts only | `open`, `decided`, `later`, `dropped` or `autofix` |
-| front matter `decision` | scripts only | `D<n>`; the line is absent while the item is not decided |
+| front matter `status` | scripts only | `to-do`, `blocked`, `done`, `backlog` or `archived` |
+| front matter `decision` | scripts only | `D<n>`; present on an item that a decision closed, absent on every other item |
 | front matter `option` | scripts only | the number of the picked option; absent when none was given |
+| front matter `decider` | scripts only | `you`, `lead` or `agent`: who closed the item; present on a `done` or `archived` item only |
+| front matter `depends_on` | scripts only | the item ids this item waits for, `Q14, Q15`; absent when there are none |
 | `# Q<n>. <title>` | script at filing | one plain sentence naming the problem or idea; the number is never reused |
 | `## Notes` | script (`--bullet`, `--fact`) | the owner's remark and the first findings, raw, one bullet each; nested bullets allowed; not shown in chat |
 | `## Details` | the lead, by a targeted edit | the facts the decision needs; absent until the lead writes the item out |
 | `## Options:` | the lead, by a targeted edit | numbered, `Recommended:` on the first; absent until the lead writes the item out |
 
-- The five status words are the item's state:
+- Five of the six status words are the item's state; a queue item is never `in progress`:
 
-  | `status` | Meaning |
-  |---|---|
-  | `open` | Waiting to be discussed |
-  | `decided` | Decided; `decision` names the decision |
-  | `later` | Parked; reopened by moving it back to `open` |
-  | `dropped` | Will not be done |
-  | `autofix` | Fixed without a decision |
+  | `status` | Meaning | `decider` |
+  |---|---|---|
+  | `to-do` | Waiting to be discussed: the queue | none |
+  | `blocked` | Waits for the items of its `depends_on` line that are not `done`; set by the scripts only | none |
+  | `done` with a `decision` line | Decided; `decision` names the decision | `you`, or `lead` when the lead settled it alone |
+  | `done` with no `decision` line | Fixed by the run without a decision | `agent` |
+  | `backlog` | Parked; reopened by moving it back to `to-do` | none |
+  | `archived` | Will not be done | `you`, or `lead` for a Lead-side close |
 
-- The status changes only through the scripts: `queue/item.py <release> D "<title>" --source Q<n> [--option <n>]` sets `decided`, `decision` and `option` (it refuses an option number the item does not have); `queue/item.py <release> --move Q<n> Open|Later|Dropped|Autofix` sets the same word in lower case; `plan/milestone.py add --cites` sets `autofix` on each item it cites and drops its `decision` and `option` lines. The fix is traced through its module heading and its tracker's first line, for example `(Q9)`.
-- `decisions.md` is the record. A decided item holds its decision id only: the lane and the epic of that decision are read from `decisions.md`, and nothing is synced into the item file. `status/report.py` flags a decided item whose decision is not in `decisions.md`.
+- The status changes only through the scripts, and a call that closes an item names its decider, or it is refused before anything is written:
+  - `queue/item.py <release> D "<title>" --source Q<n> [--option <n>] --decider you|lead` sets `done`, `decision`, `option` and `decider` (it refuses an option number the item does not have).
+  - `queue/item.py <release> --move Q<n> <word>` takes the lane words `Open`, `Later`, `Dropped`, `Autofix` or the status words `to-do`, `backlog`, `archived`, `done`, which mean the same in that order. `Dropped` needs `--decider you` or `--decider lead`; `Autofix` needs `--decider agent`; `Open` and `Later` take no decider. Every move first removes `decision`, `option` and `decider`.
+  - `plan/milestone.py add --cites` sets `done` and `decider: agent` on each item it cites and removes its `decision` and `option` lines. The fix is traced through its module heading and its tracker's first line, for example `(Q9)`.
+  - `queue/item.py <release> --depends Q<n> "Q14, Q15"` writes the `depends_on` line (`""` removes it). It refuses an id with no item file, the item itself and a ring of items that wait for each other. After every write of an item, of `queue.md` and of the page data the blocked check runs: a `to-do` or `blocked` item becomes `blocked` while a named item is not `done`, and `to-do` when every named item is `done`. After a hand edit of an item file, `sprints/refresh.py <release>` runs the check.
+- A closed item always has a `decider`, with one case that has none: an item that was decided or dropped before its release moved to format 2.2. The migration writes `decider: agent` on an `autofix` item only, because the files of format 2.1 do not say whether the owner or the lead made the other calls. `status/report.py` does not flag that case.
+- `decisions.md` is the record. A `done` item holds its decision id only: the lane and the epic of that decision are read from `decisions.md`, and nothing is synced into the item file. `status/report.py` flags a `done` item whose decision is not in `decisions.md`.
 - `<slug>` is made from the title at filing, as a task file's slug is, and never changes after. A new file has the front matter, the title and `## Notes`.
 - **Bar at filing.** An item's first `## Notes` bullet says what goes wrong for a user of the library or a reader of the docs if the item is ignored. A raiser (the lead, a lookup, the runner, a builder, a verifier) that cannot say it files no item: it writes the point in its tracker's `## Notes`, or leaves it out when it has no tracker. The owner's remarks are exempt: every one is filed.
 - `## Notes` bullets are facts and remarks as found: path:line, measurement, lookup result, what the owner said. A lookup agent adds its facts to the item it was given with `queue/item.py <release> --fact Q<n> "<text>"`.
@@ -123,7 +132,7 @@ Name one to reopen it.
 
 - Posted before the first real item of a round, and with every report of run items that settled something. Each item is listed once.
 - One line per item, never a grouped sentence ("seven kept as built (D133 to D139)").
-- The owner naming a line reopens it as a normal item: a dropped item goes back with `queue/item.py <release> --move Q<n> Open`; a settled decision is discussed as a re-decided decision (discuss.md, Changing a decision).
+- The owner naming a line reopens it as a normal item: an `archived` item goes back with `queue/item.py <release> --move Q<n> Open`; a settled decision is discussed as a re-decided decision (discuss.md, Changing a decision).
 
 ## Progress reply and reports
 

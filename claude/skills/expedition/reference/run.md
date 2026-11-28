@@ -49,7 +49,7 @@ The release's `process.md` (`.ai/plans/<release>/<owner>/process.md`) holds the 
 - Reply target: the name after `from` in the latest RUN or HELLO line, or the name in the latest LEAD line; every line to the lead goes there from then on.
 - On every RUN line, before launching anything: re-read the release's `process.md`, this file, [tick.md](tick.md) and the brief, then the epic's specs and its epic file.
 - On RUN and on every line typed to it: read the epic file of every epic it runs, re-read whatever a note names, append ` [ack HH:MM]` to each note it read, commit (Shared files rules). A note without ack is unread.
-- RUN is idempotent: an epic whose milestones are already `in progress` or `done` is not started again; the runner replies with the current state. A RUN for a held epic lifts the hold on all of it, like `RESUME E<n>`.
+- RUN is idempotent: an epic whose milestones are already `in progress` or `done` is not launched again; the runner replies with the current state. A RUN for a held epic lifts the hold on all of it, like `RESUME E<n>`.
 - Several epics run at once, no slot limit. One worktree per milestone from the pool. Machine load as today: `process.md` P5, `SERIAL_GATES` when loaded.
 - Every status of a milestone is set by `sprints/mark.py <release> <milestone> launch|wait|resume|merge|stop`; nothing under `status/` is edited by hand, no exception.
   - Its arguments, what it writes and what it commits: [scripts.md](scripts.md).

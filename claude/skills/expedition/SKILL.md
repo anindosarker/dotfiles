@@ -21,7 +21,7 @@ How the owner works in a release is in its `process.md`: a change to it is a `pr
 ## The model
 
 - A release is one folder, the release folder `.ai/plans/v0.<n>.x/<owner>/`, and one version:
-  - `plan/` (specs, epics), `queue.md` (the list of every item raised, written by the scripts), `queue/` (one item file per item, `queue/Q<n>-<slug>.md`), `run/` (trackers, handoffs), `status/` (generated, never edited by hand: `data/status.json` is the store of every status and is committed; `index.html` (the dashboard page), its scripts in `src/` and the other files of `data/` are renders, git-ignored).
+  - `plan/` (specs, epics), `queue.md` (the list of every item raised, written by the scripts), `queue/` (one item file per item, `queue/Q<n>-<slug>.md`), `run/` (trackers, handoffs), `status/` (generated, never edited by hand: `data/status.json` is the store of every status and is committed; `index.html` (the dashboard page; the task board in a release of format 2.1 or 2.0), its scripts in `src/` and the other files of `data/` are renders, git-ignored).
 - `<owner>` is the folder name earlier releases use.
 - A release has specs, one folder each (`plan/specs/NN-<slug>/NN-<slug>.md`, with `tasks/` for its task files): a spec is one planned unit of work.
 - A spec has modules (section 1.6: what is wanted, each with its decision cite) and tasks (one file each: the work, with its Verification list).

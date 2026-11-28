@@ -59,7 +59,7 @@ write one plan file (template below).
     that are built and merged together.
 15. **New work is the same three additions.** The next module, one or more task files, a
     milestone. Numbers only go up. Each new piece of work is its own milestone; a task joins
-    an existing milestone only while that milestone has not started.
+    an existing milestone only while that milestone is still to do.
 16. **A finished plan takes nothing.** A plan that is not done takes new modules, tasks and
     milestones. Once it is done, later work on the same subject is a new plan.
 17. **Suggestions, not rules.** `Files owned` on a milestone is written when it could clash
