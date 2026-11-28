@@ -9,11 +9,14 @@ commands of a release of format 2.1 write item files, not board cards.
 In the release folder:
 - Each card of the board queue.md becomes one item file queue/Q<n>-<slug>.md (lib/queue.py):
   the lane gives "status" (Open, Decided, Later, Dropped, Autofix to open, decided, later,
-  dropped, autofix), the tag "#D<n>" gives "decision: D<n>", the title after "**Q<n>**" gives
+  dropped, autofix), the tag "#D<n>" of a card in Decided gives "decision: D<n>" (the highest
+  one when it has two), the title after "**Q<n>**" gives
   "# Q<n>. <title>", and every line under the card, nested bullets too, goes under "## Notes"
   one indent level less, so each bullet keeps its depth. The tick and the tag "#E<n>" are
-  dropped: the scripts read both from decisions.md. No "## Details", no "## Options:", no
-  "option": the lead writes them when it writes an item out.
+  dropped: the scripts read both from decisions.md. A "#D<n>" tag of a card outside Decided,
+  and a lower second "#D<n>" tag, are dropped too, with one printed line each: an item that is
+  not decided has no "decision" line. No "## Details", no "## Options:", no "option": the lead
+  writes them when it writes an item out.
 - queue.md becomes the plain list of the item files (lib/queue.py write_list).
 - "format" in status/data/status.json becomes "2.1", written last; then the page data
   (status.data.js, queue.data.js) and the page status/index.html (sprints/swimlanes.py).
@@ -87,13 +90,22 @@ def notes_lines(subs):
     return out
 
 
+def decision_of(card, status):
+    """The decision id the item keeps ("D<n>" or None), and one line per "#D<n>" tag dropped."""
+    nums = [int(t[1:]) for t in card["tags"] if re.fullmatch(r"D\d+", t)]
+    keep = max(nums) if nums and status == "decided" else None
+    dropped = [n for n in nums if n != keep]
+    why = "a lower second tag of the card" if keep else f"the card is in {card['lane']}, not in Decided"
+    return (f"D{keep}" if keep else None), [f"Q{card['num']}: #D{n} dropped, {why}" for n in dropped]
+
+
 def item_text(q, card, status):
     """The item file of one card."""
     text = q.new_item(card["num"], card["title"])
     lines = notes_lines(card["subs"])
     if lines:
         text += "\n" + "\n".join(lines) + "\n"
-    return q.set_front(text, status=status, decision=f"D{card['d']}" if card["d"] else None)
+    return q.set_front(text, status=status, decision=decision_of(card, status)[0])
 
 
 def read_board(bd, q, folder):
@@ -176,9 +188,12 @@ def main():
     for c, status in cards:
         p = q.item_path(folder, c["num"], c["title"])
         files[p] = item_text(q, c, status)
+        decision, dropped = decision_of(c, status)
         rel = p.relative_to(folder).as_posix()
         print(f"{'would write ' if a.check else ''}{rel}: {status}"
-              + (f", D{c['d']}" if c["d"] else "") + f", {plural(bullets(c['subs']), 'bullet')}")
+              + (f", {decision}" if decision else "") + f", {plural(bullets(c['subs']), 'bullet')}")
+        for line in dropped:
+            print(line)
     read_n = (len(cards), sum(bullets(c["subs"]) for c, _ in cards))
     wrote_n = written_counts(q, list(files.values()))
     counts = lambda w: f"cards read {read_n[0]}, item files written {w[0]}; bullets read {read_n[1]}, bullets written {w[1]}"

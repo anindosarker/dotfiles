@@ -18,6 +18,7 @@ A release whose `status/data/status.json` says `"format": "2.0"`. A release in f
 - `decisions.md`, the specs, the task files, the trackers and every status.
 - Every line of every card: each bullet goes under `## Notes` at the same depth.
 - Only the tick and the `#E<n>` tag of a card are dropped. The scripts read both from `decisions.md`.
+- A `#D<n>` tag stays only on a card in Decided, as `decision: D<n>`. A `#D<n>` tag of a card in another lane, and the lower tag of a card with two, are dropped. The command prints one line for each, so you can add it back by hand.
 
 ## Before you start
 
