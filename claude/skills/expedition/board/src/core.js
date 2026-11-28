@@ -153,12 +153,13 @@ function load(data) {
   for (const p of [...D.specs, ...D.sprints]) { const c = zero(); kids.get(p).forEach((m) => add(c, cnt.get(m))); cnt.set(p, c); }
   D.epics.forEach((e) => { const c = zero(); kids.get(e).forEach((s) => add(c, cnt.get(s))); cnt.set(e, c); });
   // Search text: own words plus every parent's, so "E35 release" finds the specs of E35.
+  // A milestone and a task also hold their chip text, so "13-01" and "T13-01" both find the task (chipText, parts.js).
   hay = new Map();
   const low = (...a) => a.filter((x) => x != null && x !== "").join(" ").toLowerCase();
   D.epics.forEach((e) => hay.set(e, low(e.id, e.name)));
   D.specs.forEach((s) => hay.set(s, low(s.id, "#" + s.id, s.title) + " " + (hay.get(idx.epic.get(s.epic)) || "")));
-  D.milestones.forEach((m) => hay.set(m, low(m.id, m.name, m.sprint, m.commit) + " " + (hay.get(idx.spec.get(m.spec)) || hay.get(idx.epic.get(m.epic)) || "")));
-  D.tasks.forEach((t) => hay.set(t, low(t.id, t.number, `${t.spec}-${t.number}`, t.title, t.type, t.decision) + " " + (hay.get(idx.ms.get(t.milestone)) || "")));
+  D.milestones.forEach((m) => hay.set(m, low(m.id, label("ms", m), chipText("ms", label("ms", m)), m.name, m.sprint, m.commit) + " " + (hay.get(idx.spec.get(m.spec)) || hay.get(idx.epic.get(m.epic)) || "")));
+  D.tasks.forEach((t) => hay.set(t, low(t.id, t.number, `${t.spec}-${t.number}`, chipText("task", `${t.spec}-${t.number}`), t.title, t.type, t.decision) + " " + (hay.get(idx.ms.get(t.milestone)) || "")));
   D.sprints.forEach((s) => hay.set(s, low(s.id)));
   // Last change of an epic: the latest `changed` of its milestones and their tasks.
   lastChange = new Map(D.epics.map((e) => {

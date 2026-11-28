@@ -39,7 +39,11 @@ document.body.insertAdjacentHTML("afterbegin", `<svg width="0" height="0" style=
 const icon = (id, cls = "") => `<svg class="i ${cls}"><use href="#ic-${id}"/></svg>`;
 // Item id chip in its kind's color (legend: Kinds); sprints and specs get a neutral chip.
 const KC = { epic: "epic", ms: "milestone", milestone: "milestone", task: "task", q: "queue", queue: "queue", decision: "decision" };
-const kc = (kind, text) => `<span class="kchip k-${KC[kind] || "plain"}" title="${esc(KC[kind] || kind)}">${esc(text)}</span>`;
+// A milestone chip and a task chip start with the letter of the kind (D27): M13.1, T13-01, as Q8, D4 and E5
+// carry theirs in the id. Only the chip text gets it; ids, data and sort keys stay without it.
+const CHIP_LETTER = { ms: "M", milestone: "M", task: "T" };
+const chipText = (kind, text) => (CHIP_LETTER[kind] || "") + text;
+const kc = (kind, text) => `<span class="kchip k-${KC[kind] || "plain"}" title="${esc(KC[kind] || kind)}">${esc(chipText(kind, text))}</span>`;
 const sicon = (st) => icon(siconOf(st) || "circle", "c-" + (skOf(st) || "ns"));
 const pill = (st) => `<span class="pill s-${skOf(st) || "ns"}">${icon(siconOf(st) || "circle")}${esc(st)}</span>`;
 function progress(c, frac = true) {

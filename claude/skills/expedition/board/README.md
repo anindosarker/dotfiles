@@ -21,6 +21,12 @@ board/
   swimlanes.tw.css the styles of swimlanes.html
 ```
 
+## Id chips
+
+`kc` of `src/parts.js` draws every id chip, and the Dashboard view's chip (`dKind`, `src/views.js`) uses the same text function, `chipText`. A milestone chip starts with `M` (`M13.1`) and a task chip with `T` (`T13-01`), in all six views and in the side panel (D27). Queue, decision and epic chips carry their letter in the id (`Q8`, `D4`, `E5`); sprint and spec chips get no letter. Only the chip text changes: ids, data, file names, commands and the sort keys stay without the letter. The search finds a milestone or a task with and without its letter: `13-01` and `T13-01`, `13.1` and `M13.1`.
+
+A release that already has the page gets the new `status/src/` files from `python3 -I scripts/sprints/refresh.py <release>` (or `scripts/sprints/swimlanes.py <release>`): both call `install_dashboard` of `scripts/sprints/swimlanes.py`, which copies each file of `src/` that differs.
+
 ## Keys
 
 One handler (`core.js`) and one cursor per view (`parts.js`, `navStep`). The cursor is kept when the view changes.
@@ -62,7 +68,7 @@ Fields of every row. A text field with no value is `""`; `ready` is always `true
 |---|---|---|
 | `kind` | | `queue`, `decision`, `epic`, `milestone` or `task`; the id chip has the kind's color |
 | `id` | stored | unique key: `Q8`, `D4`, `E32`, the milestone id, the task id |
-| `label` | worked out | the text on the id chip: the id; a milestone's ref (`93.3`); a task's `<spec>-<number>` |
+| `label` | worked out | the text of the id chip without a letter: the id; a milestone's ref (`93.3`); a task's `<spec>-<number>`. The page puts the letter of the kind on a milestone chip and a task chip (`M93.3`, `T93-01`, D27); the data keeps `label` without it |
 | `title` | stored | the item's title |
 | `status` | stored | the column: `to-do`, `in progress`, `blocked`, `done`, `backlog`, `archived` (Status, below); cards have no status pill |
 | `turn` | worked out | whose move: `you` (person icon, marker color), `lead` (compass, muted), `agent` (bot, muted); `""` on an item that is `done`, `archived` or `backlog`, and on a held decision |
