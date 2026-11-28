@@ -395,7 +395,7 @@ For a release with `status/data/status.json`. These are the words of format 2.2;
   - `dashboard.data.js` (`window.DASHBOARD_DATA`): one row for every queue item, decision, epic, milestone and task, with `release`, `updated`, `roots`, `sources` and `rows`; read by Dashboard and Queue. A decision row takes its status and its decider from its decision file; a `blocked` decision has the reason `Waits for E11, same file`. With a decision board the row takes its status from the lane and has no decider.
   - `dashboard.json`: the same rows, indented, without `roots`: the file an agent reads.
 
-  The three files are written together, by every command that changes a status or an item (`status/status.py`, `sprints/mark.py`, `queue/item.py`, `sprints/refresh.py` and the other commands of the status chain). A release of format 2.2 has no `queue.data.js`. The page of a release of format 2.1 or 2.0 is the task board: [old-form/format-2.1.md](old-form/format-2.1.md), Status words.
+  The three files are written together, by every command that changes a status or an item (`status/status.py`, `sprints/mark.py`, `queue/item.py`, `sprints/refresh.py` and the other commands of the status chain). A release of format 2.2 has no `queue.data.js`. The page of a release of format 2.1 or 2.0 is the task board: [old-form/format-2.1.md](old-form/format-2.1.md), Files and pages.
 - The tracker of a milestone has no `Status:` line and no task list: branch, Checks, `## Attention`, `## Notes` ([../templates/tracker.md](../templates/tracker.md)).
 - The process file has `updated:` in its front matter, the time its facts were last checked or changed. No other file has a timestamp.
 
