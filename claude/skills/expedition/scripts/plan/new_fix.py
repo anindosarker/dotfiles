@@ -112,7 +112,8 @@ def append_block(text, block):
 
 
 def grid_by_spec(own, folder):
-    """{spec number: [(epic, cells)]} of status/sprints.md."""
+    """{spec number: [(epic, cells)]} of status/sprints.md (a release without status.json; the
+    others go to plan/milestone.py)."""
     out = {}
     for label, cells in own.grid(folder)[1]:
         m = re.match(r"^E(\d+)\s+(\d{2}(?:\.\d+)?)\s", label)

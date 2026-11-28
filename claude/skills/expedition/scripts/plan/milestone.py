@@ -168,7 +168,8 @@ def spec_done(own, st, folder, num, rows):
 
 
 def grid_by_spec(own, folder):
-    """{spec number: [(epic, cells)]} of status/sprints.md."""
+    """{spec number: [(epic, cells)]} of the grid (lib/ownership.py grid: the status file in
+    format 2.2, status/sprints.md below)."""
     out = {}
     for label, cells in own.grid(folder)[1]:
         m = re.match(r"^E(\d+)\s+(\d{2}(?:\.\d+)?)\s", label)
@@ -341,7 +342,8 @@ def run(a, own, root, folder, ids, decision, want_epic, lock):
         elif st.active(folder):
             st.sync(folder, a.release)
     paths = [str(p) for p in writes]
-    paths += [str(folder / own.SPRINTS_MD), str(folder / "decisions.md")] + [str(p) for p in Q.commit_paths(folder)]
+    paths += [str(p) for p in load("lib/grid").grid_files(folder)]
+    paths += [str(folder / "decisions.md")] + [str(p) for p in Q.commit_paths(folder)]
     paths += [str(p) for p in sorted((folder / own.EPICS_DIR).glob("E*.md"))]
     st.commit(root, folder, paths, f"docs(plan): {a.release} milestone {num} {a.name}")
     if ids and items:

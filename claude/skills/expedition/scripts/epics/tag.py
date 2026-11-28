@@ -10,9 +10,11 @@ on its card in decisions.md and moves to In progress (lib/decisions.py, under th
 lock, then the Done rule sync), and the spec's Deliverables row gets E<n> in
 its Epic cell, and plan/epics/E<n>.md gets "Starts: S<n>" under its Specs: line (in a release of
 format 2.2, which has no Specs: line, "starts: S<n>" directly after the "status:" line): the current
-sprint of status/sprints.md as it is at that moment (the first column holding a "[ ]", "[~]" or
-"·" cell of another epic's row, else the column after the last column holding another epic's row;
-S1 for an empty grid). An existing Epic line, epic tag or Starts value is kept and reported; a
+sprint of the grid as it is at that moment (the first column holding a "[ ]", "[~]" or "·" cell
+of another epic's row, else the column after the last column holding another epic's row; S1 for
+an empty grid). The grid is status/sprints.md below format 2.2; in a release of format 2.2 it is
+read from status/data/status.json (lib/ownership.py grid): the lowest sprint holding a to-do,
+in progress or blocked milestone of another epic. An existing Epic line, epic tag or Starts value is kept and reported; a
 missing epic file is refused. Each file is read right before its write. Then the Decided cards
 of queue.md are synced with the lanes (lib/board.py sync): each card whose decision is now In
 progress is ticked and gets "#E<n>". A release of format 2.1 keeps its queue in item files

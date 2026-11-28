@@ -17,6 +17,11 @@ write (rollup): the status of a spec, an epic and a sprint, from the milestones 
 release of format 2.2 an epic is counted so only once it has gone (a "starts:" value); before
 that it is to-do, and blocked with the reason DELEGATE_REASON while every row of its Ownership
 table has a Spec cell (epic_state). Its entry has "reason" there.
+In a release of format 2.2 (spec 04, D13) this file is also the store of each milestone's
+"sprint" (kept for a started milestone, placed again for the others by lib/ownership.py
+compute, which reads the started columns from here) and of "launched", true from its first
+sprints/mark.py launch on; lib/ownership.py grid reads the grid rows from here, and the release
+has no status/sprints.md. Below 2.2 "sprint" is the column of status/sprints.md.
 Everything else in the file is rebuilt from the specs on every write (build), in the shape of
 the status board: release, updated, root, statuses, sprints, epics, specs, milestones, tasks.
 
@@ -25,7 +30,7 @@ task is "<spec>-<number>" ("27-03"), a spec its number, an epic "E11".
 
 set_status changes one milestone or task, then runs the chain: the roll-up of a task into its
 milestone, the JSON file, the grid (lib/grid.py refresh, which draws status/sprints.md from this
-file and ends in sync), status.data.js (and, for a release of format 2.1, queue.data.js, the
+file below format 2.2, writes no grid file in format 2.2, and ends in sync), status.data.js (and, for a release of format 2.1, queue.data.js, the
 queue data of the page, lib/queue.py), and the "status:" front matter line of every task, spec
 and epic file (mirror). Nobody writes a status by hand.
 - A task set to done with an open "Owner:" box in its Verification list becomes blocked with
@@ -251,11 +256,20 @@ def build(folder, release, stored=None):
     links = dict(coll["rows"])
     scope = {m.group(1): m.group(5) for m in C.load("sprints/swimlanes").PLAN_ROW_RE.finditer(
         C.read(plan) if plan.is_file() else "")}
-    gcols = o.grid_columns(folder)
     by_name = {m["name"]: m for m in comp["milestones"]}
     stem = {b["name"]: b["tracker"].name.removesuffix("-tracker.md")
             for bl in coll["blocks"].values() for b in bl}
     epic_of = {num: o.spec_epic(p) for num, p in coll["docs"]}
+    fmt = (load(folder) or {}).get("format") or C.skill_version()
+    new = version(fmt) >= NEW_FORMAT
+    if new:
+        # Format 2.2: the status file is the store of the sprint. The placement (comp, which
+        # keeps the column of a started milestone from this file) gives it to each milestone of
+        # a spec in an epic; there is no grid file to read it back from.
+        gcols = {m["name"]: comp["col"][m["name"]] for m in comp["milestones"]
+                 if epic_of.get(m["spec"]) and m["name"] in comp["col"]}
+    else:
+        gcols = o.grid_columns(folder)
     milestones, tasks = [], []
 
     def task_entry(num, t, mid):
@@ -281,6 +295,8 @@ def build(folder, release, stored=None):
             e = {"id": mid, "name": b["name"], "number": n, "section": b["id"] or f"2.2.{n}", "ref": f"{num}.{n}",
                  "epic": epic, "spec": num, "sprint": f"S{col}" if col else ""}
             e.update(keep(old_m.get(mid, {}), with_commit=True))
+            if new:
+                e["launched"] = bool(old_m.get(mid, {}).get("launched"))
             e.update(critical=b["name"] in comp["paths"].get(epic_of.get(num), []),
                      depends=[stem[d] for d in m.get("deps", []) if d in stem],
                      outcome=scope.get(num, ""), files=m.get("files", []))
@@ -311,8 +327,7 @@ def build(folder, release, stored=None):
         epics.append({"id": f"E{n}", "name": head.group(1) if head else (mine[0]["title"] if mine else ""),
                       "status": rollup(s["status"] for s in mine),
                       "specs": [s["id"] for s in mine]})
-    fmt = (load(folder) or {}).get("format") or C.skill_version()
-    if version(fmt) >= NEW_FORMAT:
+    if new:
         for e in epics:
             word, why = epic_state(o, folder, int(e["id"][1:]), e["status"], milestones, tasks)
             specs_ = e.pop("specs")
@@ -465,8 +480,10 @@ def find(data, ident):
     return None, None
 
 
-def set_status(folder, release, ident, status, reason="", commit="", locked=False, boxes_in=None):
-    """Set one milestone or task and run the chain. Returns (kind, entry, the word stored), the
+def set_status(folder, release, ident, status, reason="", commit="", locked=False, boxes_in=None,
+               launched=False):
+    """Set one milestone or task and run the chain. launched (sprints/mark.py launch): in a
+    release of format 2.2 the milestone's "launched" becomes true, and stays true. Returns (kind, entry, the word stored), the
     word None when nothing changed (then nothing is written); the word is that of the release's
     format (say), and status may be a word of either format (canon). Dies on an unknown id, a
     spec or an epic, a word that is not one of the five, a missing reason, a task set to done
@@ -502,6 +519,8 @@ def set_status(folder, release, ident, status, reason="", commit="", locked=Fals
     new = {"status": status, "reason": reason if status in WITH_REASON else ""}
     if kind == "milestone":
         new["commit"] = commit if status == "done" else ""
+        if launched and new_form(folder):
+            new["launched"] = True
     if all(e[k] == v for k, v in new.items()):
         return kind, e, None
     e.update(new, changed=now())
@@ -518,6 +537,6 @@ def set_status(folder, release, ident, status, reason="", commit="", locked=Fals
     write_json(path(folder), dump(data))
     CHANGED.append(path(folder))
     C.load("lib/grid").refresh(folder, release, quiet=True, locked=locked)
-    if (folder / C.SPRINTS_MD).is_file():
+    if new_form(folder) or (folder / C.SPRINTS_MD).is_file():
         C.load("sprints/swimlanes").write(folder, release, quiet=True)
     return kind, e, say(folder, status)

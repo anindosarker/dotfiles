@@ -233,7 +233,8 @@ def check_decision(folder, d, epic):
 
 
 def grid_cells(folder, num):
-    """{milestone name: its grid cell} of the rows of spec num in status/sprints.md."""
+    """{milestone name: its grid cell} of the rows of spec num in the grid (lib/ownership.py grid:
+    the status file in format 2.2, status/sprints.md below)."""
     out = {}
     for label, cells in own().grid(folder)[1]:
         m = re.match(r"^E\d+\s+(\d{2}(?:\.\d+)?)\s+(.*)$", label)

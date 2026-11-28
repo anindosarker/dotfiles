@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""The only writer of the run marks in status/sprints.md: set one milestone's cell, then run the
-refresh chain and commit, as one command per event.
+"""The only writer of the run marks: set one milestone's run status (in status/data/status.json,
+or the cell in status/sprints.md of a release without that file), then run the refresh chain
+and commit, as one command per event. In a release of format 2.2 no grid file is written or
+committed (lib/grid.py).
 
 Usage: python3 -I sprints/mark.py <release> <milestone> launch|wait|resume|merge|stop [--reason "<text>"] [--commit <sha>] [--owner X] [--root PATH]
 
@@ -66,8 +68,10 @@ def milestone_of(own, folder, release, key):
 
 def mark_status(a, st, root, folder, key, num, name):
     """A release with status/data/status.json: the verb is a status of that file (lib/status.py).
-    launch: in progress. resume, on a blocked milestone only: in progress when it was launched
-    before (a launch commit of this script is in the history of status/sprints.md), not started
+    launch: in progress; in a release of format 2.2 also "launched": true in the milestone's
+    entry, which no later verb changes. resume, on a blocked milestone only: in progress when it
+    was launched before (format 2.2: its "launched" value; below: a launch commit of this script
+    is in the history of status/sprints.md, lib/ownership.py launched_keys), not started
     (to-do in a release of format 2.2) when it never was. merge: done, with --commit (a commit hash), refused while a
     task of the milestone is not done, skipped or waiting for the owner's look. wait and stop:
     blocked, with --reason; a stop whose reason starts with a decision id ("D15 ...") is
@@ -85,12 +89,14 @@ def mark_status(a, st, root, folder, key, num, name):
     with open(C.lock_file(folder), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         with contextlib.redirect_stdout(io.StringIO()):
-            _, e, stored = st.set_status(folder, a.release, key, word, a.reason, a.commit, locked=True)
+            _, e, stored = st.set_status(folder, a.release, key, word, a.reason, a.commit, locked=True,
+                                         launched=a.action == "launch")
         if stored is None:
             late = st.pending(folder) and st.commit(root, folder, [], f"docs(plan): {a.release} {key} {a.action}")
             print(f"{key}: already {st.say(folder, e['status'])}, nothing changed" + ("; an earlier failed commit is made now" if late else ""))
             return
-        paths = [folder / C.SPRINTS_MD, folder / "decisions.md", *C.load("lib/queue").commit_paths(folder)]
+        paths = [*C.load("lib/grid").grid_files(folder), folder / "decisions.md",
+                 *C.load("lib/queue").commit_paths(folder)]
         paths += sorted((folder / C.EPICS_DIR).glob("E*.md"))
         st.commit(root, folder, paths, f"docs(plan): {a.release} {key} {a.action}")
         fcntl.flock(lock, fcntl.LOCK_UN)

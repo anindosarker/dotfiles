@@ -23,6 +23,14 @@ writing no Starts line. The current sprint is the first column of status/sprints
 "[ ]", "[~]" or "·" cell of an epic row; when there is none, the column after the last column holding
 an epic row (S1 for an empty grid). For an epic's own start its own rows are ignored.
 
+Where the grid comes from: one reader, grid(), gives the rows to every grid reader here
+(current_sprint, started_columns, grid_columns, grid_epics, held_unlaunched, finished_epics).
+In a release of format 2.2 (spec 04, D13) it builds them from status/data/status.json: each
+milestone's "sprint" is its column and its status its mark, and "launched before" is the
+milestone's "launched" value (launched_keys). No file and no git history is read there, and the
+release has no status/sprints.md. Below 2.2 the rows are those of status/sprints.md and
+launched_keys reads its git history, as written above.
+
 Critical path per epic, computed on the fly (never stored): over that epic's milestones only (a
 spec's epic is its "- Epic: E<n>" line), with the Depends on and shared-file edges inside the
 epic; the longest chain, ties by lower spec number.
@@ -427,7 +435,12 @@ def epic_starts(folder):
 
 
 def grid(folder):
-    """(column count, [(row label, cells)]) of status/sprints.md; (0, []) when missing."""
+    """(column count, [(row label, cells)]) of the grid: the one reader of the grid readers below.
+    In a release of format 2.2 the rows come from status/data/status.json (stored_grid) and no
+    file is opened. Below 2.2 they are those of status/sprints.md; (0, []) when it is missing."""
+    st = C.load("lib/status")
+    if st.new_form(folder):
+        return stored_grid(st, folder)
     path = folder / SPRINTS_MD
     if not path.is_file():
         return 0, []
@@ -436,6 +449,20 @@ def grid(folder):
         return 0, []
     n = len(head) - 1
     return n, [(r[0], (r[1:] + [""] * n)[:n]) for r in data if r and r[0]]
+
+
+def stored_grid(st, folder):
+    """(column count, [(row label, cells)]) of a release of format 2.2, from its status file: one
+    row "E<n> <spec> <name>" per milestone entry with a sprint, its mark (lib/status.py MARKS,
+    from its status) in the column of that sprint, rows in the order of the file."""
+    rows = []
+    for m in (st.load(folder) or {}).get("milestones", []):
+        c = re.fullmatch(r"S(\d+)", m.get("sprint") or "")
+        if c and m.get("epic"):
+            rows.append((f"{m['epic']} {m['spec']} {m['name']}",
+                         [""] * (int(c.group(1)) - 1) + [st.MARKS.get(m["status"], "·")]))
+    n = max([len(c) for _, c in rows] + [0])
+    return n, [(label, c + [""] * (n - len(c))) for label, c in rows]
 
 
 def current_sprint(folder, exclude=None):
@@ -456,7 +483,7 @@ def current_sprint(folder, exclude=None):
 
 
 def started_columns(folder, milestones):
-    """{milestone name: (grid column, finished)} of each milestone whose status/sprints.md row
+    """{milestone name: (grid column, finished)} of each milestone whose grid row (grid)
     is running or waiting ("[ ]", "[~]") or finished ("[x]" or "[!]"), except a waiting row that
     was never launched (held_unlaunched)."""
     names = {m["name"] for m in milestones} - held_unlaunched(folder)
@@ -475,8 +502,12 @@ LAUNCH_SUBJECT_RE = re.compile(r"^docs\(plan\): \S+ (\S+) launch$")
 
 def launched_keys(folder):
     """The tracker keys (the tracker file name without "-tracker.md") of every milestone ever
-    launched: those named by a "docs(plan): <release> <key> launch" commit of sprints/mark.py in
-    the history of status/sprints.md. None when git cannot tell."""
+    launched. Format 2.2: the milestone entries of the status file with "launched" true; no git
+    history is read. Below 2.2: those named by a "docs(plan): <release> <key> launch" commit of
+    sprints/mark.py in the history of status/sprints.md. None when git cannot tell."""
+    st = C.load("lib/status")
+    if st.new_form(folder):
+        return {m["id"] for m in (st.load(folder) or {}).get("milestones", []) if m.get("launched")}
     r = subprocess.run(["git", "-C", str(folder), "log", "--format=%s", "--", SPRINTS_MD],
                        capture_output=True, text=True)
     if r.returncode != 0:
@@ -485,12 +516,17 @@ def launched_keys(folder):
 
 
 def held_unlaunched(folder):
-    """Names of the milestones whose status/sprints.md cell is "[~]" and that were never launched
+    """Names of the milestones whose grid cell (grid) is "[~]" and that were never launched
     (launched_keys): a hold put on a planned milestone. They count as "·" where a started row
     differs: the column they keep, a row whose milestone is gone, the specs status/report.py
     counts as built. A milestone's key is its tracker name (milestone_tracker); for a row whose
     milestone is gone from its spec, every name milestone_tracker could have given it. Empty when
-    git cannot tell."""
+    git cannot tell. Format 2.2: the blocked milestone entries of the status file with "launched"
+    false."""
+    st = C.load("lib/status")
+    if st.new_form(folder):
+        return {m["name"] for m in (st.load(folder) or {}).get("milestones", [])
+                if m.get("status") == "blocked" and not m.get("launched")}
     rows = []
     for label, cells in grid(folder)[1]:
         m = re.match(r"^E\d+\s+(\d{2}(?:\.\d+)?)\s+(.*)$", label)
@@ -654,7 +690,8 @@ GRID_ROW_RE = re.compile(r"^E\d+\s+\d{2}(?:\.\d+)?\s+(.*)$")
 
 
 def grid_columns(folder):
-    """{milestone name: its column in status/sprints.md (1-based, the first non-blank cell)}."""
+    """{milestone name: its grid column (grid: its sprint in format 2.2, its column in
+    status/sprints.md below; 1-based, the first non-blank cell)}."""
     _, rows = grid(folder)
     out = {}
     for label, cells in rows:
@@ -666,7 +703,8 @@ def grid_columns(folder):
 
 
 def grid_epics(folder):
-    """Epic numbers with at least one row in status/sprints.md."""
+    """Epic numbers with at least one row in the grid (grid: the status file in format 2.2,
+    status/sprints.md below)."""
     _, rows = grid(folder)
     return {int(m.group(1)) for label, _ in rows if (m := re.match(r"^E(\d+)\s", label))}
 
@@ -1023,7 +1061,8 @@ def fill_epic(folder, n, given=None, quiet=False):
 
 def finished_epics(folder):
     """Epic numbers that are finished: every decision tagged with the epic is in Done, or the
-    epic has rows in status/sprints.md and every one is "[x]" or "[!]"."""
+    epic has rows in the grid (grid: the status file in format 2.2, status/sprints.md below) and
+    every one is "[x]" or "[!]"."""
     tags = read_tags(folder)
     _, rows = grid(folder)
     marks = collections.defaultdict(list)
@@ -1048,7 +1087,7 @@ def unfinished_started_epics(folder):
 
 def sync_sprint_columns(folder, comp):
     """The refresh chain and sprints/sync_epic_sprints.py: set the Sprint cell of every row of each unfinished epic that has gone (a
-    Starts value) from status/sprints.md; no other cell or line changes. Returns the paths
+    Starts value) from the grid (grid); no other cell or line changes. Returns the paths
     written."""
     gcols = grid_columns(folder)
     by_spec = spec_milestones(comp)
@@ -1100,7 +1139,7 @@ def epic_gaps(folder, comp):
             continue
         if rows is None:
             if n in with_rows:
-                out.append(f"{rel}: no {OWN_HEAD} table, but E{n} has rows in {SPRINTS_MD}")
+                out.append(f"{rel}: no {OWN_HEAD} table, but E{n} has rows in {'the status file' if C.load('lib/status').new_form(folder) else SPRINTS_MD}")
             continue
         have_d = {r["decision"] for r in rows}
         for d in ([] if table_form(folder) else epic_decisions(text)):

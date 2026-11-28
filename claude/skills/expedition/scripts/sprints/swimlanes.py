@@ -4,7 +4,8 @@
 
 Usage: python3 -I sprints/swimlanes.py <release> [--owner X] [--root PATH]
 
-Reads status/sprints.md (grid), the ownership facts (lib/ownership.py compute, in memory: each
+Below status/data/status.json (a release without it, see the last paragraph): reads
+status/sprints.md (grid), the ownership facts (lib/ownership.py compute, in memory: each
 milestone's dependencies and files, each epic's critical path computed on the fly) and
 <release>-plan.md (Deliverables). Each epic's path milestones are marked critical; the data
 holds criticalPaths {"E6": [names]} and criticalPath, their union, for older pages.
@@ -17,7 +18,8 @@ is found.
 In a release with status/data/status.json none of that is written: the page is
 board/task-board.html, which reads status/data/status.data.js (lib/status.py) and, in a release
 of format 2.1, status/data/queue.data.js for its Queue view (lib/queue.py), and this script only
-keeps the page and those files current (refresh_board).
+keeps the page and those files current (refresh_board); it reads no grid file there, and a
+release of format 2.2 has none.
 Refreshes status/index.html from board/swimlanes.html when the template is newer or the
 page is missing. Both are renders, ignored by git (plan/new_release.py and migrate/pre-v1.0/layout.py add
 the .gitignore lines), never committed. Writes nothing else. sprints/refresh.py runs it last, after

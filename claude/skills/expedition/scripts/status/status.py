@@ -19,7 +19,8 @@ skipped), stores the word of the release's format and prints it (lib/status.py).
 set works on a task or a milestone; the status of a spec and an epic is counted. It writes the
 JSON file, rolls a task change up into its milestone, counts the spec, the epic and the sprint,
 writes the same word into the "status:" front matter line of the task, spec and epic files,
-draws status/sprints.md again, writes the page data and commits what changed. A task set to
+draws status/sprints.md again (below format 2.2; a release of format 2.2 has no grid file),
+writes the page data and commits what changed. A task set to
 done with an open "Owner:" box becomes blocked, "waits for the owner's look"; with another open
 Verification box the change is refused. A milestone's done is its merge: it needs --commit, a
 commit hash, and is refused while one of its tasks is not done, skipped or waiting for the
@@ -139,7 +140,8 @@ def main():
             late = st.pending(folder) and st.commit(root, folder, [], f"docs(plan): {a.release} {kind} {ident} {now}")
             print(f"{kind} {ident}: already {now}, nothing changed" + ("; an earlier failed commit is made now" if late else ""))
             return
-        paths = [folder / C.SPRINTS_MD, folder / "decisions.md", *C.load("lib/queue").commit_paths(folder)]
+        paths = [*C.load("lib/grid").grid_files(folder), folder / "decisions.md",
+                 *C.load("lib/queue").commit_paths(folder)]
         paths += sorted((folder / C.EPICS_DIR).glob("E*.md"))
         st.commit(root, folder, paths, f"docs(plan): {a.release} {kind} {ident} {stored}")
         fcntl.flock(lock, fcntl.LOCK_UN)

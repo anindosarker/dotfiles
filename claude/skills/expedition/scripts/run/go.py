@@ -16,10 +16,12 @@ Steps, each skipped when already done, so a rerun after a failure picks up where
 2. commit: the epic's spec files and their trackers, decisions.md, queue.md, <release>-plan.md
    and the epic file, when any of them changed.
 3. grid: sprints/refresh.py (the grid, the epic files' Sprint column, the decisions lanes, the
-   queue sync, the swimlane data). Done when every milestone of the epic's specs has a row in status/sprints.md.
+   queue sync, the swimlane data). Done when every milestone of the epic's specs has a row in status/sprints.md
+   (in a release of format 2.2, which has no grid file: a "sprint" in status/data/status.json, and
+   the step recorded in status/data/go.log, because the tag step already stores the sprints).
 4. epic file: the "Specs:" line (none in format 2.2) and the final table (the epics/table.py fill, the Sprint column
    from the grid); commits the epic files (plan/epics/E<n>.md by number, nothing else in that
-   folder), status/sprints.md, decisions.md and queue.md when any of them changed.
+   folder), status/sprints.md (none in format 2.2), decisions.md and queue.md when any of them changed.
 5. close writer: runner.sh stop "<release> specs E<n>". Skipped when runner.sh list shows that
    window stopped; a window runner.sh does not list at all leaves nothing to close.
 6. run: runner.sh start <release> --from <lead> when runner.sh list shows no live runner of the
@@ -27,7 +29,7 @@ Steps, each skipped when already done, so a rerun after a failure picks up where
    folder>/plan/epics/E<n>.md from <lead>" (<release folder> relative to the repository).
 7. next epic: epics/new.py <release> E<n+1>, when that file does not exist.
 
-Steps 5 and 6 have no trace in the plan files: each is recorded in status/data/go.log (a
+Steps 5 and 6 (and step 3 in format 2.2) have no trace in the plan files: each is recorded in status/data/go.log (a
 git-ignored script output, like the swimlane data) once it succeeds, and a rerun skips a step
 recorded there. On the first failure it prints one line naming the step, runs nothing after it
 and exits 1. On success it prints one summary line.
@@ -194,7 +196,16 @@ class Go:
     def step_grid(self):
         specs, _ = self.specs()
         have = self.own.grid_columns(self.folder)
-        if all(m["name"] in have for m in self.milestones_of(specs)):
+        placed = all(m["name"] in have for m in self.milestones_of(specs))
+        if C.load("lib/status").new_form(self.folder):
+            # Format 2.2: the status chain of the tag step already stores a sprint for each
+            # milestone, so a sprint does not show that the refresh chain ran; go.log does.
+            if placed and self.logged("grid"):
+                return False
+            self.script("sprints/refresh.py")
+            self.log("grid")
+            return True
+        if placed:
             return False
         self.script("sprints/refresh.py")
         return True
@@ -215,7 +226,8 @@ class Go:
         epics = [own.epic_path(self.folder, k) for k in own.epic_numbers(self.folder)]
         # status.json and the "status:" lines the refresh mirrored into this epic's spec folders.
         mirrored = [p for s in specs for p in sorted((self.folder / own.SPECS_DIR).glob(f"{s}-*"))]
-        return self.commit([*epics, *mirrored, self.folder / C.load("lib/status").FILE, self.folder / own.SPRINTS_MD,
+        return self.commit([*epics, *mirrored, self.folder / C.load("lib/status").FILE,
+                            *C.load("lib/grid").grid_files(self.folder),
                             self.folder / "decisions.md", *C.load("lib/queue").commit_paths(self.folder)],
                            f"docs(plan): {self.release} E{self.n} go: grid and epic file")
 

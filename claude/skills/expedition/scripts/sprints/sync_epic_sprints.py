@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Rewrite the Sprint column of the "## Ownership" table of every unfinished epic that has gone
-(a Starts value, not every decision in Done) from status/sprints.md, touching only that column
+(a Starts value, not every decision in Done) from the grid (status/data/status.json in a release
+of format 2.2, status/sprints.md below), touching only that column
 (lib/ownership.py sync_sprint_columns); finished epics' files are left alone. Prints each file
 it changed. Commits nothing.
 

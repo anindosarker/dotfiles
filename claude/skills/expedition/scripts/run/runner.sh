@@ -316,6 +316,22 @@ check_release() {
   [[ "$1" =~ ^v[0-9]+\.[0-9]+\.x$ ]] || die "bad release '$1', expected like v0.9.x"
 }
 
+# no_grid_file <release> <folder>: true when the release, found under .ai/plans/ of the git
+# repository of <folder>, is of format 2.2 or higher (the "format" of its status file): such a
+# release has no status/sprints.md (spec 04, D13). False when no status file is found or it
+# cannot be read: a release of format 1.0 has none and keeps its grid file.
+no_grid_file() {
+  python3 -I - "$1" "$2" <<'PY' 2>/dev/null
+import json, re, subprocess, sys
+from pathlib import Path
+release, folder = sys.argv[1], sys.argv[2]
+top = subprocess.run(["git", "-C", folder, "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
+files = sorted(Path(top or folder).glob(f".ai/plans/{release}/*/status/data/status.json"))
+fmt = json.loads(files[0].read_text(encoding="utf-8")).get("format") or "1.0" if files else "1.0"
+sys.exit(0 if tuple(int(x) for x in re.findall(r"\d+", fmt)) >= (2, 2) else 1)
+PY
+}
+
 # new_cwd [PATH]: the absolute folder a new window opens in: PATH, else the caller's folder.
 new_cwd() {
   if [ -n "${1:-}" ]; then
@@ -385,7 +401,11 @@ cmd_start() {
                 --settings "$SETTINGS" --append-system-prompt-file "$brief")
   if [ "$resume" = 1 ]; then
     cmd+=(--resume "$uuid")
-    prompt="ultracode. You are $name, resumed. Re-read the appended brief, then continue every epic that has a running row in status/sprints.md."
+    if no_grid_file "$release" "$cwd"; then
+      prompt="ultracode. You are $name, resumed. Re-read the appended brief, then continue every epic that has a milestone in progress."
+    else
+      prompt="ultracode. You are $name, resumed. Re-read the appended brief, then continue every epic that has a running row in status/sprints.md."
+    fi
   else
     cmd+=(--session-id "$uuid")
   fi

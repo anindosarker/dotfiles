@@ -9,7 +9,12 @@ earlier release (else the skill template), and the sub-folders:
 
 status/index.html is copied from board/task-board.html. status/index.html and status/data/
 are renders, never committed: the two .ai/plans/*/*/status/ lines are appended to the repo's
-.gitignore when missing. status/sprints.md and status/data/ are written later by sprints/refresh.py.
+.gitignore when missing. status/data/ (and status/sprints.md, below format 2.2) are written later
+by sprints/refresh.py.
+
+The plan file follows the skill's version too: templates/plan.md holds the form of 2.2, with no
+link to status/sprints.md; below 2.2 the script adds the link (PLAN_LINK), as releases of that
+format have the file.
 
 The queue takes the form of the skill's version (SKILL.md), which is also the new release's
 format: below 2.1 the board stub from templates/queue.md; from 2.1 on queue.md from
@@ -40,6 +45,10 @@ def _common():
 
 C = _common()
 die, detect_owner = C.die, C.detect_owner
+# Below format 2.2 the plan file links the grid file (spec 04, D13); templates/plan.md has the 2.2 form.
+PLAN_DECISIONS = "Decisions: [decisions.md](decisions.md)."
+PLAN_LINK = " Sprints: [status/sprints.md](status/sprints.md)."
+NO_GRID_FILE = (2, 2)
 
 
 def write_new(path, text):
@@ -111,6 +120,10 @@ def main():
     write_new(folder / "process.md", process_text(root, owner, a.release))
     c = a.release
     plan = "".join(l + "\n" for l in from_template("plan.md", c, None).splitlines() if not l.startswith("| [NN]"))
+    if C.load("lib/status").version(C.skill_version()) < NO_GRID_FILE:
+        if PLAN_DECISIONS not in plan:
+            die(f"templates/plan.md has no line starting {PLAN_DECISIONS!r}: restore it from git")
+        plan = plan.replace(PLAN_DECISIONS, PLAN_DECISIONS + PLAN_LINK, 1)
     write_new(folder / f"{c}-plan.md", plan)
     today = datetime.date.today().isoformat()
     write_new(folder / "decisions.md", from_template("decisions.md", c, today))
