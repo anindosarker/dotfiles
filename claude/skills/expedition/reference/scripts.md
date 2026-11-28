@@ -266,6 +266,12 @@ For any session that is about to run a command of the skill: how to run them, th
 - Does: moves a format 1.0 release to spec folders, task files and the status store, in one commit; counts before and after must be equal; details in [migrate.md](migrate.md)
 - When: once per release that is in work, when no milestone runs
 
+### migrate/v2.0-v2.1/format.py
+
+- Command: `python3 -I <skill>/scripts/migrate/v2.0-v2.1/format.py v0.<n>.x [--check] [--owner X] [--root PATH]`
+- Does: moves the queue of a format 2.0 release from the board `queue.md` to one item file per card under `queue/` and `queue.md` as a list, sets the format to 2.1, in one commit; `--check` prints what it would write and the counts, and writes nothing; details in [its README](../scripts/migrate/v2.0-v2.1/README.md)
+- When: once per format 2.0 release that should use queue item files
+
 ### queue/item.py
 
 - Command: `python3 -I <skill>/scripts/queue/item.py v0.<n>.x D|Q "<title>" [--source Q<n>] [--option <n>] [--bullet "<text>"] [--new-round]`, `--move Q<n> Open|Later|Dropped|Autofix`, `--fact Q<n> "<text>"`
