@@ -46,7 +46,7 @@ Scripts are classic `<script src>` files that share one global scope, loaded in 
   updated: "2026-11-28 07:00",                                          local time, YYYY-MM-DD HH:MM
   roots:   { plan: "/abs/plan/folder", status: "/abs/status/root" },   only in dashboard.data.js
   sources: { ... },                                                     for people, not shown
-  rows: [{ kind, id, label, title, status, turn, ready, command, depends_on, decider, decision, reason, progress, root, file, details }]
+  rows: [{ kind, id, label, title, status, turn, ready, command, hold, depends_on, decider, decision, reason, progress, root, file, details }]
 }
 ```
 
@@ -54,9 +54,9 @@ The skill's Python scripts write both files from this section (v2.1.x D14), in t
 
 A decision row copies the `status` line and the `decider` line of its decision file `decisions/D<n>-<slug>.md` (D9, D16); a file with no `decider` line gives `decider: ""` (a decision moved from a board has none until `scripts/decisions/decider.py` sets it). The rows are in the order of the numbers, and `sources` names the folder `decisions/`.
 
-Format 2.2 releases with the board: a release whose `decisions.md` is still a board (not yet moved by `scripts/migrate/v2.1-v2.2/`) takes a decision row's `status` from the lane of its card (To do `to-do`, In progress `in progress`, Done `done`; Done with the tag `#deferred` `backlog`, with `#superseded` `archived`). Such a row is never `blocked`, has `decider: ""`, and its file is `decisions.md`.
+Format 2.2 releases with the board: a release whose `decisions.md` is still a board (not yet moved by `scripts/migrate/v2.1-v2.2/`) takes a decision row's `status` from the lane of its card (To do `to-do`, In progress `in progress`, Done `done`; Done with the tag `#deferred` `backlog`, with `#superseded` `archived`). Such a row is never `blocked`, has `decider: ""`, and its file is `decisions.md`. It has no `hold` field (a hold needs decision files); `ready` is `true` for a decision that is `to-do` with no epic tag, and its `turn` is `lead` while it is `to-do`.
 
-Fields of every row. A text field with no value is `""`; `ready` is always `true` or `false`; `progress` is present on epics only, `decision` on queue rows only.
+Fields of every row. A text field with no value is `""`; `ready` is always `true` or `false`; `progress` is present on epics only, `decision` on queue rows only, `hold` on the decision rows of a release whose decisions are files only.
 
 | Field | Stored or worked out | Meaning |
 |---|---|---|
@@ -65,9 +65,10 @@ Fields of every row. A text field with no value is `""`; `ready` is always `true
 | `label` | worked out | the text on the id chip: the id; a milestone's ref (`93.3`); a task's `<spec>-<number>` |
 | `title` | stored | the item's title |
 | `status` | stored | the column: `to-do`, `in progress`, `blocked`, `done`, `backlog`, `archived` (Status, below); cards have no status pill |
-| `turn` | worked out | whose move: `you` (person icon, marker color), `lead` (compass, muted), `agent` (bot, muted); `""` on an item that is `done`, `archived` or `backlog` |
-| `ready` | worked out | `true` only for a decision that is `to-do` and in no epic: it waits for the owner's go. No person icon; the side panel shows "Ready: waits for your go (compose D<n>)" |
+| `turn` | worked out | whose move: `you` (person icon, marker color), `lead` (compass, muted), `agent` (bot, muted); `""` on an item that is `done`, `archived` or `backlog`, and on a held decision |
+| `ready` | worked out | `true` only for a decision that is `to-do`, has no `epic` line, has no row in the Ownership table of an epic file, and has no hold or a hold that is over: it waits for the owner's go. The rule is `is_ready` of `scripts/lib/decisions.py`, the same rule as the `Ready:` list of `scripts/epics/overlap.py`. The side panel shows "Ready: waits for your go (compose D<n>)" |
 | `command` | worked out | `compose` when `ready`, else `""` |
+| `hold` | stored | decisions only: the owner's hold, `yes` or `until <id>` (a queue item, a decision or an epic), from `decisions.D<n>.hold` of `data/status.json` (`scripts/decisions/hold.py`); `""` when there is none. A hold `until <id>` is over when `<id>` is `done` or `archived`. The page does not show it |
 | `depends_on` | stored | queue items: the ids the item waits for, as written (`Q14, Q15`); shown in the side panel |
 | `decider` | stored or worked out | `you`, `lead` or `agent`: who made the call (Decider, below). Shown as "decided by ..." on a closed queue card and on a decision card, and in the side panel of every kind |
 | `decision` | stored | queue rows only: the id of the decision made from the item (`D8`), else `""`; a chip in the Queue view |
@@ -98,8 +99,10 @@ Turn. An item that is `done`, `archived` or `backlog` has `turn: ""`. For every 
 | queue | `to-do`, its item file has an `## Options:` section | `you` |
 | queue | `to-do`, no `## Options:` section, or no item file | `lead` |
 | queue | `blocked` | `lead` |
-| decision | `to-do` (in no epic: `ready: true`, `command: compose`) | `lead` |
-| decision | `in progress` or `blocked` | `agent` |
+| decision | `ready: true` (`command: compose`) | `you` |
+| decision | `to-do` or `blocked`, with a hold that is not over | `""`: the owner chose to wait, so it is not in "N need you" |
+| decision | `to-do`, not ready and not held (an epic file names it and the owner has not said `delegate`) | `lead` |
+| decision | `in progress`, or `blocked` and not held | `agent` |
 | epic | `blocked` (planned, rule 2) | `you` |
 | epic | `to-do` or `in progress` | `agent` |
 | milestone | `blocked`, the reason is "waits for the owner's look" or starts with `owner:` | `you` |

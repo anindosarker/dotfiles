@@ -37,7 +37,10 @@ In a release of format 2.2 the key "decisions" holds one entry per decision of t
 writes it (set_decision), every build keeps it, and a release with no such entry has no key. An
 entry also holds "files", the files the lead gave for a decision no spec cites yet
 (epics/overlap.py --files, spec 07 module 1.6.2); every build drops them by the rule of
-lib/decisions.py kept_entries.
+lib/decisions.py kept_entries. An entry also holds the hold of the decision (spec 10, D17):
+"hold" ("yes" or "until <id>") and, with "yes", "hold_reason", written by decisions/hold.py
+(set_decision); every build keeps them, in status.data.js too, until the decision is no longer
+to-do or blocked (kept_entries), and epics/new.py removes them from each decision it takes.
 Everything else in the file is rebuilt from the specs on every write (build), in the shape of
 the status board: release, updated, root, statuses, sprints, epics, specs, milestones, tasks.
 
