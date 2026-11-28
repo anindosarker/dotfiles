@@ -23,8 +23,8 @@ The lane is the state, from the Done rule (rule_lanes):
    hold a task of a module citing it; a citing module with no task in a milestone keeps it In
    progress, except in a spec migrate/v1.0-v2.0/format.py marked "migrated: true".
 3. No such row: Done when it is closed by hand (a ticked card in Done: decisions/close.py writes
-   it for a decision with nothing to run, migrate/pre-v1.0/decisions.py for an old "[Done]" tag line) or
-   when any spec citing it has merged; In progress when it carries "#E<n>"; else To do.
+   it for a decision with nothing to run) or when any spec citing it has merged; In progress
+   when it carries "#E<n>"; else To do.
 The checkbox is [x] only in Done. sync() moves every card whose lane disagrees with the rule,
 sets every card's tick to its lane and writes its tags in the order above; the scripts are the
 only writers of lanes, ticks and tags (a drag or tick in the extension is not a state change).
@@ -160,8 +160,7 @@ def is_list(text):
 
 def is_board(text):
     """True when decisions.md is in a form the scripts read, not in the old heading format: the
-    board, or the list of the file form. migrate/pre-v1.0/decisions.py refusal and the release
-    lookup of lib/common.py ask this; is_kanban asks for the board alone."""
+    board, or the list of the file form. is_kanban asks for the board alone."""
     return is_kanban(text) or is_list(text)
 
 

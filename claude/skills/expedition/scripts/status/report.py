@@ -80,10 +80,8 @@ not one of [x], [ ], [~], ·, [!] or blank, or with rows that differ from the mi
 with an Epic line. In a release of format 2.2 status/sprints.md is not read and not required: the
 gaps are the file itself when it is left over, and a milestone of an epic with no "sprint" in the
 status file (fix: sprints/refresh.py). Ownership also prints each tagged epic's critical path,
-computed on the fly. A folder without plan/ is refused (migrate/pre-v1.0/layout.py), a folder still on
-the old queue files too (migrate/pre-v1.0/queue.py), a decisions.md in the heading format too
-(migrate/pre-v1.0/decisions.py), a folder that still has status/ownership.md too
-(migrate/pre-v1.0/epics.py), a folder that still has run/trackers/fix-*-tracker.md too (migrate/pre-v1.0/fixes.py).
+computed on the fly. A folder older than format 1.0 (no plan/, a status/ownership.md, or a
+run/trackers/fix-*-tracker.md) is refused with one line that names no script (lib/common.py).
 A tracker Status of done (or the old merged) counts as done. A tracker no milestone owns counts as citing the
 queue cards named on its first line.
 After the "Release" line, when the release folder has uncommitted changes (in format 2.2 a
@@ -908,7 +906,8 @@ def main():
             print(f"  E{e} has milestones with a sprint in the status file and no Starts value: write "
                   f"\"Starts: S<n>\" in plan/epics/E{e}.md, the sprint of its first milestone")
         elif e in marks and e in starts and not v:
-            print(f"  E{e} has rows in status/sprints.md and no Starts value: migrate/pre-v1.0/backfill_starts.py {a.release}")
+            print(f"  E{e} has rows in status/sprints.md and no Starts value: write \"Starts: S<n>\" in "
+                  f"plan/epics/E{e}.md, the sprint of its first milestone")
         elif v and not own.SPRINT_VALUE_RE.match(v):
             print(f"  plan/epics/E{e}.md: Starts '{v}' is not S<number>")
     for gap in own.epic_gaps(folder, own.compute(folder)):

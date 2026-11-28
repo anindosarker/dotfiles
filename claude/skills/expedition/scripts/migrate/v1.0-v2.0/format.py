@@ -50,7 +50,7 @@ that are not done yet, repairs the links, writes status.json last, commits and r
 marker. The result equals an uninterrupted run.
 
 Refuses: a release that has status.json already (nothing to do); a release folder with
-uncommitted changes; free-standing fix trackers (migrate/pre-v1.0/fixes.py first); milestones that do
+uncommitted changes; free-standing fix trackers (a folder older than format 1.0); milestones that do
 not schedule; a running milestone ("[ ]") unless --force: a builder in the middle of a
 milestone holds the earlier text, so let it merge first or tell it.
 """
@@ -347,7 +347,7 @@ def main():
         print(f"{MARKER} found: finishing a migration that was interrupted")
     else:
         if C.legacy_fixes(folder):
-            C.die(f"{folder} has free-standing fix trackers: run migrate/pre-v1.0/fixes.py first")
+            C.die(C.older_than_v1(folder))
         if git("status", "--porcelain", "--", ".").stdout.strip():
             C.die(f"{folder} has uncommitted changes: commit them first")
         plan = plan_of(own, st, folder, a.release, a.force)

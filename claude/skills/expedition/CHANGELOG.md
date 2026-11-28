@@ -47,6 +47,7 @@ What stops working:
 - Nothing that a 2.1 release used is removed. Every command and every flag stays, and a command takes the words of both formats.
 - In a release of format 2.2, no script writes `status/sprints.md`, and `queue.data.js` is not written.
 - In a release with decision files, `queue/item.py <release> D` without `--decider` is refused, and `decisions/supersede.py` writes no `- Supersedes` line into the new decision.
+- Files with no reader are deleted (D31): `scripts/migrate/pre-v1.0/` (8 files) and its 7 forwarders (`scripts/migrate/decisions.py`, `epics.py`, `fixes.py`, `layout.py`, `queue.py`, `statuses.py`, `scripts/sprints/backfill_starts.py`), `scripts/plan/new_cycle.py` (use `plan/new_release.py`), and the pointer files `reference/specs.md`, `reference/example-plan.md` and `templates/root-layout.md`. Commit `c86eacc` is the last that holds them. A folder older than format 1.0 (no `plan/` folder, a `status/ownership.md` or a free-standing fix tracker `run/trackers/fix-<slug>-tracker.md`) is refused with one line: the skill does not support it.
 
 Migration: [scripts/migrate/v2.1-v2.2/README.md](scripts/migrate/v2.1-v2.2/README.md).
 
@@ -118,4 +119,4 @@ Migration: [scripts/migrate/v1.0-v2.0/README.md](scripts/migrate/v1.0-v2.0/READM
 
 ## 1.0
 
-The skill before versions were kept. Folders older than that: [scripts/migrate/pre-v1.0/README.md](scripts/migrate/pre-v1.0/README.md).
+The skill before versions were kept. Folders older than that were moved by the scripts of `scripts/migrate/pre-v1.0/`, deleted in 2.2 (last held at commit `c86eacc`).

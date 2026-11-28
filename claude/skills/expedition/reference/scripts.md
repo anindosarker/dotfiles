@@ -23,7 +23,7 @@ For any session that is about to run a command of the skill: how to run them, th
 
 ## The commands by job
 
-- `plan/new_release.py v0.<n>.x`: a new release folder, in the format of the skill's version (`plan/new_cycle.py` runs the same script). In a format 1.0 release `plan/new_spec.py` writes the flat spec file and `plan/new_fix.py` adds a fix ([SKILL.md](../SKILL.md), Format 1.0 releases).
+- `plan/new_release.py v0.<n>.x`: a new release folder, in the format of the skill's version. In a format 1.0 release `plan/new_spec.py` writes the flat spec file and `plan/new_fix.py` adds a fix ([SKILL.md](../SKILL.md), Format 1.0 releases).
   - A release has its specs in folders and its statuses in the status file. A session that holds the text of an earlier version of this skill re-reads the skill whole before it creates a release.
 - `plan/new_spec.py <release> NN <slug> "<Title>" "<scope>"`: a new spec folder, with its plan row.
 - `sprints/check.py <release>`: the ownership check, after each spec is written; writes nothing.

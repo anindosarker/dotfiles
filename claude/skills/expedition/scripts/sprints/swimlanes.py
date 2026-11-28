@@ -25,7 +25,7 @@ format 2.2 has none. The page is picked by the format of the release:
 - format 2.0 and 2.1: board/task-board.html, which reads status.data.js and, in a release of
   format 2.1, status/data/queue.data.js for its Queue view (lib/queue.py).
 Refreshes status/index.html from board/swimlanes.html when the template is newer or the
-page is missing. Both are renders, ignored by git (plan/new_release.py and migrate/pre-v1.0/layout.py add
+page is missing. Both are renders, ignored by git (plan/new_release.py adds
 the .gitignore lines), never committed. Writes nothing else. sprints/refresh.py runs it last, after
 the grid chain.
 """

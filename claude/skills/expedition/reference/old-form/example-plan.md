@@ -1,4 +1,4 @@
-Example of a release `<release>-plan.md` and its sprint grid (v0.8.x), and an epic file with its Ownership table as migrate/epics.py wrote it (v0.9.x), from a real project. Its relative links point into that project's plan folder.
+Example of a release `<release>-plan.md` and its sprint grid (v0.8.x), and an epic file with its Ownership table as the migration of folders older than format 1.0 wrote it (skill commit c86eacc) (v0.9.x), from a real project. Its relative links point into that project's plan folder.
 
 # v0.8.x plan
 
