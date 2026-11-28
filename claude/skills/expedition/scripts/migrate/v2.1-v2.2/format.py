@@ -27,16 +27,21 @@ In the release folder, in one run and one commit ("docs(plan): <release> moved t
   the status file. A difference stops the run before it writes anything and names the rows.
 - <release>-plan.md: the link to status/sprints.md in the lines above its first "## " heading
   removed; the rest of the line stays.
+- The dashboard page (D15), once the status file says 2.2: status/index.html from
+  board/dashboard.html and status/src/ from board/src/ (sprints/swimlanes.py, which also removes
+  status/data/queue.data.js; the page reads the queue rows from dashboard.data.js), and the line
+  ".ai/plans/*/*/status/src/" in the repository's .gitignore (lib/common.py PAGE_SRC_IGNORE),
+  which is part of the one commit. The page and status/src/ are renders, never committed.
 
 Prints one line per file it changes and the counts: queue items per old and new status, decision
 cards, epics, specs, milestones and tasks before and after, statuses changed in the status file,
 epic files changed, whether the grid file was removed. A count that differs, or a decisions.md that
 changed, stops it before the commit and restores the files from git. --check prints the files and
-the counts it can know before the status chain runs, and writes nothing.
+the counts it can know before the status chain runs, one line for the page, and writes nothing.
 
 Refuses, writing nothing: a release that is not in format 2.1 (for 2.0 it names migrate/v2.0-v2.1,
 for 1.0 migrate/v1.0-v2.0, for 2.2 or higher it says there is nothing to change); an uncommitted
-change in a file it rewrites; an item file with a status that is not a word of format 2.1; an
+change in a file it rewrites (the .gitignore among them when it lacks the status/src/ line); an item file with a status that is not a word of format 2.1; an
 epic file whose Ownership table cannot be read.
 """
 import argparse
@@ -46,6 +51,7 @@ import importlib.util
 import io
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -303,6 +309,16 @@ def main():
         first = r.stdout.splitlines()[0][3:]
         C.die(f"{first} has uncommitted changes ({plural(len(r.stdout.splitlines()), 'path')} in all): "
               "commit them first; nothing written")
+    top = Path(git("rev-parse", "--show-toplevel").stdout.strip())
+    gi = top / ".gitignore"
+    src_line = C.render_ignores(folder, top, page_src=True)[-1]
+    gi_before = gi.read_bytes() if gi.is_file() else None
+    gi_add = src_line not in (gi_before or b"").decode("utf-8").splitlines()
+    if gi_add and git("status", "--porcelain", "--", str(gi)).stdout.strip():
+        C.die(f"{gi} has uncommitted changes and the run adds the line {src_line} to it: "
+              "commit them first; nothing written")
+    page_src = folder / "status" / "src"
+    src_before = page_src.exists()
 
     lock = None if a.check else open(C.lock_file(folder), "a")
     if lock:
@@ -354,6 +370,9 @@ def main():
     if plan:
         print(f"{pre}{rel(plan[0])}: link to {GRID} removed")
     print(f"{'would remove ' if a.check else 'remove '}{GRID}" if grid_on else f"{GRID}: none")
+    print(f"{'would install' if a.check else 'install'} the dashboard page: status/index.html from board/dashboard.html, "
+          f"status/src/ from board/src/, no {q.DATA}; {gi.name}: "
+          + (f"{'would add' if a.check else 'add'} {src_line}" if gi_add else f"has {src_line}"))
     print(f"{pre}{st.FILE}: format {TO}, {plural(renamed, 'word')} renamed (not started to to-do, skipped to archived), "
           f"launched true on {plural(len(launched), 'milestone')}")
     if a.check:
@@ -379,9 +398,11 @@ def main():
         m["launched"] = m["id"] in launched
     data["format"] = TO
     st.write_json(st.path(folder), st.dump(data))
+    sw = C.load("sprints/swimlanes")
     with contextlib.redirect_stdout(io.StringIO()):
         new_data = st.sync(folder, a.release)
-        C.load("sprints/swimlanes").write(folder, a.release, quiet=True)
+        sw.write(folder, a.release, quiet=True)  # format 2.2 now: the dashboard page
+        C.ignore_renders(folder, page_src=True)
     after = counts(q, st, dec, folder)
     print(count_line(before, after))
     changed = [f"{e['id']} from {st.say(folder, old_words[e['id']])} to {st.say(folder, e['status'])}"
@@ -404,16 +425,31 @@ def main():
         stop.append("decisions.md changed")
     if (folder / GRID).exists():
         stop.append(f"{GRID} exists again")
+    page = folder / "status" / "index.html"
+    if not page.is_file() or page.read_bytes() != sw.DASHBOARD.read_bytes() or (folder / q.DATA).exists():
+        stop.append("the dashboard page is not installed")
+    if src_line not in C.read(gi).splitlines():
+        stop.append(f"{gi} has no line {src_line}")
     if stop:
         for x in rewrites:  # one path at a time: a path HEAD does not have would stop a joint checkout
             git("checkout", "HEAD", "--", x)
+        if gi_before is None:
+            gi.unlink(missing_ok=True)
+        else:
+            gi.write_bytes(gi_before)
         left = git("status", "--porcelain", "--", *rewrites).stdout.strip()
         if left:
             C.die(f"{'; '.join(stop)}, and git could not restore every file ({left.splitlines()[0][3:]}): "
                   f"run `git checkout HEAD -- {' '.join(rewrites)}` in the release folder; nothing is committed")
-        st.write_page_data(folder)
+        if not src_before:
+            shutil.rmtree(page_src, ignore_errors=True)
+        for name in ("dashboard.data.js", "dashboard.json"):  # the data of format 2.2 only
+            (folder / "status" / "data" / name).unlink(missing_ok=True)
+        with contextlib.redirect_stdout(io.StringIO()):
+            sw.write(folder, a.release, quiet=True)  # format 2.1 again: the task board and queue.data.js
         C.die(f"{'; '.join(stop)}: the files are restored from git and nothing is committed")
-    commit(root, [folder / x for x in rewrites if x != GRID or grid_on], f"docs(plan): {a.release} moved to format {TO}")
+    paths = [folder / x for x in rewrites if x != GRID or grid_on] + ([gi] if gi.read_bytes() != gi_before else [])
+    commit(root, paths, f"docs(plan): {a.release} moved to format {TO}")
     q.write_data(folder)  # again after the commit: the "changed" time of each item is its commit
     fcntl.flock(lock, fcntl.LOCK_UN)
     lock.close()

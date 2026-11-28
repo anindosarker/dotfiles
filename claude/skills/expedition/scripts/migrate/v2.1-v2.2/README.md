@@ -1,6 +1,6 @@
 # Migration v2.1 to v2.2
 
-Moves one release to the status words of format 2.2: the queue items, the epics, the specs, the milestones and the tasks. The epic file loses its `decisions:` and `specs:` lines, and `status/sprints.md` is removed.
+Moves one release to the status words of format 2.2: the queue items, the epics, the specs, the milestones and the tasks. The epic file loses its `decisions:` and `specs:` lines, `status/sprints.md` is removed, and the release gets the dashboard page.
 
 ## Who needs it
 
@@ -24,6 +24,9 @@ A release whose `status/data/status.json` says `"format": "2.1"`. A release in f
 - `depends_on: Q14, Q15` on a queue item: the items it waits for. Set it with `queue/item.py <release> --depends Q<n> "Q14, Q15"`. The scripts set `blocked`, and `to-do` again when every item it names is `done`.
 - `plan/epics/E<n>.md` has no `decisions:` and no `specs:` line. Its `## Ownership` table is the one copy of both.
 - There is no `status/sprints.md`. The status file holds the sprint of each milestone. To see the grid, run `python3 -I <skill>/scripts/sprints/grid.py <release>`: it prints the grid and writes nothing.
+- `status/index.html` is the dashboard page in place of the task board: the task board with one more view, Dashboard. Its six views are Dashboard, Epics, Tasks, Sprints, Milestones and Queue (keys 1 to 6). The page loads its scripts and styles from `status/src/`, copies of `board/src/` of the skill. Its reference is [../../../board/README.md](../../../board/README.md).
+- `status/data/` gets `dashboard.data.js`, read by the Dashboard and the Queue view, and `dashboard.json`, the same rows for an agent. `queue.data.js` is no longer written: the Queue view reads its rows from `dashboard.data.js`. All of them are renders: every command writes them again.
+- The repository's `.gitignore` gets one line, `.ai/plans/*/*/status/src/`, in the commit of the migration.
 
 ## What stays
 
@@ -37,7 +40,7 @@ The migration writes `decider` only on an item that a run agent fixed (`autofix`
 
 ## Before you start
 
-- `queue.md`, `queue/`, `plan/`, `<release>-plan.md`, `status/sprints.md` and `status/data/status.json` have no uncommitted change.
+- `queue.md`, `queue/`, `plan/`, `<release>-plan.md`, `status/sprints.md` and `status/data/status.json` have no uncommitted change, nor has the repository's `.gitignore` when it lacks the `status/src/` line.
 - Each row of `status/sprints.md` has the sprint and the mark of the status file. When they differ, the command names the rows and writes nothing: run `sprints/refresh.py <release>`, commit, and run it again.
 - A milestone may be in progress: the migration does not stop a run.
 
@@ -50,7 +53,7 @@ python3 -I <skill>/scripts/migrate/v2.1-v2.2/format.py <release> --check
 python3 -I <skill>/scripts/migrate/v2.1-v2.2/format.py <release>
 ```
 
-The first line, on stderr, tells the session to read the skill again. `--check` prints one line per file it would change and the counts, and writes nothing. The run writes the item files, the epic files, the `status:` lines of the task and spec files, the plan file, the status file with `"format": "2.2"`, removes `status/sprints.md`, writes the page data, and makes one commit: `docs(plan): <release> moved to format 2.2`.
+The first line, on stderr, tells the session to read the skill again. `--check` prints one line per file it would change and the counts, and writes nothing. The run writes the item files, the epic files, the `status:` lines of the task and spec files, the plan file, the status file with `"format": "2.2"`, removes `status/sprints.md`, installs the dashboard page with `status/src/` and its data, adds the `.gitignore` line, and makes one commit: `docs(plan): <release> moved to format 2.2`.
 
 An epic file whose `decisions:` or `specs:` line names a decision or a spec that no row of its table has gets a row for it first. The command prints one line for each row it adds.
 
@@ -60,10 +63,11 @@ The command refuses, and writes nothing, when the release is not in format 2.1, 
 
 - The command prints the counts before and after: queue items per status, decision cards, epics, specs, milestones and tasks. They are equal, or it commits nothing and restores the files from git. It also prints each status the status file changed beyond the two renamed words.
 - `python3 -I <skill>/scripts/status/report.py <release>` exits 0, and its `Queue:` line counts the items in the words of format 2.2.
+- Open `status/index.html` of the release in a browser, from disk. The six views draw, and the Queue view shows as many items as the `Queue:` line counts.
 
 ## How to undo it
 
-It is one commit in the repository that holds the plan folder: `git revert <that commit>`. The release is in format 2.1 again, with its `status/sprints.md`.
+It is one commit in the repository that holds the plan folder: `git revert <that commit>`. The release is in format 2.1 again, with its `status/sprints.md`, and the `.gitignore` line for `status/src/` is gone. The next command that writes the page (`sprints/refresh.py <release>`, for example) writes the task board as `status/index.html` again, and `queue.data.js`. `status/src/` is left over and can be deleted.
 
 ## Prompt for a lead session
 
