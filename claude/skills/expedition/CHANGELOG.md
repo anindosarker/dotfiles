@@ -2,6 +2,33 @@
 
 One section per version of the skill, newest first. The version is `metadata.version` in the front matter of `SKILL.md`. A release folder states the format it has in `status/data/status.json` (`format`); a release with no status file is format 1.0.
 
+## 2.2
+
+What is new:
+
+- Six status words: `to-do`, `in progress`, `blocked`, `done`, `backlog`, `archived`. A queue item uses `to-do`, `blocked`, `done`, `backlog` and `archived` (before: `open`, `decided`, `autofix`, `later`, `dropped`). An epic, a spec, a milestone and a task use `to-do`, `in progress`, `blocked`, `done` and `archived` (before: `not started` and `skipped` in place of `to-do` and `archived`). The owner words "record it", "later" and "drop it" stay; they set `done`, `backlog` and `archived`.
+- A closed queue item has a `decider` line: `you`, `lead` or `agent`, who made the call. A command that closes an item takes `--decider`: `queue/item.py <release> D "<title>" --source Q<n> --decider you` (or `lead`), and `--move Q<n> Dropped --decider lead` or `--move Q<n> Autofix --decider agent`. Without it the command writes nothing. The status file gives a `decider` for each epic, spec, milestone and task too, worked out on each write.
+- A queue item can wait for other items: `queue/item.py <release> --depends Q<n> "Q14, Q15"` writes its `depends_on` line. The scripts set it `blocked` while an item it names is not `done`, and `to-do` again after that. `queue/next.py` skips a blocked item.
+- An epic whose specs are ready is `blocked`, with the reason `waits for delegate`, until the owner says `delegate`.
+- The epic file `plan/epics/E<n>.md` has no `decisions:` and no `specs:` line. Its `## Ownership` table is the one copy of both.
+- There is no `status/sprints.md`. The status file holds the sprint of each milestone, and `sprints/grid.py <release>` prints the grid and writes nothing.
+- `status/index.html` is the dashboard page in place of the task board: six views, Dashboard, Queue, Epics, Milestones, Tasks and Sprints. Dashboard shows what waits for whom. The page loads its scripts from `status/src/`, and its data from `status/data/dashboard.data.js` and `status/data/status.data.js`; `status/data/dashboard.json` holds the same rows for an agent. `queue.data.js` is no longer written. Reference: [board/README.md](board/README.md).
+- `plan/new_release.py` makes a new release in format 2.2.
+- `status/report.py` on a release of an older format names, in its last line, the migration folders to run, in order.
+
+What changes for a release in work:
+
+- Nothing has to change at once. A release in format 2.1 or lower keeps its words, its epic file lines and its `status/sprints.md`, and every script reads and writes it as before. Its rules: the section Format 2.1 releases of `SKILL.md`, and [reference/old-form/format-2.1.md](reference/old-form/format-2.1.md).
+- To use the new words and the dashboard page, migrate the release. The migration is one commit, keeps every id and every line of the item files, and can be undone with `git revert`. A migrated `decided` or `dropped` item has no `decider` line, because the files of format 2.1 do not say who made the call.
+- A session that read the skill before this version re-reads it before it creates a release or migrates one.
+
+What stops working:
+
+- Nothing that a 2.1 release used is removed. Every command and every flag stays, and a command takes the words of both formats.
+- In a release of format 2.2, no script writes `status/sprints.md`, and `queue.data.js` is not written.
+
+Migration: [scripts/migrate/v2.1-v2.2/README.md](scripts/migrate/v2.1-v2.2/README.md).
+
 ## 2.1
 
 What is new:
