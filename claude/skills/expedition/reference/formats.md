@@ -138,7 +138,7 @@ Name one to reopen it.
   ```
 
   `Running` lists each spec with a milestone running, including a spec that is being retried or fixed. `Blocked` lists only work that has stopped, with the run's own reason and who it waits on (`waits on the owner: ...` or `waits on the lead: ...`).
-- Reporting on epic work (after a regroup, an added fix, a note to the runner, a release check): the default report is that same progress block, followed by the settled list (Settled list, above) when run cards were settled. Add a plain sentence only when the block cannot show what was done or what the owner has to do. No commit id, sprint number, file path or script leftover; a leftover is fixed, or filed as a queue item when it needs a decision. A reply to a skill-update prompt keeps the form that prompt asks for.
+- Reporting on epic work (after a regroup, an added fix, a note to the runner, a release check): the default report is that same progress block, followed by the settled list (Settled list, above) when run items were settled. Add a plain sentence only when the block cannot show what was done or what the owner has to do. No commit id, sprint number, file path or script leftover; a leftover is fixed, or filed as a queue item when it needs a decision. A reply to a skill-update prompt keeps the form that prompt asks for.
 
 ## decisions.md
 
