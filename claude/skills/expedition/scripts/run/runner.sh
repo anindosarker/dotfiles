@@ -14,19 +14,27 @@
 #                                                takes input, types, and exits 0 only when the line
 #                                                is in the runner's transcript (see Confirm below)
 #        runner.sh fork <release> E<n> "<D ids>" --from <lead> [--model M] [--cwd PATH]
-#                                                open window "<release> specs E<n>": a forked session
+#                                                open window "<code>-<release>-E<n>": a forked session
 #                                                of the lead ($CLAUDE_CODE_SESSION_ID) that writes
 #                                                the epic's specs and replies "SPECS E<n> ...";
 #                                                its own --session-id is in the registry, and a
 #                                                fork whose window died is resumed, not forked again
-#        runner.sh stop "<window name>"          close a fork window ("<release> specs E<n>")
+#        runner.sh stop "<window name>"          close a fork window ("Exp-2.1-E7"; the older form
+#                                                "<release> specs E<n>" still finds it)
 #        runner.sh watch start|stop|status        the nudge watcher (scripts/run/nudge-watch.sh)
 #        runner.sh adopt <release> [--uuid UUID] [--pane PANE] [--replaces <name>]
 #                                                register a claude session that is already running
 #                                                (default: the calling session, $CLAUDE_CODE_SESSION_ID
-#                                                in $TMUX_PANE) as the next "<release> runner<n>",
+#                                                in $TMUX_PANE) as the next runner name (Names below),
 #                                                with its own uuid; --replaces marks the entry it
 #                                                takes over stopped. Never copy a registry entry by hand
+#
+# Names (D28): a new runner window is "<code>-<release>-R", then "-R2", "-R3"; a new spec writer
+# window "<code>-<release>-E<n>": <code> from the name of the window's folder ("Expedition": "Exp",
+# "web-template": "wt"), <release> without "v" and ".x" (scripts/run/name.py). start --new --name
+# wins. Entries of the older forms ("<release> runner<n>", "<release> specs E<n>") keep their names
+# and keep working; every command finds a session by its registry entry and pane, so a window
+# renamed by hand in tmux still works.
 #
 # Folder: start and fork open a new window in --cwd, else in the folder the script is called
 # from. A resumed runner or fork reopens in the folder stored in its registry entry. list, stop,
@@ -130,7 +138,7 @@ def write(change):
             f.write(json.dumps(data, indent=2) + "\n")
         os.replace(tmp, path)
 
-data = read() if op in ("get", "field", "all", "uuid", "newest") else {}
+data = read() if op in ("get", "field", "all", "uuid", "newest", "fork") else {}
 if op == "get":
     e = data.get(sys.argv[3])
     print(json.dumps(e) if e else "")
@@ -157,17 +165,26 @@ elif op == "uuid":
                 and e.get("uuid") == sys.argv[3] and e.get("state") != "stopped"), ""))
 elif op == "newest":
     # The newest runner entry of a release that is not stopped: latest "started", then the
-    # highest "<release> runner<n>" number, so a registry of default names answers as before.
+    # highest number ("<release> runner<n>" or "<code>-<release>-R<n>"), so a registry of
+    # default names answers as before.
     import re
     rel = sys.argv[3]
     pat = re.compile(re.escape(rel) + r" runner(\d+)$")
     def key(n):
-        m = pat.match(n)
-        return (data[n].get("started") or "", int(m.group(1)) if m else 0, n)
+        m = pat.match(n) or re.search(r"-R(\d*)$", n)
+        return (data[n].get("started") or "", int(m.group(1) or 1) if m else 0, n)
     live = [n for n, e in data.items() if n != "lead" and isinstance(e, dict) and e.get("uuid")
             and e.get("state") != "stopped" and e.get("kind", "runner") == "runner"
             and (e.get("release") == rel or pat.match(n))]
     print(max(live, key=key) if live else "")
+elif op == "fork":
+    # The fork entry of a release and epic under a default name ("<code>-<release>-E<n>"), for a
+    # window name of the older form "<release> specs E<n>": one not stopped first, then the newest.
+    rel, epic = sys.argv[3], sys.argv[4]
+    hits = [n for n, e in data.items() if n != "lead" and isinstance(e, dict) and e.get("kind") == "fork"
+            and e.get("release") == rel and n.endswith("-" + epic)]
+    hits.sort(key=lambda n: (data[n].get("state") != "stopped", data[n].get("started") or ""))
+    print(hits[-1] if hits else "")
 elif op == "all":
     for name, e in data.items():
         if name == "lead":
@@ -225,24 +242,40 @@ type_into() {
   TYPED_PANE="$pane"
 }
 
-# Runner names: "<release> runner<n>" by default, or the name given to start --new --name.
-# runner_name <release> returns the newest runner entry of the release that is live or resumable
-# (reg newest; a live entry under the older key "runner-<release>" counts first and keeps its
-# name); nothing live: the next unused number. A number is never reused within a release.
-# next_runner_name <release> always returns the next unused number (start --new).
+# Runner names (D28): "<code>-<release>-R<n>" by default (scripts/run/name.py: the code of the
+# window's folder, "Exp-2.1-R", "Exp-2.1-R2"), or the name given to start --new --name. Entries
+# of the older form "<release> runner<n>" and "runner-<release>" stay valid and are resumed,
+# listed, sent to and stopped under their own names.
+# runner_name <release> [folder] returns the newest runner entry of the release that is live or
+# resumable (reg newest; a live entry under the older key "runner-<release>" counts first and
+# keeps its name); nothing live: the next unused name. A number is never reused within a release.
+# next_runner_name <release> [folder] always returns the next unused name (start --new): the
+# number after the highest of every runner entry of the release, old names included.
 runner_name() {
   local old="runner-$1" best
   if [ -n "$(reg field "$old" uuid)" ] && [ "$(reg field "$old" state)" != stopped ]; then
     echo "$old"; return
   fi
   best="$(reg newest "$1")"
-  if [ -n "$best" ]; then echo "$best"; else next_runner_name "$1"; fi
+  if [ -n "$best" ]; then echo "$best"; else next_runner_name "$1" "${2:-}"; fi
 }
 
 next_runner_name() {
-  local n=1
-  while [ -n "$(reg field "$1 runner$n" uuid)" ]; do n=$((n+1)); done
-  echo "$1 runner$n"
+  python3 -I "$SKILL_DIR/scripts/run/name.py" "$1" runner --cwd "${2:-$PWD}"
+}
+
+# resolve_name <release | window name>: the registry entry a command acts on. A release: its
+# runner (runner_name). A window name of the older form "<release> specs E<n>" with no entry:
+# the fork entry of that release and epic under its default name, so a caller that still names
+# the old form finds it. Any other name: as given.
+resolve_name() {
+  if [[ "$1" =~ ^v[0-9]+\.[0-9]+\.x$ ]]; then runner_name "$1"; return; fi
+  if [ -z "$(reg field "$1" uuid)" ] && [[ "$1" =~ ^(v[0-9]+\.[0-9]+\.x)\ specs\ (E[0-9]+)$ ]]; then
+    local hit
+    hit="$(reg fork "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}")"
+    if [ -n "$hit" ]; then echo "$hit"; return; fi
+  fi
+  echo "$1"
 }
 
 # record_lead [name]: inside tmux, store the calling window as registry key "lead"; an empty
@@ -377,6 +410,8 @@ cmd_start() {
   done
   [ -n "$release" ] || usage
   check_release "$release"
+  local cwd
+  cwd="$(new_cwd "$cwd_flag")"
   local name
   if [ -n "$given" ]; then
     # A name of the owner's, used exactly as given.
@@ -386,13 +421,11 @@ cmd_start() {
     [ -z "$(reg field "$given" uuid)" ] || [ "$(reg field "$given" state)" = stopped ] \
       || die "'$given' is already a registry entry that is not stopped"
     name="$given"
-  elif [ "$new" = 1 ]; then name="$(next_runner_name "$release")"; else name="$(runner_name "$release")"; fi
+  elif [ "$new" = 1 ]; then name="$(next_runner_name "$release" "$cwd")"; else name="$(runner_name "$release" "$cwd")"; fi
   # Model: --model; --new from a runner window keeps the calling runner's model;
   # else $EXPEDITION_RUNNER_MODEL, else opus.
   [ -n "$model" ] || [ "$new" != 1 ] || [ -z "${EXPEDITION_RUNNER:-}" ] || model="$(session_model)"
   [ -n "$model" ] || model="${EXPEDITION_RUNNER_MODEL:-opus}"
-  local cwd
-  cwd="$(new_cwd "$cwd_flag")"
   mkdir -p "$STATE_DIR"
 
   local state uuid target resume=0
@@ -485,10 +518,8 @@ cmd_list() {
 
 cmd_stop() {
   [ $# -eq 1 ] || usage
-  local name="$1" target
-  if [[ "$1" =~ ^v[0-9]+\.[0-9]+\.x$ ]]; then
-    name="$(runner_name "$1")"
-  fi
+  local name target
+  name="$(resolve_name "$1")"
   [ -n "$(reg field "$name" state)" ] || die "no registry entry for $name"
   target="$(reg field "$name" tmux)"
   if window_alive "$target"; then
@@ -527,6 +558,11 @@ cmd_fork() {
   record_lead "$from"
   local name="$release specs $epic" cwd target uuid resume=0 parent="${CLAUDE_CODE_SESSION_ID:-}"
   cwd="$(new_cwd "$cwd_flag")"
+  # Window name (D28): "<code>-<release>-E<n>" (scripts/run/name.py); a live or resumable entry
+  # of the older form "<release> specs E<n>" keeps its name.
+  if [ -z "$(reg field "$name" uuid)" ] || [ "$(reg field "$name" state)" = stopped ]; then
+    name="$(python3 -I "$SKILL_DIR/scripts/run/name.py" "$release" "$epic" --cwd "$cwd")"
+  fi
   uuid="$(reg field "$name" uuid)"
   if [ -n "$uuid" ] && [ "$(reg field "$name" state)" != stopped ]; then
     if window_alive "$(reg field "$name" tmux)"; then
@@ -584,7 +620,8 @@ cmd_fork() {
 cmd_resume() {
   [ $# -eq 1 ] || usage
   local name target uuid state line
-  if [[ "$1" =~ ^v[0-9]+\.[0-9]+\.x$ ]]; then name="$(runner_name "$1")"; line="ultracode resume"; else name="$1"; line="resume"; fi
+  name="$(resolve_name "$1")"
+  if [[ "$1" =~ ^v[0-9]+\.[0-9]+\.x$ ]]; then line="ultracode resume"; else line="resume"; fi
   uuid="$(reg field "$name" uuid)"
   [ -n "$uuid" ] || die "no registry entry for $name"
   state="$(reg field "$name" state)"
@@ -623,7 +660,8 @@ cmd_resume() {
 
 # adopt <release> [--uuid UUID] [--pane PANE] [--replaces <name>]: a claude session that runs
 # already (a runner opened by hand from a handoff, a session that takes the runner role over) gets
-# its own entry "<release> runner<n>", the next unused number, with its own session uuid, its pane
+# its own entry under the next unused runner name (Names above; "Exp-2.1-R3" after "Exp-2.1-R2",
+# "Exp-2.1-R4" after "v2.1.x runner3"), with its own session uuid, its pane
 # and window and the pane's folder; the window is renamed to that name and the brief file written.
 # Defaults: the calling session ($CLAUDE_CODE_SESSION_ID, $TMUX_PANE). --replaces marks the entry
 # it takes over stopped (its window is left alone). Refuses a uuid with no transcript, and a uuid
@@ -663,16 +701,16 @@ cmd_adopt() {
   fi
   [ -z "$replaces" ] || [ -n "$(reg field "$replaces" uuid)" ] || die "no registry entry for $replaces"
   local name target="" cwd
-  name="$(next_runner_name "$release")"
   cwd="$(pwd)"
   if [ -n "$pane" ] && tmux display-message -p -t "$pane" '#{pane_id}' >/dev/null 2>&1; then
     target="$(tmux display-message -p -t "$pane" '#{session_name}:#{window_id}')"
     pane="$(tmux display-message -p -t "$pane" '#{pane_id}')"
     cwd="$(tmux display-message -p -t "$pane" '#{pane_current_path}')"
-    tmux rename-window -t "$target" "$name"
   else
     pane=""
   fi
+  name="$(next_runner_name "$release" "$cwd")"
+  [ -z "$target" ] || tmux rename-window -t "$target" "$name"
   mkdir -p "$STATE_DIR"
   sed -e "s|{{release}}|$release|g" -e "s|{{name}}|$name|g" -e "s|{{brief}}|$(file_of "$name").brief.md|g" "$BRIEF_TEMPLATE" > "$(file_of "$name").brief.md"
   reg put "$name" "$(python3 -I -c 'import json,sys,datetime; print(json.dumps({"name": sys.argv[1], "uuid": sys.argv[2], "tmux": sys.argv[3], "pane": sys.argv[4], "cwd": sys.argv[5], "release": sys.argv[6], "started": datetime.datetime.now().isoformat(timespec="seconds"), "state": "running"}))' "$name" "$uuid" "$target" "$pane" "$cwd" "$release")"
@@ -836,7 +874,7 @@ cmd_send() {
   [ -n "$from" ] || from="$(sed -nE 's/.* from ([^ ]+)$/\1/p' <<< "$2")"
   [ -n "$from" ] || from="$(sed -nE 's/^LEAD (.+)$/\1/p' <<< "$2")"
   record_lead "$from"
-  if [[ "$1" =~ ^v[0-9]+\.[0-9]+\.x$ ]]; then name="$(runner_name "$1")"; else name="$1"; fi
+  name="$(resolve_name "$1")"
   [ -n "$(reg field "$name" uuid)" ] || die "no registry entry for $name"
   [ "$(reg field "$name" state)" != "stopped" ] || die "$name is stopped: runner.sh start $1"
   target="$(reg field "$name" tmux)"
