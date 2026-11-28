@@ -26,10 +26,12 @@ In a release of format 2.2 (spec 05, D8) every epic, spec, milestone and task en
 "decider", worked out on every build (deciders) and stored in no plan file: an epic "you"; a task
 the decider of the decision its module cites ("" when it cites none); a milestone the decider of
 the first of its tasks that has a decision ("agent" when none has); a spec the decider of the first
-decision a module of it cites ("" when none cites one). The decider of a decision is the "decider"
-line of the queue item whose "decision" line names it (lib/queue.py); "" when no item names it or
+decision a module of it cites ("" when none cites one). With the decisions.md board the decider of
+a decision is the "decider" line of the queue item whose "decision" line names it (lib/queue.py); "" when no item names it or
 the item has no such line. decisions.md is only read. In the file form of the decisions
-(lib/decisions.py file_form) the decider of a decision is the "decider" line of its file first.
+(lib/decisions.py file_form) the decider of a decision is the "decider" line of its file alone, ""
+when the file has none (a decision moved from a board has none until decisions/decider.py sets it);
+no queue item is read for it.
 In a release of format 2.2 the key "decisions" holds one entry per decision of the file form,
 "D<n>": {"round": <n>} (spec 07, D16 keeps the round out of the decision file): queue/item.py D
 writes it (set_decision), every build keeps it, and a release with no such entry has no key. An
@@ -408,11 +410,13 @@ def set_decision(folder, ident, **fields):
 
 def deciders(folder):
     """{"D<n>": decider} of a release of format 2.2: in the file form the "decider" line of the
-    decision file; else the "decider" line of the queue item whose "decision" line names the
-    decision, the first such item with one, in number order."""
+    decision file alone (a file with no such line has no entry: its decider is "", never the one
+    of a queue item); with the board the "decider" line of the queue item whose "decision" line
+    names the decision, the first such item with one, in number order."""
     dc = C.load("lib/decisions")
-    out = {f"D{c['num']}": c["decider"] for c in dc.file_cards(folder) if c["decider"]} \
-        if dc.file_form(folder) else {}
+    if dc.file_form(folder):
+        return {f"D{c['num']}": c["decider"] for c in dc.file_cards(folder) if c["decider"]}
+    out = {}
     for it in C.load("lib/queue").items(folder):
         if it["decision"] and not out.get(it["decision"]):
             out[it["decision"]] = it["decider"]
