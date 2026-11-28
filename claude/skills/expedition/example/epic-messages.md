@@ -14,14 +14,14 @@ Filled messages in the shapes of [../templates/epic-messages.md](../templates/ep
 - B. `compose delegate`: plan and start.
 ```
 
-## Epic ready, with a decision that waits
+## Epic ready, with a blocked decision
 
 ```Markdown
 **Epic ready: E12**
 - D63: Sidebar menu scrolls above a fixed footer.
 - D64: Billing is its own sidebar section with three pages.
 
-**Decided, not in this epic:**
+**Blocked:**
 - D65: Sidebar header shows the team name. Waits for E11, same file.
 
 **Say:**

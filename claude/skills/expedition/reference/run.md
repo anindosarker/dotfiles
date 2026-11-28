@@ -54,10 +54,10 @@ The release's `process.md` (`.ai/plans/<release>/<owner>/process.md`) holds the 
 - Every status of a milestone is set by `sprints/mark.py <release> <milestone> launch|wait|resume|merge|stop`; nothing under `status/` is edited by hand, no exception.
   - Its arguments, what it writes and what it commits: [scripts.md](scripts.md).
   - The status each verb sets: [formats.md](formats.md), Milestone status.
-  - A `merge` mark is what moves a decision to Done (the Done rule reads the trackers, so the tracker says `done` first); the runner never moves a decision card or edits its tick or tags, and never edits an item file by hand.
+  - A `merge` mark is what makes a decision `done` (the status rule reads the milestone statuses, so the milestone is `done` first); the runner never sets the status of a decision, never edits the front matter of a decision file, and never edits an item file by hand.
   - The merger of the workflow runs `merge` right after the merge commit; the runner runs it as the fallback for a merged milestone that is not `done`.
   - When every milestone of an epic has merged it files its queue items, writes the handoff, sends DONE.
-- Shared files (`decisions.md`, the queue, the epic files): the rules in [formats.md](formats.md), Shared files.
+- Shared files (`decisions.md` and the decision files, the queue, the epic files): the rules in [formats.md](formats.md), Shared files.
 - On `progress` (or "status"): the rule in [formats.md](formats.md), Progress reply and reports.
 
 ## Each tick
@@ -199,6 +199,7 @@ The runner then files a queue item and continues with work that does not depend 
   - A fact for an existing item: `queue/item.py <release> --fact Q<n> "<text>"` (it goes under `## Notes`).
   - An item the run fixed itself, with no decision and no fix milestone, is closed by the runner with `queue/item.py <release> --move Q<n> Autofix --decider agent` (`status: done`, `decider: agent`).
   - A run agent records no decision from a queue item: `queue/item.py <release> D --source Q<n>` takes `--decider you` or `--decider lead` and refuses `agent`. A choice is a queue item for the lead.
+  - A deviation from the letter of a decision that keeps its intent, which the run settles itself (SKILL.md, Owner input), is recorded as a decision file with no `--source`: `queue/item.py <release> D "<title>" --decider agent --bullet "<the rule>"`. It is `to-do` and in no epic, like any other new decision, and the lead sees it in the next Epic hint.
   - Never a hand edit of `queue.md` or of an item file.
 - The run reports; it does not solve. Do not research solutions for a queue item. A deviation is reported as keep or revert with the exact strings, never as an implementation question.
 - An accepted decision that no longer fits: a queue item, never a silent change.
