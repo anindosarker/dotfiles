@@ -92,7 +92,7 @@ decider: you
 | `# Q<n>. <title>` | script at filing | one plain sentence naming the problem or idea; the number is never reused |
 | `## Notes` | script (`--bullet`, `--fact`) | the owner's remark and the first findings, raw, one bullet each; nested bullets allowed; not shown in chat |
 | `## Details` | the lead, by a targeted edit | the facts the decision needs; absent until the lead writes the item out |
-| `## Options:` | the lead, by a targeted edit | numbered, `Recommended:` on the first; absent until the lead writes the item out |
+| `## Options:` | the lead, by a targeted edit | numbered, `Recommended:` on the first; inside an option bullets by default, a table or a code block only where bullets do not work; absent until the lead writes the item out |
 
 - Five of the six status words are the item's state; a queue item is never `in progress`:
 

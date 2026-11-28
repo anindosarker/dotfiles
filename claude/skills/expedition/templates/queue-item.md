@@ -18,6 +18,6 @@ depends_on: [Q<n>, Q<n>; optional: the items this item waits for; not in format 
 ## Options:
 
 1. Recommended: [Optional, with its heading: the proposal in a few words. Absent until the lead writes the item out.]
-   - [bullet]
+   - [bullet. Inside an option: bullets by default, a table or a code block only where bullets do not work.]
 2. [another option]
    - [bullet]
