@@ -48,9 +48,10 @@ Item format, one item per message, the next item only after the explicit word on
 - Any number of options is allowed; one or two is the usual case.
 - Wording: ASD-STE100 words, caveman shortness, key details kept.
 - The `Say:` block is the last part of an item and of an epic message. A letter alone is the command. In an item with several options the owner gives the option number with it ("2, A"); no number means the recommended option.
+- A repost keeps every line word for word. Only the lines the owner asked to change are changed. No rephrasing. Every repost shows the title, all bullets and all options: no "unchanged" line, no part left out. A reply that changes nothing in the item (an answer to a question, an explanation) gets no repost.
 
 No question at the end: the item ends with its `Say:` block, and the options are the question. Options are about the decision only: fix, keep, drop, or which variant. An option never names an epic, a sprint or a release, and never offers to decide later; the owner says "later" or "drop it" unprompted. Write the decision into `decisions.md` only on the explicit word (SKILL.md, Explicit word), in that same turn, then post the next item.
-- Recording: run `python3 -I ${CLAUDE_SKILL_DIR}/scripts/queue/item.py <release> D "<title>"` (with `--source Q<n>` for a queued item), write the bullets under the card it made, each indented with one tab, above a `- Source:` line (targeted edit, then commit), and reply with the id it printed. The item has no D number before that.
+- Recording: run `python3 -I ${CLAUDE_SKILL_DIR}/scripts/queue/item.py <release> D "<title>"` (with `--source Q<n>` for a queued item), write the bullets under the card it made (lines taken from the picked option stay word for word), each indented with one tab, above a `- Source:` line (targeted edit, then commit), and reply with the id it printed. The item has no D number before that.
 - Handoff: only when the owner asks. State and Open only, what the next session needs; never history. State names the runner window and the writer's session name and uuid (formats.md, Handoff).
 
 ## Epics
