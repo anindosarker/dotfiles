@@ -4,7 +4,7 @@
 - Layout
 - <release>-plan.md sections
 - Ownership
-- status/sprints.md
+- The grid
 - Scripts
 - Template
 - Conventions
@@ -16,20 +16,21 @@
 ├── <release>-plan.md       ← authored: ## Goals, ## Deliverables
 ├── decisions.md            ← accepted decisions, a kanban board: D<n> cards in three lanes (To do, In progress, Done), lane by the Done rule
 ├── queue.md                ← the list of every item filed in the release, one linked line per item file; written by the scripts only (in a release of format 2.0 or 1.0 a kanban board of Q<n> cards: old-form/queue-board.md)
-├── queue/Q<n>-<slug>.md    ← one item file per item: front matter (status, decision, option), # Q<n>. title, ## Notes (scripts), ## Details and ## Options: (the lead, when the item settles); format 2.1 only
+├── queue/Q<n>-<slug>.md    ← one item file per item: front matter (status, decision, option, decider, depends_on), # Q<n>. title, ## Notes (scripts), ## Details and ## Options: (the lead, when the item settles); format 2.1 and higher
 ├── process.md              ← this project's facts for the release, about ten P<n> rules, two to five explicit bullets each (branches, milestone branch and worktree, merge, release, checks on the shared machine, agent sandbox, public surface, commits, shared files, plans); copied from the previous release by plan/new_release.py, audited and rewritten rule by rule with the owner before the run (SKILL.md, Process notes)
 ├── plan/specs/NN-<slug>/   ← authored: one spec, NN-<slug>.md: modules in 1.6, task pointers in 2.1, one #### 2.2.N Milestone: <name> block per milestone in 2.2; tasks/NN-<slug>.md its task files
-├── plan/epics/E<n>.md     ← one per epic, started by epics/new.py: Decisions, Specs and Starts lines, the Ownership table, Notes only when the specs cannot hold something, acked by the runner
+├── plan/epics/E<n>.md     ← one per epic, started by epics/new.py: front matter status and starts, the Ownership table (the one copy of its decisions and specs), Notes only when the specs cannot hold something, acked by the runner
 ├── run/trackers/NN-<slug>-tracker.md ← one per milestone: branch, check lines, staged attention items, notes; no status
 ├── run/handoffs/          ← write-handoff output
-├── status/sprints.md       ← generated, like everything under status/ (never edited by hand); sprints/refresh.py, by run/go.py: the grid, one row per milestone, one column per sprint; its marks set by sprints/mark.py only
-├── status/index.html       ← the status page, a render, git-ignored, never committed: in a release of format 2.0 or 2.1 the task board (with its Queue view in 2.1), copied from board/task-board.html by plan/new_release.py and kept current by sprints/swimlanes.py; in a format 1.0 release the swimlane page from board/swimlanes.html
-├── status/data/status.json ← the store of every status (epic, spec, milestone, task) and the data of the status board; written by status/status.py and sprints/mark.py only; committed
-├── status/data/status.data.js ← the task board's data, rewritten with every status change; git-ignored, never committed. sprints.data.js and sprints.json, the swimlane page's data, are written only in a format 1.0 release
-├── status/data/queue.data.js ← the data of the task board's Queue view, written from the item files by queue/item.py and the refresh chain; format 2.1 only; git-ignored, never committed
+├── status/index.html       ← the dashboard page, generated like everything under status/ (never edited by hand), a render, git-ignored, never committed: a copy of board/dashboard.html, made by plan/new_release.py and kept current by sprints/swimlanes.py
+├── status/src/             ← the dashboard page's scripts and style, copies of board/src/ (core.js, parts.js, views.js, style.css); git-ignored
+├── status/data/status.json ← the store of every status (epic, spec, milestone, task), with the sprint and launched of each milestone, and the data of the dashboard page; written by status/status.py and sprints/mark.py only; committed
+├── status/data/status.data.js ← the data of the Epics, Milestones, Tasks and Sprints views, rewritten with every status change; git-ignored, never committed
+├── status/data/dashboard.data.js ← the data of the Dashboard and Queue views: one row per queue item, decision, epic, milestone and task, written with status.data.js and by queue/item.py; git-ignored, never committed
+├── status/data/dashboard.json ← the same rows, indented, for an agent to read; written with dashboard.data.js; git-ignored, never committed
 ├── status/data/go.log      ← run/go.py: one line per runner step done (the spec writer's window closed, the RUN line sent) per epic, so a rerun skips it; git-ignored
 ├── status/data/runs.json   ← run/runs.py: the Workflow run id of each milestone, written by the runner at launch, the newest id wins; read by run/check.py; git-ignored
-├── status/data/.ids.lock   ← the write lock every writing script takes (ids, the queue, decisions, the grid and its marks); an empty file, git-ignored with the folder
+├── status/data/.ids.lock   ← the write lock every writing script takes (ids, the queue, decisions, the statuses); an empty file, git-ignored with the folder
 └── reference/              ← optional supporting material, by hand
 ```
 
@@ -37,7 +38,7 @@ Where the root folder, the project repo, the worktrees folder and `.ai/plans/` s
 
 A release folder in an older layout is refused by the scripts with one line naming a `migrate/` script: [migrate.md](migrate.md).
 
-Formats of each file: [formats.md](formats.md).
+Formats of each file: [formats.md](formats.md). A release of format 2.1, 2.0 or 1.0 has `status/sprints.md` and the page and data files of its format: [old-form/format-2.1.md](old-form/format-2.1.md).
 
 ## <release>-plan.md sections
 
@@ -55,12 +56,12 @@ Checks live in each task's Verification list and the release's `process.md`; Acc
 
 - `lib/ownership.py` computes the ownership facts from those blocks, in memory; no file holds them, and every script that needs them (`sprints/check.py`, the grid chain, `sprints/swimlanes.py`, `status/report.py`, `plan/milestone.py`, `run/go.py`) calls the same code.
 - An edge from A to B exists when B lists A under `Depends on` or when A and B share a file (lower spec number first); a milestone with no `Files owned` line shares no file.
-- A milestone's sprint is the longest chain ending at it plus one, across every epic, and never before its epic's start sprint: the `Starts: S<n>` line of `plan/epics/E<n>.md`, written on go by `epics/tag.py` as the current sprint.
+- A milestone's sprint is the longest chain ending at it plus one, across every epic, and never before its epic's start sprint: the `starts: S<n>` line of `plan/epics/E<n>.md`, written on go by `epics/tag.py` as the current sprint.
 - The start sprint carries along the edges.
-- An epic file without a `Starts:` value means no floor.
+- An epic file without a `starts` value means no floor.
 - A milestone added after go carries its own `- Starts: S<n>` line (`plan/milestone.py` writes the current sprint), so it never lands in a finished sprint.
-- A milestone whose grid row is running or waiting (`[ ]`, `[~]`) or finished (`[x]`, `[!]`) keeps that sprint, and a finished one never collides on a shared file.
-- The current sprint is the first column of `status/sprints.md` holding a `[ ]`, `[~]` or `·` cell of an epic row; when there is none, the column after the last column holding an epic row (S1 on an empty grid).
+- The status file stores the sprint of each milestone. A milestone that is `in progress`, `done` or `archived`, or `blocked` after its launch, keeps the sprint the status file holds, and a finished one never collides on a shared file. Every other milestone is placed again on each refresh.
+- The current sprint is the lowest sprint that holds a milestone of an epic that is `to-do`, `in progress` or `blocked`; when there is none, the sprint after the highest one in use (S1 for a release with no sprint).
 - For an epic's own start its own rows are ignored.
 - An epic's critical path is the longest chain over that epic's milestones and the edges between them, ties by lower spec number; it is computed where it is shown (the `sprints/check.py` printout, `status/report.py`, the swimlane data), never stored.
 - Each epic file's Ownership table shows the epic's share of these facts: the files per decision, the spec and milestones that own them and their sprint ([formats.md](formats.md), Epic file).
@@ -71,14 +72,14 @@ Checks live in each task's Verification list and the release's `process.md`; Acc
 - Shared files no milestone owns (`<release>-plan.md` appends, changelog blocks, generated registry and docs copies) follow the release's `process.md`.
 - What two or more milestones need (dependency adds, lockfile, lint or CI config, shared helpers, baseline captures) lands as the first sprint's shared milestone.
 
-## status/sprints.md
+## The grid
 
-In `status/`: a title, an `Updated: <date time>` line, one table `Milestone`, `S1` .. `Sn`. Grid only: one row per milestone of a spec with an Epic line, row text `E1 01 Filtering` ([formats.md](formats.md)). A cell is one of the marks of [formats.md](formats.md), Milestone status. No legend, no prose, nothing under the table.
+A release of format 2.2 has no grid file. `sprints/grid.py <release>` prints the grid from the status file, in the shape of [formats.md](formats.md), The grid, and writes nothing.
 
-- `sprints/refresh.py` writes it on go (`run/go.py`, the epic's rows with `·`); `sprints/mark.py` sets each mark at a boundary (`launch`, `wait`, `resume`, `merge`, `stop`) and reruns the same chain, so nothing under `status/` is edited by hand.
-- A regeneration keeps every finished cell (`[x]`, `[!]`) where it is; a running or waiting row (`[ ]`, `[~]`) keeps its sprint (`lib/ownership.py` pins it) and a not-started row (`·`, or `[~]` never launched) is placed again.
-- Then the Sprint column of every unfinished epic's table that has a `Starts:` value follows the grid; nothing else in those files changes, and finished epics' files are left alone.
-- `status/report.py` flags a `status/sprints.md` whose rows differ from the milestones.
+- `sprints/refresh.py` places the milestones and stores each sprint in the status file, on go (`run/go.py`) and after every change to the specs or the epics; `sprints/mark.py` sets a milestone's status at a boundary (`launch`, `wait`, `resume`, `merge`, `stop`) and runs the same chain, so nothing under `status/` is edited by hand.
+- Then the Sprint column of every unfinished epic's table that has a `starts` value follows the status file; nothing else in those files changes, and finished epics' files are left alone.
+- `status/report.py` flags a left-over `status/sprints.md` (delete it) and a milestone of an epic with no sprint in the status file (run `sprints/refresh.py`).
+- A release of format 2.1, 2.0 or 1.0 keeps the file `status/sprints.md`: [old-form/format-2.1.md](old-form/format-2.1.md), The grid file.
 
 ## Scripts
 
