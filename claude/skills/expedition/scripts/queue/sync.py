@@ -5,6 +5,10 @@ tick and the #E<n> tag), under the .ids.lock lock. Prints the cards it changed. 
 Usage: python3 -I queue/sync.py <release> [--owner X] [--root PATH]
 
 queue/item.py, epics/tag.py, sprints/refresh.py and sprints/mark.py run the same sync.
+
+A release of format 2.1 and higher keeps its queue in item files (lib/queue.py): a decided item
+holds its decision id only, so there is nothing to sync. The script prints that, writes nothing
+and exits 0; the path stays, because sessions run it by path.
 """
 import argparse
 import importlib.util
@@ -34,6 +38,9 @@ def main():
     if not C.RELEASE_RE.match(a.release):
         C.die(f"bad release '{a.release}', expected like v0.9.x")
     _, folder = C.find_folder(a.release, a.owner, a.root)
+    if C.load("lib/queue").item_form(folder):
+        print(f"{a.release}: the queue is in item files (format 2.1); nothing to sync")
+        return
     C.load("lib/grid").sync_queue(folder)
 
 
