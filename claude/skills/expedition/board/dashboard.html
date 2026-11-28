@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard</title>
+<script>
+try { const th = localStorage.getItem("taskboard-theme"); if (th) document.documentElement.dataset.theme = th; } catch (e) {}
+</script>
+<link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+
+<header>
+  <div class="bar-in">
+    <div class="brand">
+      <span class="rel" id="rel"></span>
+      <h1 id="title">Task Board</h1>
+      <span class="tdone" id="tdone"></span>
+      <span class="qopen" id="qopen" hidden></span>
+
+    </div>
+
+    <div class="popwrap" id="view-wrap">
+      <button class="sortsel" id="view-btn" aria-haspopup="true" aria-expanded="false" aria-label="View"><svg class="i"><use id="view-ic" href="#ic-gauge"/></svg><span id="view-label">Dashboard</span><svg class="i chev"><use href="#ic-chevron"/></svg></button>
+      <div id="view-pop" class="pop left" role="menu" aria-label="View" hidden></div>
+    </div>
+
+    <div class="popwrap" id="filter-wrap">
+      <button class="sortsel" id="filter-btn" aria-haspopup="true" aria-expanded="false" aria-label="Status filter" data-tip="Status filter"><svg class="i" id="filter-ic"><use href="#ic-filter"/></svg><span id="filter-label">All statuses</span><svg class="i chev"><use href="#ic-chevron"/></svg></button>
+      <div id="filter-pop" class="pop left" role="menu" aria-label="Status filter" hidden></div>
+    </div>
+
+    <div class="popwrap" id="vm-wrap">
+      <button class="sortsel" id="vm-btn" aria-haspopup="true" aria-expanded="false" aria-label="View options"><svg class="i"><use href="#ic-sliders"/></svg><span>View</span><svg class="i chev"><use href="#ic-chevron"/></svg></button>
+      <div id="vm" class="pop left vm" role="menu" aria-label="View options" hidden></div>
+    </div>
+
+    <label class="search">
+      <svg class="i"><use href="#ic-search"/></svg>
+      <input id="q" type="search" placeholder="Search  ( / )" title="Search ids, names, numbers" aria-label="Search" autocomplete="off" spellcheck="false">
+      <button id="q-clear" aria-label="Clear search" hidden><svg class="i" style="position:static;width:12px;height:12px"><use href="#ic-x"/></svg></button>
+    </label>
+
+    <div class="sortbox">
+      <label class="sortsel"><svg class="i"><use href="#ic-sort"/></svg><select id="sort" aria-label="Sort by"></select><svg class="i chev"><use href="#ic-chevron"/></svg></label>
+      <button class="ibtn" id="sortdir" data-tip="Ascending" aria-label="Sort direction"><svg class="i"><use href="#ic-sort-asc"/></svg></button>
+    </div>
+    <div class="seg" role="group" aria-label="Queue layout" id="qmode" hidden>
+      <button data-qmode="list" aria-pressed="true" aria-label="List" data-tip="List"><svg class="i"><use href="#ic-list"/></svg></button>
+      <button data-qmode="board" aria-pressed="false" aria-label="Board" data-tip="Board by status"><svg class="i"><use href="#ic-kanban"/></svg></button>
+    </div>
+
+    <div class="tools">
+      <span id="upd"></span>
+      <div class="popwrap" id="legend-wrap">
+        <button class="ibtn" id="legend-btn" data-tip="Legend" aria-label="Legend" aria-pressed="false"><svg class="i"><use href="#ic-info"/></svg></button>
+        <div id="legend" class="pop" hidden>
+          <h4>Legend</h4>
+          <ul id="lg-lanes">
+            <li><i class="sw st-ns"></i>not started</li>
+            <li><i class="sw st-prog"></i>in progress</li>
+            <li><i class="sw st-block"></i>blocked</li>
+            <li><i class="sw st-done"></i>done</li>
+            <li><i class="sw st-skip"></i>skipped</li>
+            <li><i class="ln"></i>dependency in the epic</li>
+            <li><i class="ln dash"></i>dependency across epics</li>
+            <li><i class="ln red"></i>critical path</li>
+            <li><i class="nowsw"></i>current sprint</li>
+            <li><i class="foldsw"></i>folded sprint: click its header to open</li>
+          </ul>
+          <div id="lg-kinds" hidden>
+            <h4>Kinds</h4>
+            <ul class="lg-kinds">
+              <li><span class="kchip k-queue">queue</span>queue item</li>
+              <li><span class="kchip k-decision">decision</span>decision</li>
+              <li><span class="kchip k-epic">epic</span>epic</li>
+              <li><span class="kchip k-milestone">milestone</span>milestone</li>
+              <li><span class="kchip k-task">task</span>task</li>
+            </ul>
+            <h4>Turn</h4>
+            <ul class="lg-kinds">
+              <li><span class="d-turn t-you"><svg class="i"><use href="#ic-user"/></svg></span>your turn</li>
+              <li><span class="d-turn t-lead"><svg class="i"><use href="#ic-compass"/></svg></span>the lead's turn</li>
+              <li><span class="d-turn t-agent"><svg class="i"><use href="#ic-bot"/></svg></span>an agent's turn</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <button class="ibtn" id="fold" data-tip="Expand all" aria-label="Expand all"><svg class="i"><use href="#ic-unfold-all"/></svg></button>
+      <button class="ibtn" id="reload" data-tip="Reload data (also every 30 seconds)" data-tip-end aria-label="Reload data"><svg class="i"><use href="#ic-refresh"/></svg></button>
+      <button class="ibtn" id="theme" data-tip="Light or dark" data-tip-end aria-label="Theme"><svg class="i" id="theme-ic"><use href="#ic-moon"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div id="board"></div>
+  <aside id="panel" hidden></aside>
+</main>
+
+<script src="src/core.js"></script>
+<script src="src/parts.js"></script>
+<script src="src/views.js"></script>
+</body>
+</html>
