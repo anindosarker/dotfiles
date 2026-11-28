@@ -380,8 +380,8 @@ For any session that is about to run a command of the skill: how to run them, th
 
 - Command: `python3 -I <skill>/scripts/queue/list.py v0.<n>.x [word] [--facts]`
 - Does: read-only: one line `Q<n> <title>` per item, in number order; `--facts` adds the lines of each item's `## Notes`, each indented with one tab; default `Open`, words in any case; none found prints `none`; an unknown word exits 1 naming the valid ones.
-- The word is a lane word or a status word. `Open` lists the `to-do` and the `blocked` items, a blocked one with ` (blocked: waits for Q14, Q15)` after its title (the ids of its `depends_on` line that are not done); `Decided` the `done` items with a decision; `Autofix` the `done` items without one; `Later` the `backlog` items; `Dropped` the `archived` ones. The six status words select by `status` alone. `all` counts the items per lane word.
-- Format 2.1: the lane word selects the items whose `status` is that word in lower case, and a status word the status it maps to. Format 2.0: the cards of one lane of the board, with their `#D<n>` and `#E<n>` tags and, in Decided, the tick first.
+- The word is a lane word or a status word. `Open` lists the `to-do` and the `blocked` items, a blocked one with ` (blocked: waits for Q14, Q15)` after its title (the ids of its `depends_on` line that are not done); `Decided` the `done` items with a decision; `Autofix` the `done` items without one; `Later` the `backlog` items; `Dropped` the `archived` ones. The six status words select by `status` alone. `all` prints one line `<word> <count>` per status word, in the order `to-do`, `in progress`, `blocked`, `done`, `backlog`, `archived`; each item is counted once, a blocked item under `blocked` only.
+- Format 2.1: the lane word selects the items whose `status` is that word in lower case, and a status word the status it maps to; `all` counts the items per lane word. Format 2.0: the cards of one lane of the board, with their `#D<n>` and `#E<n>` tags and, in Decided, the tick first.
 - When: when a session needs more than the next item
 
 ### queue/sync.py
