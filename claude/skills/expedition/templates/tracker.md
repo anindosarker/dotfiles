@@ -14,7 +14,7 @@ Checks:
 
 ## Attention
 
-- [One bullet per item the lead or the owner must see, clear from its first line. The reason of a blocked or skipped item is written here.]
+- [One bullet per item the lead or the owner must see, clear from its first line. The reason of a blocked or archived item (blocked or skipped below format 2.2) is written here.]
 
 ## Notes
 
