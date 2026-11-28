@@ -48,7 +48,11 @@ def main():
     Q = C.load("lib/queue")
     if Q.item_form(folder):
         new = Q.status_form(folder)
-        item = next((it for it in Q.items(folder) if Q.status_of(it, new) == ("to-do" if new else "open")), None)
+        its = Q.items(folder)
+        if new:  # the blocked check, also after a hand edit: a blocked item is never printed
+            item = next((it for it in its if Q.effective(it, its) == "to-do"), None)
+        else:
+            item = next((it for it in its if Q.status_of(it) == "open"), None)
         print(f"{item['path']}\n{item['text'].rstrip()}" if item else "none")
         return
     queue = folder / C.QUEUE_MD

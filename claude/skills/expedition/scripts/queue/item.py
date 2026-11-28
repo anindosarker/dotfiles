@@ -7,6 +7,7 @@ Usage: python3 -I queue/item.py <release> D|Q "<title>" [--source Q<n>] [--optio
        python3 -I queue/item.py <release> --move Q<n> Open|Later|Dropped|Autofix|to-do|backlog|archived|done
        [--decider you|lead|agent]
        python3 -I queue/item.py <release> --fact Q<n> "<text>"
+       python3 -I queue/item.py <release> --depends Q<n> "<Q ids>"
 
 Under an exclusive lock on <release folder>/status/data/.ids.lock, re-reading the files right before the
 write (queue.md is a kanban board the owner may drag in the editor; lib/board.py edits it in place
@@ -64,7 +65,13 @@ item needs --decider and is refused without it, before anything is written:
   "decision" and "option". The decision card is the same as in format 2.1: nothing about the
   decider goes into decisions.md. D with no --source needs no --decider.
 
-Below format 2.2 --decider is accepted and not stored.
+--depends Q<n> "Q14, Q15" replaces the "depends_on" line of Q<n>; an empty text removes it.
+Refused, before anything is written: an id that is not a queue item id, an id with no item file,
+the item itself, a ring of items that wait for each other. After every command the blocked check
+(lib/queue.py settle) sets "blocked" or "to-do" on each to-do or blocked item from what it waits
+for, and the files it changed are committed with the rest.
+
+Below format 2.2 --decider is accepted and not stored, and --depends is refused.
 """
 import argparse
 import fcntl
@@ -100,8 +107,8 @@ class _Once(argparse.Action):
 def main():
     ap = argparse.ArgumentParser(
         usage='queue/item.py <release> D|Q "<title>" [--source Q<n>] [--option <n>] [--decider W] [--bullet "<text>"] [--new-round] | '
-              '<release> --move Q<n> Open|Later|Dropped|Autofix|to-do|backlog|archived|done [--decider W] | <release> --fact Q<n> "<text>" '
-              '[--owner X] [--root PATH]'
+              '<release> --move Q<n> Open|Later|Dropped|Autofix|to-do|backlog|archived|done [--decider W] | <release> --fact Q<n> "<text>" | '
+              '<release> --depends Q<n> "<Q ids>" [--owner X] [--root PATH]'
     )
     ap.add_argument("release")
     ap.add_argument("kind", nargs="?")
@@ -114,16 +121,17 @@ def main():
     ap.add_argument("--bullet", action=_Once)
     ap.add_argument("--move", nargs=2, metavar=("Q<n>", "LANE"))
     ap.add_argument("--fact", nargs=2, metavar=("Q<n>", "TEXT"))
+    ap.add_argument("--depends", nargs=2, metavar=("Q<n>", "IDS"), help='2.2: the items Q<n> waits for, "Q14, Q15"')
     ap.add_argument("--new-round", action="store_true")
     a = ap.parse_args()
     if not C.RELEASE_RE.match(a.release):
         die(f"bad release '{a.release}', expected like v0.9.x")
-    card_op = a.move or a.fact
-    if a.move and a.fact:
-        die("--move and --fact are separate calls")
+    card_op = a.move or a.fact or a.depends
+    if sum(1 for x in (a.move, a.fact, a.depends) if x) > 1:
+        die("--move, --fact and --depends are separate calls")
     if card_op:
         if a.kind or a.title or a.source or a.bullet or a.new_round or a.option:
-            die("--move and --fact take only a Q id and a lane or a text")
+            die("--move, --fact and --depends take only a Q id and a lane or a text")
         if not SOURCE_RE.match(card_op[0]):
             die(f"bad id '{card_op[0]}', expected like Q3")
         if a.move and C.load("lib/queue").move_status(a.move[1]) is None:
@@ -160,6 +168,8 @@ def main():
     dc = C.load("lib/decisions")
     target = folder / "decisions.md"
     Q = C.load("lib/queue")
+    if a.depends and not Q.status_form(folder):
+        die(f"--depends needs a release of format 2.2: move {a.release} first with scripts/migrate/v2.1-v2.2")
     if Q.item_form(folder):
         return items(a, root, folder, Q, dc, target, card_op, title, fact)
     if a.option is not None:
@@ -247,6 +257,7 @@ def items(a, root, folder, Q, dc, target, card_op, title, fact):
                 f"{'an archived item is closed by you or lead' if closes == 'archived' else 'a done item with no decision is closed by agent'}")
     if new22 and a.source and a.decider is None:
         die(f"D --source {a.source} needs --decider you, lead or agent in a release of format 2.2")
+    deps = Q.split_ids(a.depends[1]) if a.depends else []
     with open(C.lock_file(folder), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         written = []
@@ -255,7 +266,13 @@ def items(a, root, folder, Q, dc, target, card_op, title, fact):
             item = Q.find(folder, int(ident[1:]))
             if item is None:
                 die(f"{ident} is not in {folder / Q.QUEUE_DIR}")
-            if a.move:
+            if a.depends:
+                why = Q.check_depends(folder, int(ident[1:]), deps)
+                if why:
+                    die(why)
+                new = Q.set_front(item["text"], depends_on=", ".join(deps))
+                subject = f"{ident} depends on {', '.join(deps) or 'nothing'}"
+            elif a.move:
                 word = Q.move_status(a.move[1], new22)
                 new = Q.set_front(item["text"], status=word, decision=None, option=None,
                                   decider=a.decider if closes else None)
@@ -309,6 +326,7 @@ def items(a, root, folder, Q, dc, target, card_op, title, fact):
                     written.append(item["path"])
             subject = f"{ident} {title}"
 
+        written += [p for p in Q.settle(folder) if p not in written]
         moved = dc.sync_file(folder)
         if moved:
             print(f"decisions.md lanes synced: {dc.moved_text(moved)}", file=sys.stderr)

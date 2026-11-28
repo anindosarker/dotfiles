@@ -20,6 +20,13 @@ A closed item of format 2.2 (done or archived) also has "decider: you|lead|agent
 made the call (DECIDERS); it is removed when the item is opened again. A done item closed by a
 decision has the decision line and decider you or lead (or agent); a done item with no decision
 has decider agent; an archived item has you or lead (CLOSERS).
+
+"depends_on: Q14, Q15" (format 2.2) names the items an item waits for; the line is absent when
+there are none. blocked is never set by hand: the blocked check (settle()) makes an item that is
+to-do or blocked "blocked" while an item it names is not done, and "to-do" when every named item
+is done; an item in another status keeps it. It runs on every write of an item, of queue.md and
+of the page data (write_data(), which lib/status.py runs on every save, so sprints/refresh.py
+also runs it after a hand edit).
     # Q<n>. <title>
 
     ## Notes
@@ -42,7 +49,8 @@ change of an item; nobody edits it by hand.
 status/data/queue.data.js, "window.QUEUE_DATA = {...};", is the data of the Queue view of the
 task board (board/task-board.html): release, format, updated, root, and items with id, number,
 title, status, decision, option, file, changed, notes, details and options (key, title, body,
-recommended). Format 2.2 adds decider ("" when none) after option. changed is the time of the last commit that changed the "status:" line of the
+recommended). Format 2.2 adds decider ("" when none) and depends_on (a list of ids, [] when
+none) after option. changed is the time of the last commit that changed the "status:" line of the
 file, left out while the file is not committed. It is a render, git-ignored with the rest of
 status/data/, written only for a release of format 2.1 and higher.
 
@@ -82,9 +90,10 @@ MOVES = {"open": ("open", "to-do"), "to-do": ("open", "to-do"), "later": ("later
 # The words queue/list.py takes besides LANES: the six status words; in progress is no queue status.
 WORDS_22 = ("to-do", "in progress", "blocked", "done", "backlog", "archived")
 LANES = ("Open", "Decided", "Later", "Dropped", "Autofix")  # the lane words of the commands, in this order
-FRONT_KEYS = ("status", "decision", "option", "decider")
+FRONT_KEYS = ("status", "decision", "option", "decider", "depends_on")
 DECIDERS = ("you", "lead", "agent")
 CLOSERS = {"archived": ("you", "lead"), "done": ("agent",)}  # the deciders of a --move to that status
+ID_RE = re.compile(r"^Q(\d+)$")
 FILE_RE = re.compile(r"^Q(\d+)-.*\.md$")
 TITLE_RE = re.compile(r"^# Q(\d+)\.\s+(.*?)\s*$")
 LIST_RE = re.compile(r"^- \[Q(\d+)\]\(")
@@ -242,14 +251,89 @@ def options(text):
 
 
 def read_item(path):
-    """{num, title, status, decision, option, decider, path, text} of an item file; num and title
-    from its "# Q<n>." line (None when it has none)."""
+    """{num, title, status, decision, option, decider, depends_on, path, text} of an item file;
+    num and title from its "# Q<n>." line (None when it has none); depends_on the list of the ids
+    of its "depends_on" line, [] when none."""
     text = C.read(path)
     head = next((TITLE_RE.match(l) for l in body(text).split("\n") if TITLE_RE.match(l)), None)
     f = front(text)
     return {"num": int(head.group(1)) if head else None, "title": head.group(2) if head else "",
             "status": f.get("status", ""), "decision": f.get("decision", ""), "option": f.get("option", ""),
-            "decider": f.get("decider", ""), "path": Path(path), "text": text}
+            "decider": f.get("decider", ""), "depends_on": split_ids(f.get("depends_on", "")),
+            "path": Path(path), "text": text}
+
+
+def split_ids(text):
+    """The ids of a "Q14, Q15" text, in order, each once; blank parts left out."""
+    return list(dict.fromkeys(t.strip() for t in (text or "").split(",") if t.strip()))
+
+
+# --- depends_on and the blocked check (format 2.2) ---
+
+def waits_for(it, its):
+    """The ids of the depends_on line of it that are not done (an id with no item file counts as
+    not done), in the order of the line."""
+    done = {f"Q{x['file_num']}" for x in its if status_of(x, True) == "done"}
+    return [d for d in it["depends_on"] if d not in done]
+
+
+def effective(it, its):
+    """The status an item of format 2.2 has by the blocked check: blocked or to-do for an item
+    that is to-do or blocked (or has no status line), from what it waits for; else its status."""
+    st = status_of(it, True)
+    if st not in ("to-do", "blocked"):
+        return st
+    return "blocked" if waits_for(it, its) else "to-do"
+
+
+def settle(folder):
+    """The blocked check: write the status of each item of a release of format 2.2 whose stored
+    status differs from effective(); a file with no status line that is to-do stays as it is.
+    Returns the paths written; [] below format 2.2."""
+    if not status_form(folder):
+        return []
+    its = items(folder)
+    out = []
+    for it in its:
+        want = effective(it, its)
+        if want != status_of(it, True):
+            write_item(it["path"], set_front(it["text"], status=want))
+            out.append(it["path"])
+    return out
+
+
+def check_depends(folder, num, ids):
+    """The refusal of "--depends Q<num> <ids>", one line, or None: an id that is not like Q14
+    (a decision id among them), an id with no item file, the item itself, a ring of items that
+    wait for each other."""
+    bad = [i for i in ids if not ID_RE.match(i)]
+    if bad:
+        return f"bad id {', '.join(bad)}: depends_on names queue item ids only, like Q14"
+    files = item_files(folder)
+    missing = [i for i in ids if int(i[1:]) not in files]
+    if missing:
+        return f"no item file for {', '.join(missing)} in {Path(folder) / QUEUE_DIR}"
+    if f"Q{num}" in ids:
+        return f"Q{num} cannot wait for itself"
+    graph = {f"Q{it['file_num']}": it["depends_on"] for it in items(folder)}
+    graph[f"Q{num}"] = ids
+    path, seen = [], set()
+
+    def ring(node):
+        if node == f"Q{num}" and path:
+            return True
+        if node in seen:
+            return False
+        seen.add(node)
+        path.append(node)
+        found = any(ring(n) for n in graph.get(node, []))
+        if not found:
+            path.pop()
+        return found
+
+    if any(ring(i) for i in ids):
+        return f"a ring: Q{num} waits for {' which waits for '.join(path)}, which waits for Q{num}"
+    return None
 
 
 def new_item(num, title, bullet=None, new=False):
@@ -383,13 +467,15 @@ def data(folder):
     """The queue data of the page, with root."""
     folder = Path(folder)
     new = status_form(folder)
+    its = items(folder)
     out = []
-    for it in items(folder):
+    for it in its:
         e = {"id": f"Q{it['file_num']}", "number": it["file_num"], "title": it["title"],
-             "status": status_of(it, new), "decision": it["decision"], "option": it["option"],
+             "status": effective(it, its) if new else status_of(it), "decision": it["decision"], "option": it["option"],
              "file": it["path"].relative_to(folder).as_posix()}
         if new:
             e["decider"] = it["decider"]
+            e["depends_on"] = it["depends_on"]
         when = changed(folder, it["path"])
         if when:
             e["changed"] = when
@@ -402,9 +488,14 @@ def data(folder):
 
 def write_data(folder):
     """status/data/queue.data.js of a release in the item form; nothing for a lower format.
-    Returns the path written, or None."""
+    Format 2.2: first the blocked check (settle) and queue.md when it is not in step. Returns the
+    path written, or None."""
     if not item_form(folder):
         return None
+    if status_form(folder):
+        settle(folder)
+        if not list_in_step(folder):
+            write_list(folder)
     p = Path(folder) / DATA
     C.load("lib/status").write_json(p, f"window.QUEUE_DATA = {json.dumps(data(folder), ensure_ascii=False)};\n")
     return p

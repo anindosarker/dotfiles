@@ -16,8 +16,10 @@ names the status it maps to (lib/queue.py select).
 
 A release of format 2.2 and higher (lib/queue.py status_form): Open lists the to-do and the
 blocked items, Decided the done items with a decision line, Autofix the done items without one,
-Later the backlog items, Dropped the archived ones; the six words select by status alone. Lane
-"all" counts the items of each lane word.
+Later the backlog items, Dropped the archived ones; the six words select by status alone. A
+blocked item has " (blocked: waits for Q14, Q15)" after its title: the items of its depends_on
+line that are not done. The status counts by the blocked check (lib/queue.py effective), also
+after a hand edit. Lane "all" counts the items of each lane word.
 
 Usage: python3 -I queue/list.py <release> [lane] [--facts] [--owner X] [--root PATH]
 """
@@ -87,15 +89,19 @@ def print_counts(bd, text):
 
 def print_items(Q, its, lane, facts, new=False):
     """The item form: the items of one lane word, or the count of each lane word (lane None)."""
+    status = (lambda it: Q.effective(it, its)) if new else None
     if lane is None:
         for n in Q.LANES:
-            print(f"{n} {len(Q.select(its, n, new))}")
+            print(f"{n} {len(Q.select(its, n, new, status))}")
         return
-    mine = Q.select(its, lane, new)
+    mine = Q.select(its, lane, new, status)
     if not mine:
         print("none")
     for it in mine:
-        print(f"Q{it['file_num']} {it['title']}")
+        wait = ""
+        if new and status(it) == "blocked":
+            wait = f" (blocked: waits for {', '.join(Q.waits_for(it, its))})"
+        print(f"Q{it['file_num']} {it['title']}{wait}")
         if facts:
             for s in Q.notes(it["text"]).split("\n"):
                 if s.strip():
