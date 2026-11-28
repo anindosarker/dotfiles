@@ -2,7 +2,8 @@
 """The one command after a change to the specs, the epics or the grid: the chain of lib/grid.py
 refresh(), then the swimlane data, in this order:
 
-1. the status/sprints.md grid (sprints/grid.py),
+1. the status/sprints.md grid (sprints/grid.py); in a release of format 2.2 no grid file: the
+   placement, stored in status/data/status.json (lib/status.py),
 2. the Sprint column of every unfinished epic's table (sprints/sync_epic_sprints.py),
 3. the cards of decisions.md moved to the lanes of the Done rule (lib/decisions.py sync),
 4. the Decided cards of queue.md synced with those lanes (queue/sync.py; nothing in a release
@@ -12,7 +13,7 @@ refresh(), then the swimlane data, in this order:
 Usage: python3 -I sprints/refresh.py <release> [--owner X] [--root PATH]
 
 Runs under the .ids.lock lock, so it never interleaves with sprints/mark.py. Prints what each
-step prints. Commits nothing: the caller commits the grid together with the epic files,
+step prints. Commits nothing: the caller commits the grid (none in format 2.2) together with the epic files,
 decisions.md and queue.md (with queue/ in format 2.1) the chain changed (run/go.py does).
 """
 import argparse

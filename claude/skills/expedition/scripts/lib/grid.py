@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
-"""The status/sprints.md grid of a release, built from the ownership facts (lib/ownership.py
-compute, in memory): milestones (rows) and sprints (columns). Library, no CLI.
+"""The grid of a release, built from the ownership facts (lib/ownership.py compute, in memory):
+milestones (rows) and sprints (columns). Library, no CLI. Below format 2.2 it is the file
+status/sprints.md. In a release of format 2.2 (spec 04, D13) no file is written or read: the
+grid text is built from status/data/status.json and returned (sprints/grid.py prints it), and
+the status file holds each milestone's sprint (lib/status.py).
 
 Columns are the ownership arithmetic: the longest chain ending at a milestone plus one, never
 before its epic's "Starts: S<n>" line in plan/epics/E<n>.md. The file holds "# <release> sprints",
@@ -8,7 +11,8 @@ an "Updated:" line and the grid "| Milestone | S1 | ... |" only: "·" in a miles
 blank elsewhere. Cells are "·", "[ ]", "[~]", "[x]" or "[!]" (reference/formats.md, Milestone
 status).
 
-When status/sprints.md exists, a row that still exists keeps every cell as it is once it is
+When status/sprints.md exists (a release with no status file; a release with one, of any format,
+reads these rows from its status file instead, stored_rows), a row that still exists keeps every cell as it is once it is
 finished ("[x]" or "[!]"). Every other row is placed again; a running or waiting row carries its
 "[ ]" or "[~]" to its new column. A row whose milestone no longer exists is dropped, unless it carries a run
 mark: then it is kept with a warning. A "[~]" of a milestone never launched (lib/ownership.py
@@ -20,8 +24,9 @@ at its own "- Starts: S<n>" line (plan/milestone.py); dependent ones open the ne
 is the epic label, the spec number and the milestone name, "E1 01 Filtering"; rows sorted by
 epic, spec number, then milestone order in the spec.
 
-write_grid() writes the grid only (sprints/grid.py). refresh() is the chain every grid change
-runs, in this order: the grid; the Sprint column of the "## Ownership" table of every unfinished
+write_grid() writes the grid only (sprints/grid.py); in format 2.2 it returns the text and writes
+no file. refresh() is the chain every grid change runs, in this order: the grid (in format 2.2
+the placement, stored in the status file by lib/status.py sync); the Sprint column of the "## Ownership" table of every unfinished
 epic that has gone (a Starts value, not every decision in Done), touching only that column
 (lib/ownership.py sync_sprint_columns), finished epics' files left alone; then the cards of
 decisions.md moved to the lanes of the Done rule (lib/decisions.py sync), so a merge reaches
@@ -89,10 +94,11 @@ def mark_of(cells):
     return next((c for c in cells if c in RUN_MARKS), PLANNED)
 
 
-def build(release, milestones, col, existing, num_key, label=None, held=(), view=False):
-    """Return (text, warnings) for status/sprints.md. label maps a milestone name to its epic number;
+def build(release, milestones, col, existing, num_key, label=None, held=(), view=False, updated=False):
+    """Return (text, warnings) for the grid. label maps a milestone name to its epic number;
     held names the "[~]" rows never launched. view: the marks of a release with status.json, as
-    {status word of its format: mark}, for the legend line; False for an earlier release."""
+    {status word of its format: mark}, for the legend line; False for an earlier release.
+    updated: an "Updated:" line in the view too (format 2.2, whose grid is printed on demand)."""
     n_old, rows_old = existing
     label = label or {}
     old = dict(rows_old)
@@ -131,7 +137,8 @@ def build(release, milestones, col, existing, num_key, label=None, held=(), view
     body = "".join(f"| {show(name)} | " + " | ".join(cells_of(name)) + " |\n" for name in rows)
     if view:
         legend = ", ".join(f"`{m}` {w}" for w, m in view.items())
-        return f"# {release} sprints\n\n{head}\n{sep}\n{body}\nMarks: {legend}.\n", warnings
+        stamp = f"Updated: {now:%Y-%m-%d %H:%M}\n\n" if updated else ""
+        return f"# {release} sprints\n\n{stamp}{head}\n{sep}\n{body}\nMarks: {legend}.\n", warnings
     text = f"# {release} sprints\n\nUpdated: {now:%Y-%m-%d %H:%M}\n\n{head}\n{sep}\n{body}"
     return text, warnings
 
@@ -154,23 +161,29 @@ def compute_or_die(own, folder):
 
 
 def write_grid(folder, release, quiet=False):
-    """Write status/sprints.md; returns (text, the ownership facts)."""
+    """Write status/sprints.md; returns (text, the ownership facts). In a release of format 2.2
+    the text is built from the status file and returned, and no file is written or read."""
     own = C.load("lib/ownership")
     comp = compute_or_die(own, folder)
     milestones, col = comp["milestones"], comp["col"]
-    path = folder / C.SPRINTS_MD
-    path.parent.mkdir(exist_ok=True)
-    n_old, rows_old, _ = read_grid(path)
+    st = C.load("lib/status")
+    new = st.new_form(folder)
+    n_old, rows_old = 0, []
+    if not new:
+        path = folder / C.SPRINTS_MD
+        path.parent.mkdir(exist_ok=True)
+        n_old, rows_old, _ = read_grid(path)
     label = epic_rows(folder, own, milestones)
     milestones = [m for m in milestones if m["name"] in label]
-    st = C.load("lib/status")
     view = st.active(folder) and {st.say(folder, w): m for w, m in st.MARKS.items()}
     if view:
         n_old, rows_old = stored_rows(st, folder)
     text, warnings = build(release, milestones, col, (n_old, rows_old), C.num_key, label,
-                           () if view else own.held_unlaunched(folder), view)
+                           () if view else own.held_unlaunched(folder), view, updated=new)
     for w in warnings:
         print(f"warning: {w}", file=sys.stderr)
+    if new:
+        return text, comp
     path.write_text(text, encoding="utf-8")
     if not quiet:
         print(path)
@@ -189,8 +202,15 @@ def stored_rows(st, folder):
     return n, [(name, c + [""] * (n - len(c))) for name, c in rows]
 
 
+def grid_files(folder):
+    """The grid file a commit of the chain holds: [status/sprints.md] below format 2.2, [] in a
+    release of format 2.2, which has none."""
+    return [] if C.load("lib/status").new_form(folder) else [folder / C.SPRINTS_MD]
+
+
 def sync_epics(folder, comp):
-    """The Sprint column of every unfinished epic's table, from the grid; prints each file."""
+    """The Sprint column of every unfinished epic's table, from the grid (lib/ownership.py grid:
+    the status file in format 2.2, status/sprints.md below); prints each file."""
     for p in C.load("lib/ownership").sync_sprint_columns(folder, comp):
         print(f"{p}: Sprint column synced with the grid")
 
@@ -219,12 +239,18 @@ def sync_queue(folder, locked=False):
 
 def refresh(folder, release, quiet=False, locked=False):
     """The chain after a grid change: the grid, the epic files' Sprint column, the decisions
-    lanes, the queue sync. locked=True: the caller holds the .ids.lock lock. Returns the grid text."""
+    lanes, the queue sync. locked=True: the caller holds the .ids.lock lock. Returns the grid text.
+    In a release of format 2.2 the status file is written before the Sprint column, because the
+    placement is stored there and the column is read from there (no grid file)."""
     text, comp = write_grid(folder, release, quiet)
-    sync_epics(folder, comp)
     st = C.load("lib/status")
-    if st.active(folder):
+    if st.new_form(folder):
         st.sync(folder, release)
+        sync_epics(folder, comp)
+    else:
+        sync_epics(folder, comp)
+        if st.active(folder):
+            st.sync(folder, release)
     sync_decisions(folder, locked)
     sync_queue(folder, locked)
     return text
@@ -237,14 +263,15 @@ WAITABLE = STARTED + (PLANNED,)
 
 def resume_mark(folder, key):
     """The cell a resume sets on the "[~]" cell of the milestone with tracker key key: "[ ]" when
-    it was launched before (a sprints/mark.py launch commit names it, lib/ownership.py
-    launched_keys), "·" when it never was. "[ ]" when git cannot tell."""
+    it was launched before (lib/ownership.py launched_keys: its "launched" value in the status
+    file in format 2.2, a sprints/mark.py launch commit in the history of status/sprints.md
+    below), "·" when it never was. "[ ]" when git cannot tell."""
     keys = C.load("lib/ownership").launched_keys(folder)
     return "[ ]" if keys is None or key in keys else PLANNED
 
 
 def set_mark(path, name, mark):
-    """status/sprints.md with the run cell of the row of milestone name set to mark, in the
+    """status/sprints.md (a release with no status file) with the run cell of the row of milestone name set to mark, in the
     column the row has now. Returns (old cell, new text), or (None, None) when no row names it."""
     lines = C.read(path).split("\n")
     for i, line in enumerate(lines):

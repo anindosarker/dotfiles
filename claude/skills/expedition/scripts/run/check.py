@@ -14,6 +14,9 @@ the run's last activity and one state word:
 - finished: the run's final state file says completed, but the row is still "[ ]";
 - no run: no id recorded, or the id is in no session folder.
 Every "[~]" row is listed as "waiting" and never counted as silent. A last line gives the counts.
+In a release of format 2.2 there is no status/sprints.md: the rows are read from
+status/data/status.json, a milestone in progress for a "[ ]" row and a blocked one for a "[~]"
+row; the output lines are the same.
 
 Where a run lives (Claude Code internals, read defensively; anything unreadable is skipped):
 <projects>/<project folder>/<session uuid>/subagents/workflows/<run id>/ holds journal.jsonl and
@@ -80,7 +83,13 @@ def registry():
 
 
 def rows(folder):
-    """[(milestone key, cell)] of the "[ ]" and "[~]" rows of status/sprints.md."""
+    """[(milestone key, cell)] of the "[ ]" and "[~]" rows of status/sprints.md. In a release of
+    format 2.2, which has no grid file, from status/data/status.json: "[ ]" for each milestone
+    that is in progress, "[~]" for each that is blocked, in the order of the file."""
+    st = C.load("lib/status")
+    if st.new_form(folder):
+        cell = {"in progress": "[ ]", "blocked": "[~]"}
+        return [(m["id"], cell[m["status"]]) for m in st.load(folder)["milestones"] if m.get("status") in cell]
     grid = folder / C.SPRINTS_MD
     head, data = C.table_rows(C.read(grid), "Milestone") if grid.is_file() else (None, [])
     keys = {}
