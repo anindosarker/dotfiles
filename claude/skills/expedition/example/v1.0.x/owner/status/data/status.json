@@ -1,7 +1,7 @@
 {
   "release": "v1.0.x",
   "format": "2.2",
-  "updated": "2026-11-28 12:03",
+  "updated": "2026-11-28 12:04",
   "statuses": [
     "to-do",
     "in progress",
@@ -43,7 +43,7 @@
       "path": "plan/specs/27-sidebar/27-sidebar.md",
       "epic": "E11",
       "status": "in progress",
-      "decider": ""
+      "decider": "you"
     }
   ],
   "milestones": [
@@ -65,7 +65,7 @@
       "depends": [],
       "outcome": "The sidebar holds the settings pages, a collapse shortcut and a numbered layout picker; its menus keep their blur.",
       "files": [],
-      "decider": ""
+      "decider": "you"
     },
     {
       "id": "27-collapse-shortcut",
@@ -85,7 +85,7 @@
       "depends": [],
       "outcome": "The sidebar holds the settings pages, a collapse shortcut and a numbered layout picker; its menus keep their blur.",
       "files": [],
-      "decider": ""
+      "decider": "you"
     },
     {
       "id": "27-layout-picker",
@@ -107,7 +107,7 @@
       "files": [
         "apps/web/src/lib/layouts.ts"
       ],
-      "decider": ""
+      "decider": "lead"
     },
     {
       "id": "27-sidebar-menus-keep-their-blur",
@@ -127,7 +127,7 @@
       "depends": [],
       "outcome": "The sidebar holds the settings pages, a collapse shortcut and a numbered layout picker; its menus keep their blur.",
       "files": [],
-      "decider": ""
+      "decider": "you"
     }
   ],
   "tasks": [
@@ -144,7 +144,7 @@
       "type": "feat",
       "decision": "D57",
       "file": "plan/specs/27-sidebar/tasks/01-settings-pages-in-sidebar.md",
-      "decider": ""
+      "decider": "you"
     },
     {
       "id": "27-02",
@@ -159,7 +159,7 @@
       "type": "feat",
       "decision": "D57",
       "file": "plan/specs/27-sidebar/tasks/02-remove-settings-side-menu.md",
-      "decider": ""
+      "decider": "you"
     },
     {
       "id": "27-03",
@@ -174,7 +174,7 @@
       "type": "feat",
       "decision": "D58",
       "file": "plan/specs/27-sidebar/tasks/03-shortcut.md",
-      "decider": ""
+      "decider": "you"
     },
     {
       "id": "27-04",
@@ -189,7 +189,7 @@
       "type": "feat",
       "decision": "D61",
       "file": "plan/specs/27-sidebar/tasks/04-layout-picker-numbered-list.md",
-      "decider": ""
+      "decider": "lead"
     },
     {
       "id": "27-05",
@@ -204,7 +204,7 @@
       "type": "feat",
       "decision": "D61",
       "file": "plan/specs/27-sidebar/tasks/05-remove-layouts-2-and-7.md",
-      "decider": ""
+      "decider": "lead"
     },
     {
       "id": "27-06",
@@ -219,7 +219,7 @@
       "type": "bug",
       "decision": "D62",
       "file": "plan/specs/27-sidebar/tasks/06-menu-keeps-blur.md",
-      "decider": ""
+      "decider": "you"
     }
   ]
 }
