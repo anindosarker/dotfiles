@@ -383,10 +383,15 @@ def push_plans(root, repo):
 def commit(root, paths, message):
     """git add and commit the paths that exist, with --only; nothing when none changed. Dies with
     one line on a git failure. Commits in the repo plan_repo names; pushes only that repo when it
-    is not root and has a remote."""
+    is not root and has a remote. A folder that holds no file is not named: git has no such
+    pathspec and would refuse the commit (the empty decisions/ of a new release)."""
     repo, paths = plan_repo(root, paths)
     git_ = lambda *args: subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
     tracked = [str(p) for p in paths if Path(p).exists()]
+    tracked = [p for p in tracked
+               if not Path(p).is_dir() or git_("ls-files", "-co", "--exclude-standard", "--", p).stdout.strip()]
+    if not tracked:
+        return False
     r = git_("add", "--", *tracked)
     if r.returncode:
         die(f"git add failed: {(r.stderr or r.stdout).strip()}")
