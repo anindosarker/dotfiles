@@ -26,6 +26,7 @@ SPECS_DIR = "plan/specs"
 EPICS_DIR = "plan/epics"
 TRACKERS_DIR = "run/trackers"
 QUEUE_MD = "queue.md"
+QUEUE_DIR = "queue"  # the item files of a release of format 2.1 and higher (lib/queue.py)
 HANDOFFS_DIR = "run/handoffs"
 STATUS_DIR = "status"
 SPRINTS_MD = "status/sprints.md"
@@ -232,7 +233,9 @@ def release_folder(root, owner, release):
     if not (folder / "plan").is_dir():
         die(f"{folder} has the old layout (no plan/): run python3 -I "
             f"{script('migrate/pre-v1.0/layout.py')} {release}")
-    old = load("migrate/pre-v1.0/queue").refusal(folder, release) or load("migrate/pre-v1.0/decisions").refusal(folder, release)
+    # A release of format 2.1 keeps its queue in item files: its queue.md is a list, not a board.
+    queue_old = None if load("lib/queue").item_form(folder) else load("migrate/pre-v1.0/queue").refusal(folder, release)
+    old = queue_old or load("migrate/pre-v1.0/decisions").refusal(folder, release)
     if old:
         die(old)
     if (folder / LEGACY_OWNERSHIP_MD).is_file():
