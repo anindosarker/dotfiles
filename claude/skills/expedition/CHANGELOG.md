@@ -15,6 +15,7 @@ What is new:
 - `status/index.html` is the dashboard page in place of the task board: six views, Dashboard, Queue, Epics, Milestones, Tasks and Sprints. Dashboard shows what waits for whom. The page loads its scripts from `status/src/`, and its data from `status/data/dashboard.data.js` and `status/data/status.data.js`; `status/data/dashboard.json` holds the same rows for an agent. `queue.data.js` is no longer written. Reference: [board/README.md](board/README.md).
 - `plan/new_release.py` makes a new release in format 2.2.
 - `status/report.py` on a release of an older format names, in its last line, the migration folders to run, in order.
+- Item post rules, for a release of every format: during a discussion the lead answers in chat, and the whole item comes again only when the talk on it ended and the proposal changed, or on the new owner word `restate` (before: a repost after each reply that changed the item). Every post of an item, the first post too, passes four checks: each line is needed for this decision, what the owner needs to finish the item is in it, ASD-STE100 words in short lines, and option 2 is a different idea or there is one option. Inside an option: bullets by default, a table or a code block only where bullets do not work. Rules: [reference/discuss.md](reference/discuss.md), Item format.
 
 What changes for a release in work:
 
