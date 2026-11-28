@@ -51,9 +51,17 @@ The status of a decision file, from the status rule (rule_status), the first row
 4. no such row, and the stored status is done (decisions/close.py, or a rule of an earlier run),
    or a spec that cites it has merged: done.
 5. an "epic" line: in progress.
-6. in no epic and sharing a file with a running epic: blocked (module 1.6.2 of spec 07; until it
-   is built this row never holds).
+6. in no epic (no "epic" line, no row in the Ownership table of any epic file, gone or planned)
+   and sharing a file with a running epic: blocked (the blocked check below).
 7. else to-do.
+The blocked check (module 1.6.2 of spec 07). The files of a decision are the Files owned of every
+milestone of the specs that cite it; when no spec cites it, the files the lead gave with
+epics/overlap.py --files ("decisions.D<n>.files" in status/data/status.json). A running epic is
+the "epic" line of a decision that is in progress by rows 1 to 5; its files are the Files owned of
+every milestone of the specs with "- Epic: E<n>", except the specs that cite the decision checked.
+The reason of a blocked decision is "Waits for E11, same file" (reason_words). The refresh chain
+removes the given files of a decision (kept_entries, called by lib/status.py build) when a spec
+cites it, when it has a row in an epic file, or when it is no longer to-do or blocked.
 The readers of the board form (read_cards, rule_lanes, sync_file, highest) answer from the files
 in the file form: a card keeps its keys, each worked out from the file and the status file (the
 lane from the status: to-do and blocked give To do, in progress gives In progress, done, backlog
@@ -575,6 +583,12 @@ def file_cards(folder):
 
 def rule_status(folder, cards):
     """{D: status word} of every decision file by the status rule (module docstring)."""
+    return status_and_waits(folder, cards)[0]
+
+
+def status_and_waits(folder, cards):
+    """({D: status word} by the status rule, {D: {epic: [shared files]}} of each blocked
+    decision)."""
     rows = started_rows(folder)
     facts = spec_facts(folder)
     out = {}
@@ -591,7 +605,132 @@ def rule_status(folder, cards):
         elif c["epic"]:
             out[n] = "in progress"
         else:
-            out[n] = STATUS_WORDS[0]  # row 6, the blocked check, comes with module 1.6.2 of spec 07
+            out[n] = STATUS_WORDS[0]
+    waits = {}
+    free = [c for c in cards if out[c["num"]] == STATUS_WORDS[0] and not c["epic"]]
+    if free:
+        scene = block_scene(folder, cards, out)
+        for c in free:
+            if c["num"] in scene["rows"]:
+                continue
+            got = waits_of(scene, c["num"])
+            if got:
+                out[c["num"]], waits[c["num"]] = "blocked", got
+    return out, waits
+
+
+# The blocked check (module docstring).
+def row_epics(folder):
+    """{D: the first epic number}: every decision with a row in the Ownership table of an epic
+    file, gone or planned."""
+    o = own()
+    out = {}
+    for n in o.epic_numbers(folder):
+        rows, _ = o.read_table(o.read(o.epic_path(folder, n)))
+        for r in rows or []:
+            if r["decision"] is not None:
+                out.setdefault(r["decision"], n)
+    return out
+
+
+def running_from(cards, word):
+    """Sorted epic numbers of the decisions that have an "epic" line and are in progress, word
+    being {D: status word}."""
+    return sorted({c["epic"] for c in cards if c["epic"] and word.get(c["num"]) == "in progress"})
+
+
+def block_scene(folder, cards, word):
+    """The facts of the blocked check: specs {spec: (epic or None, cited D numbers)}, owned
+    {spec: [files of every milestone]}, running (epic numbers), rows (row_epics) and given
+    ({"D<n>": [files]} the lead gave)."""
+    o = own()
+    owned = {}
+    for num, p in o.spec_files(folder):
+        files = []
+        for b in o.parse_spec(p):
+            files += [f for f in b["files"] or [] if f not in files]
+        owned[num] = files
+    given = {k: v["files"] for k, v in status_lib().decision_entries(folder).items()
+             if isinstance(v, dict) and isinstance(v.get("files"), list)}
+    return {"specs": o.spec_epics(folder), "owned": owned, "running": running_from(cards, word),
+            "rows": row_epics(folder), "given": given}
+
+
+def citing(scene, num):
+    """Spec numbers that cite decision num, in spec order."""
+    return [s for s, (_, cited) in scene["specs"].items() if num in cited]
+
+
+def files_of(scene, num):
+    """The files of decision num: the Files owned of the specs that cite it, else the files the
+    lead gave, else []."""
+    specs = citing(scene, num)
+    if specs:
+        out = []
+        for s in specs:
+            out += [f for f in scene["owned"].get(s, []) if f not in out]
+        return out
+    return list(scene["given"].get(f"D{num}", []))
+
+
+def waits_of(scene, num):
+    """{epic: [files of decision num that a milestone of that running epic owns]}, only the
+    epics that share a file. The specs citing num are not counted for any epic."""
+    mine = files_of(scene, num)
+    skip = set(citing(scene, num))
+    out = {}
+    for e in scene["running"]:
+        theirs = set()
+        for s, (epic, _) in scene["specs"].items():
+            if epic == e and s not in skip:
+                theirs.update(scene["owned"].get(s, []))
+        shared = [f for f in mine if f in theirs]
+        if shared:
+            out[e] = shared
+    return out
+
+
+def reason_words(epics):
+    """"Waits for E11, same file", "Waits for E11 and E12, same file", "Waits for E1, E2 and E3,
+    same file" for the epic numbers given."""
+    names = [f"E{e}" for e in sorted(epics)]
+    who = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+    return f"Waits for {who}, same file"
+
+
+def blocked_reason(waits):
+    """(reason words, shared files) of one entry of status_and_waits()[1]."""
+    files = []
+    for e in sorted(waits):
+        files += [f for f in waits[e] if f not in files]
+    return reason_words(waits), files
+
+
+def running_epics(folder):
+    """Sorted epic numbers of the running epics of a release in the file form."""
+    cards = file_cards(folder)
+    return running_from(cards, status_and_waits(folder, cards)[0])
+
+
+def kept_entries(folder, entries):
+    """The entries of the key "decisions" of the status file without the given files that the
+    refresh chain removes: a decision a spec cites, one with a row in an epic file, one that is
+    no longer to-do or blocked (or has no file). An entry left empty is dropped."""
+    if not any(isinstance(v, dict) and "files" in v for v in entries.values()):
+        return entries
+    cards = file_cards(folder)
+    word = rule_status(folder, cards)
+    scene = block_scene(folder, cards, word)
+    out = {}
+    for k, v in entries.items():
+        m = re.fullmatch(r"D(\d+)", k)
+        n = int(m.group(1)) if m else None
+        if isinstance(v, dict) and "files" in v and (
+                n is None or word.get(n) not in (STATUS_WORDS[0], "blocked")
+                or citing(scene, n) or n in scene["rows"]):
+            v = {x: y for x, y in v.items() if x != "files"}
+        if v:
+            out[k] = v
     return out
 
 

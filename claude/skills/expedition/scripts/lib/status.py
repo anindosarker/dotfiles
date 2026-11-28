@@ -32,8 +32,10 @@ the item has no such line. decisions.md is only read. In the file form of the de
 (lib/decisions.py file_form) the decider of a decision is the "decider" line of its file first.
 In a release of format 2.2 the key "decisions" holds one entry per decision of the file form,
 "D<n>": {"round": <n>} (spec 07, D16 keeps the round out of the decision file): queue/item.py D
-writes it (set_decision), every build keeps it as it is, and a release with no such entry has no
-key.
+writes it (set_decision), every build keeps it, and a release with no such entry has no key. An
+entry also holds "files", the files the lead gave for a decision no spec cites yet
+(epics/overlap.py --files, spec 07 module 1.6.2); every build drops them by the rule of
+lib/decisions.py kept_entries.
 Everything else in the file is rebuilt from the specs on every write (build), in the shape of
 the status board: release, updated, root, statuses, sprints, epics, specs, milestones, tasks.
 
@@ -364,7 +366,7 @@ def build(folder, release, stored=None):
     out = {"release": release, "format": fmt,
            "updated": now(), "statuses": list(STATUSES),
            "sprints": sprints, "epics": epics, "specs": specs, "milestones": milestones, "tasks": tasks}
-    kept = decision_entries(folder)
+    kept = C.load("lib/decisions").kept_entries(folder, decision_entries(folder))
     if kept:
         out["decisions"] = kept
     return out
