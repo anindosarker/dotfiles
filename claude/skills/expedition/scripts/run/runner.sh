@@ -7,9 +7,12 @@
 # Usage: runner.sh start <release> [--model M] [--new [--name NAME]] [--from <lead>] [--cwd PATH]   reuse the live runner, resume a dead one, or open the next number; --new opens another runner beside the live one, named NAME when given
 #        runner.sh list [<release>]              registry entries with busy or idle, release and kind; of one release when named
 #        runner.sh stop <release>                close the window, mark the entry stopped
-#        runner.sh send [--from <lead>] <release> "<line>"   type "ultracode <line>" into the runner window
+#        runner.sh send [--confirm] [--from <lead>] <release> "<line>"   type "ultracode <line>" into the runner window
 #                                                and submit it (typed prompts opt the turn in to
-#                                                ultracode; a SendMessage does not)
+#                                                ultracode; a SendMessage does not); --confirm (the
+#                                                two flags in either order) waits until the window
+#                                                takes input, types, and exits 0 only when the line
+#                                                is in the runner's transcript (see Confirm below)
 #        runner.sh fork <release> E<n> "<D ids>" --from <lead> [--model M] [--cwd PATH]
 #                                                open window "<release> specs E<n>": a forked session
 #                                                of the lead ($CLAUDE_CODE_SESSION_ID) that writes
@@ -44,6 +47,15 @@
 # without one: the window's pane running claude), literal text then Enter as a separate key, and
 # only while that pane runs a program that is not a shell; otherwise nothing is typed and the
 # command fails with one line.
+#
+# Confirm (send --confirm, D19): the window takes input when the entry's pane runs claude and
+# shows the input box (the text between the last two rule lines of the pane); a runner that is
+# busy on its start prompt takes input as soon as the box is there. The line is in the transcript
+# when <projects>/*/<uuid>.jsonl of the entry holds it, written after the call started, as a user
+# message (an idle runner) or as a "queue-operation" entry with operation "enqueue" (a busy one).
+# A line that is not there is typed once more; still not there: exit 1 with one line. Waits, in
+# seconds: EXPEDITION_SEND_READY (default 40) for the input box, EXPEDITION_SEND_WAIT (default
+# 20) for the transcript after each typing; the reasons are at the two values below.
 #
 # Registry: ~/.claude/expedition-runners.json, one entry per runner name
 # (name, uuid, tmux target, pane, cwd, release, started, state); every write takes a lock and
@@ -83,7 +95,7 @@ transcript_exists() {
 die() { echo "error: $*" >&2; exit 1; }
 
 usage() {
-  echo "usage: runner.sh start <release> [--model M] [--new [--name NAME]] [--from <lead>] [--cwd PATH] | list [<release>] | stop <release or window name> | send <release> \"<line>\" | resume <release or window name> | fork <release> E<n> \"<D ids>\" --from <lead> [--model M] [--cwd PATH] | adopt <release> [--uuid UUID] [--pane PANE] [--replaces <name>] | watch start|stop|status" >&2
+  echo "usage: runner.sh start <release> [--model M] [--new [--name NAME]] [--from <lead>] [--cwd PATH] | list [<release>] | stop <release or window name> | send [--confirm] [--from <lead>] <release> \"<line>\" | resume <release or window name> | fork <release> E<n> \"<D ids>\" --from <lead> [--model M] [--cwd PATH] | adopt <release> [--uuid UUID] [--pane PANE] [--replaces <name>] | watch start|stop|status" >&2
   exit 2
 }
 
@@ -648,10 +660,123 @@ cmd_adopt() {
   echo "$name registered: session $uuid in ${target:-no tmux window}${replaces:+, $replaces marked stopped}"
 }
 
+# send --confirm waits (D19 asks for short waits; a test sets them through the environment):
+# - for the input box: a claude session that starts or resumes draws its input box once it has
+#   loaded, in seconds on a fresh session and longer with a long transcript to resume; 40 s
+#   leaves room for that, and 40 + 20 + 20 = 80 s keeps a whole call, and the go that runs it,
+#   inside the 120 s limit of a shell call.
+# - for the transcript, after each typing: claude writes a typed line within a second, as a user
+#   message when idle or as a queue "enqueue" entry when busy; 20 s leaves room for a slow machine.
+SEND_READY="${EXPEDITION_SEND_READY:-40}"
+SEND_WAIT="${EXPEDITION_SEND_WAIT:-20}"
+# Each wait checks twice a second: often enough that a ready window costs no wait a person sees,
+# rare enough that the tmux and python calls cost nothing.
+SEND_POLL=0.5
+
+# input_box <pane>: the input box is the text between the last two rule lines of the pane.
+input_box() {
+  tmux capture-pane -p -t "$1" \
+    | awk '/^[[:space:]]*─/ { n++; box[n] = buf; buf = ""; next } { buf = buf $0 } END { print box[n] }'
+}
+
+# box_shown <pane>: the pane shows the input box, two rule lines or more.
+box_shown() {
+  [ "$(tmux capture-pane -p -t "$1" 2>/dev/null | grep -c '^[[:space:]]*─')" -ge 2 ]
+}
+
+# wait_ready <name>: wait up to SEND_READY seconds until the entry's pane runs claude and shows
+# the input box; fail with one line, nothing typed.
+wait_ready() {
+  local pane end=$((SECONDS + SEND_READY))
+  while :; do
+    pane="$(entry_pane "$1")"
+    if [ -n "$pane" ] && pane_typable "$pane" && box_shown "$pane"; then return 0; fi
+    [ "$SECONDS" -lt "$end" ] || die "$1: the window takes no input after $SEND_READY s; nothing typed. Look at its window, then send again"
+    sleep "$SEND_POLL"
+  done
+}
+
+# transcript_size <uuid>: the byte size of the session transcript now, 0 when it has none yet.
+transcript_size() {
+  local f
+  f="$(ls "$PROJECTS"/*/"$1".jsonl 2>/dev/null | head -1)"
+  if [ -n "$f" ]; then wc -c < "$f" | tr -d ' '; else echo 0; fi
+}
+
+# transcript_has <uuid> <offset> <since> <text>: the transcript holds <text> in a user message or
+# a queue "enqueue" entry written after byte <offset> and not before the UTC time <since>, so a
+# line of an earlier call never counts.
+transcript_has() {
+  python3 -I - "$PROJECTS" "$@" <<'PY'
+import datetime, glob, json, sys
+projects, uuid, offset, since, text = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4], sys.argv[5]
+files = glob.glob(f"{glob.escape(projects)}/*/{uuid}.jsonl")
+if not files:
+    sys.exit(1)
+since = datetime.datetime.fromisoformat(since)
+with open(files[0], "rb") as f:
+    data = f.read()
+# A transcript that shrank was replaced: read it whole, the time filter keeps old lines out.
+data = data[offset:] if len(data) >= offset else data
+for raw in data.decode("utf-8", "replace").splitlines():
+    try:
+        e = json.loads(raw)
+    except ValueError:
+        continue
+    try:
+        if datetime.datetime.fromisoformat(e.get("timestamp", "").replace("Z", "+00:00")) < since:
+            continue
+    except ValueError:
+        continue
+    if e.get("type") == "queue-operation" and e.get("operation") == "enqueue":
+        body = e.get("content")
+    elif e.get("type") == "user":
+        body = (e.get("message") or {}).get("content")
+    else:
+        continue
+    if isinstance(body, list):
+        body = " ".join(b.get("text", "") for b in body if isinstance(b, dict))
+    if isinstance(body, str) and text in body:
+        sys.exit(0)
+sys.exit(1)
+PY
+}
+
+# type_line <name> <line>: type the line and submit it; a long line can stay in the input box
+# after the first Enter: check, send Enter once more.
+type_line() {
+  type_into "$1" "$2"
+  sleep 1
+  if input_box "$TYPED_PANE" | grep -qF -- "${2:0:40}" && pane_typable "$TYPED_PANE"; then
+    tmux send-keys -t "$TYPED_PANE" Enter
+  fi
+}
+
+# confirm_line <name> <uuid> <offset> <since> <text>: wait up to SEND_WAIT seconds for the text in
+# the transcript.
+confirm_line() {
+  local end=$((SECONDS + SEND_WAIT))
+  while :; do
+    transcript_has "$2" "$3" "$4" "$5" && return 0
+    [ "$SECONDS" -lt "$end" ] || return 1
+    sleep "$SEND_POLL"
+  done
+}
+
 cmd_send() {
-  local from=""
-  if [ "${1:-}" = --from ]; then [ $# -ge 2 ] || usage; from="$2"; shift 2; fi
+  local from="" confirm=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --confirm) confirm=1; shift ;;
+      --from) [ $# -ge 2 ] || usage; from="$2"; shift 2 ;;
+      *) break ;;
+    esac
+  done
   [ $# -eq 2 ] || usage
+  if [ "$confirm" = 1 ]; then
+    [[ "$SEND_READY" =~ ^[1-9][0-9]*$ ]] || die "EXPEDITION_SEND_READY='$SEND_READY' is not a whole number of seconds; unset it or set it like 40"
+    [[ "$SEND_WAIT" =~ ^[1-9][0-9]*$ ]] || die "EXPEDITION_SEND_WAIT='$SEND_WAIT' is not a whole number of seconds; unset it or set it like 20"
+  fi
   local name line="ultracode $2" target i
   # The lead name: --from, else the "from <name>" that ends a RUN or HELLO line, else the name
   # of a "LEAD <name>" line.
@@ -663,16 +788,26 @@ cmd_send() {
   [ "$(reg field "$name" state)" != "stopped" ] || die "$name is stopped: runner.sh start $1"
   target="$(reg field "$name" tmux)"
   window_alive "$target" || die "$name window is gone: runner.sh start $1 resumes it"
-  type_into "$name" "$line"
-  # A long line can stay in the input box after the first Enter: check, send Enter once more.
-  sleep 1
-  # The input box is the text between the last two rule lines of the pane.
-  if tmux capture-pane -p -t "$TYPED_PANE" \
-      | awk '/^[[:space:]]*─/ { n++; box[n] = buf; buf = ""; next } { buf = buf $0 } END { print box[n] }' \
-      | grep -qF -- "${line:0:40}" && pane_typable "$TYPED_PANE"; then
-    tmux send-keys -t "$TYPED_PANE" Enter
+  if [ "$confirm" = 0 ]; then
+    type_line "$name" "$line"
+    echo "typed into $target ($TYPED_PANE): $line"
+    return 0
   fi
-  echo "typed into $target ($TYPED_PANE): $line"
+  local uuid offset since try
+  uuid="$(reg field "$name" uuid)"
+  # The mark of this call: only an entry written after it counts.
+  offset="$(transcript_size "$uuid")"
+  since="$(python3 -I -c 'import datetime; print(datetime.datetime.now(datetime.timezone.utc).isoformat())')"
+  wait_ready "$name"
+  # Two typings: the second covers a line that a window lost although it showed its input box.
+  for try in 1 2; do
+    type_line "$name" "$line"
+    if confirm_line "$name" "$uuid" "$offset" "$since" "$2"; then
+      echo "typed into $target ($TYPED_PANE): $line"
+      return 0
+    fi
+  done
+  die "$name: the line is not in the transcript after 2 tries. Look at its window, then send again"
 }
 
 [ $# -ge 1 ] || usage
