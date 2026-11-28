@@ -11,7 +11,10 @@ Usage: python3 -I status/status.py <release> set <id> "<status>" [--reason "<tex
 <id>: a task is "<spec>-<number>" (27-03), a milestone its tracker file name without
 "-tracker.md" (27-collapse-shortcut), a spec its number (27), an epic E11.
 <status>: not started, in progress, blocked, done or skipped. blocked and skipped need
---reason, a few words; the full text goes under "## Attention" of the milestone's tracker.
+--reason, a few words; the full text goes under "## Attention" of the milestone's tracker. A
+release of format 2.2 says to-do for not started and archived for skipped: every command takes
+both sets of words in every format (to-do and not started mean the same, so do archived and
+skipped), stores the word of the release's format and prints it (lib/status.py).
 
 set works on a task or a milestone; the status of a spec and an epic is counted. It writes the
 JSON file, rolls a task change up into its milestone, counts the spec, the epic and the sprint,
@@ -62,9 +65,9 @@ C = _common()
 KINDS = ("epic", "spec", "milestone", "task")
 
 
-def line(kind, e):
+def line(st, folder, kind, e):
     why = f" ({e['reason']})" if e.get("reason") else ""
-    return f"{kind} {e['id']}: {e['status']}{why} {e.get('name') or e.get('title') or ''}".rstrip()
+    return f"{kind} {e['id']}: {st.say(folder, e['status'])}{why} {e.get('name') or e.get('title') or ''}".rstrip()
 
 
 def main():
@@ -94,13 +97,14 @@ def main():
         C.die(f"{folder} has no {st.FILE}: a release made before this format keeps its statuses "
               "in the grid and the trackers (sprints/mark.py)")
     if a.action == "list":
-        if a.rest or (a.status and a.status not in st.STATUSES):
-            C.die(f"list takes --status (one of {', '.join(st.STATUSES)}) and --kind")
+        want = st.canon(a.status) if a.status else None
+        if a.rest or (want and want not in st.STATUSES):
+            C.die(f"list takes --status (one of {', '.join(st.words(folder))}) and --kind")
         data = st.load(folder)
         for kind in KINDS:
             for e in data[kind + "s"] if a.kind in (None, kind) else []:
-                if a.status in (None, e["status"]):
-                    print(line(kind, e))
+                if want in (None, e["status"]):
+                    print(line(st, folder, kind, e))
         return
     if a.action == "get":
         if len(a.rest) != 1:
@@ -108,7 +112,7 @@ def main():
         kind, e = st.find(st.load(folder), a.rest[0])
         if kind is None:
             C.die(f"nothing has the id {a.rest[0]}")
-        print(f"{e['id']}: {e['status']}" + (f" ({e['reason']})" if e.get("reason") else ""))
+        print(f"{e['id']}: {st.say(folder, e['status'])}" + (f" ({e['reason']})" if e.get("reason") else ""))
         return
     if a.action == "drop":
         if len(a.rest) != 1:
@@ -131,8 +135,9 @@ def main():
             kind, e, stored = st.set_status(folder, a.release, ident, word, a.reason, a.commit, locked=True,
                                             boxes_in=mine if mine and mine.is_dir() else None)
         if stored is None:
-            late = st.pending(folder) and st.commit(root, folder, [], f"docs(plan): {a.release} {kind} {ident} {e['status']}")
-            print(f"{kind} {ident}: already {e['status']}, nothing changed" + ("; an earlier failed commit is made now" if late else ""))
+            now = st.say(folder, e["status"])
+            late = st.pending(folder) and st.commit(root, folder, [], f"docs(plan): {a.release} {kind} {ident} {now}")
+            print(f"{kind} {ident}: already {now}, nothing changed" + ("; an earlier failed commit is made now" if late else ""))
             return
         paths = [folder / C.SPRINTS_MD, folder / "decisions.md", *C.load("lib/queue").commit_paths(folder)]
         paths += sorted((folder / C.EPICS_DIR).glob("E*.md"))

@@ -131,9 +131,10 @@ def add_pointer(text, number, title, module, rel):
     return _append(text, "Tasks", lambda *_: [f"- {number} {title} · module {module} · {rel}"])
 
 
-def task_file_text(title, kind):
-    """templates/task.md for a new task: its title and type, "status: not started", no quote (an
-    agent never writes the owner's words) and no Instructions section (added when needed)."""
+def task_file_text(title, kind, status="not started"):
+    """templates/task.md for a new task: its title and type, "status: <status>" (the first word of
+    the release's format, lib/status.py say; "not started" by default), no quote (an agent never
+    writes the owner's words) and no Instructions section (added when needed)."""
     out, skip = [], False
     for line in C.template("task.md").splitlines():
         if line.startswith("## "):
@@ -142,6 +143,8 @@ def task_file_text(title, kind):
             continue
         if line.startswith("type:"):
             line = f"type: {kind}"
+        elif line.startswith("status:"):
+            line = f"status: {status}"
         elif line.startswith("# "):
             line = f"# {title}"
         out.append(line)

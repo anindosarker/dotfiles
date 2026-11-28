@@ -91,7 +91,8 @@ def mark_of(cells):
 
 def build(release, milestones, col, existing, num_key, label=None, held=(), view=False):
     """Return (text, warnings) for status/sprints.md. label maps a milestone name to its epic number;
-    held names the "[~]" rows never launched."""
+    held names the "[~]" rows never launched. view: the marks of a release with status.json, as
+    {status word of its format: mark}, for the legend line; False for an earlier release."""
     n_old, rows_old = existing
     label = label or {}
     old = dict(rows_old)
@@ -129,7 +130,7 @@ def build(release, milestones, col, existing, num_key, label=None, held=(), view
     show = lambda name: f"E{label[name]} {spec[name]} {name}" if label.get(name) else name
     body = "".join(f"| {show(name)} | " + " | ".join(cells_of(name)) + " |\n" for name in rows)
     if view:
-        legend = ", ".join(f"`{m}` {w}" for w, m in C.load("lib/status").MARKS.items())
+        legend = ", ".join(f"`{m}` {w}" for w, m in view.items())
         return f"# {release} sprints\n\n{head}\n{sep}\n{body}\nMarks: {legend}.\n", warnings
     text = f"# {release} sprints\n\nUpdated: {now:%Y-%m-%d %H:%M}\n\n{head}\n{sep}\n{body}"
     return text, warnings
@@ -163,7 +164,7 @@ def write_grid(folder, release, quiet=False):
     label = epic_rows(folder, own, milestones)
     milestones = [m for m in milestones if m["name"] in label]
     st = C.load("lib/status")
-    view = st.active(folder)
+    view = st.active(folder) and {st.say(folder, w): m for w, m in st.MARKS.items()}
     if view:
         n_old, rows_old = stored_rows(st, folder)
     text, warnings = build(release, milestones, col, (n_old, rows_old), C.num_key, label,

@@ -1,5 +1,5 @@
 ---
-status: not started
+status: to-do
 ---
 <!--
 In one line each

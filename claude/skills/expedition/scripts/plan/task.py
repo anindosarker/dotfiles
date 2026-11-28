@@ -5,7 +5,7 @@ Usage: python3 -I plan/task.py add <release> <spec> "<Title>" [--module 1.6.N]
        [--milestone "<name>"] [--type feat|bug] [--owner X] [--root PATH]
 
 For a spec in the new form. Writes the file tasks/NN-<slug>.md from templates/task.md ("status:
-not started", --type, default feat; NN is the next task number of the spec) and the line
+not started", "status: to-do" in a release of format 2.2, --type, default feat; NN is the next task number of the spec) and the line
 "- NN <Title> · module 1.6.N · tasks/NN-<slug>.md" at the end of 2.1 Tasks. --module names the
 task's module: default the module of the milestone's first task, else the spec's last module.
 --milestone adds the number to that milestone's "- Tasks:" line; a task joins a milestone only
@@ -90,7 +90,7 @@ def main():
             else:
                 state = "not started" if sp.grid_cells(folder, a.spec).get(a.milestone, "·") == "·" else "started"
             if state != "not started":
-                die(f"milestone '{a.milestone}' is {state}: a task joins a milestone only while it is "
+                die(f"milestone '{a.milestone}' is {st.say(folder, state)}: a task joins a milestone only while it is "
                     "not started; add the work as its own milestone (plan/milestone.py add)")
         module = a.module or (block["tasks"][0]["module"] if block and block["tasks"] else None) \
             or (list(doc["modules"])[-1] if doc["modules"] else None)
@@ -103,7 +103,7 @@ def main():
             text = sp.link_task(text, a.milestone, number)
         out = path.parent / rel
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(sp.task_file_text(a.title, a.type), encoding="utf-8")
+        out.write_text(sp.task_file_text(a.title, a.type, st.say(folder, st.STATUSES[0])), encoding="utf-8")
         path.write_text(text, encoding="utf-8")
         if stored:
             with contextlib.redirect_stdout(io.StringIO()):

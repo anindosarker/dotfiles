@@ -10,7 +10,8 @@ Usage: python3 -I plan/new_spec.py <release> <num> <slug> "<Title>" "<scope>"
 
 Template: --template PATH, else a contract stub when the project has planning rules
 (plan/find_rules.py), else the bundled templates/spec.md, without its note and with the
-sections 1.6 Modules, 2.1 Tasks and 2.2 Milestones empty. Write section 1, then add each piece
+sections 1.6 Modules, 2.1 Tasks and 2.2 Milestones empty. Its "status:" line holds the first word
+of the release's format: "not started", or "to-do" in a release of format 2.2. Write section 1, then add each piece
 of work with plan/milestone.py add: it writes the module heading, the task files, the task
 pointers, the milestone block and the milestone's tracker. Then run sprints/check.py.
 
@@ -189,7 +190,7 @@ def main():
     specs_dir.mkdir(parents=True, exist_ok=True)
     spec = specs_dir / f"{a.num}-{a.slug}" / spec_name
     rules = [] if a.template else C.find_rules(root)
-    template = load_template(root, a.template, rules)
+    template = st.stamp(folder, load_template(root, a.template, rules))  # "status: to-do" in format 2.2
     cited = set()
     for text in (a.title, a.scope, template):
         for m in re.finditer(r"\((D\d+[^)]*)\)", text):
