@@ -5,9 +5,12 @@
 # every 5 s and types each note whose source is not the lead into the lead's tmux pane as
 # one line: "NUDGE <name or unknown>: <text>" (same typing method as runner.sh send).
 #
-# Store: key "seen" is a flat list of note texts, appended as shown; key "sessions" is a list
-# of {id, askedTurn, offeredTurn?, tag?}, where an entry gaining offeredTurn (or a new value of
-# it) means that session was just shown a note. Names come from ~/.claude/expedition-runners.json
+# Store: key "seen" is a flat list of note texts, appended as shown and capped by the plugin at
+# 50 (the oldest drops); key "sessions" is a list of {id, askedTurn, offeredTurn?, tag?, view?},
+# where view.line is the note that session was shown last. A session whose view.line changed
+# since the last poll was just shown that note: its line is forwarded with its own name, one
+# line per session. A newly offered session (offeredTurn new) without a view.line falls back to
+# the texts of "seen" that the last poll did not see. Names come from ~/.claude/expedition-runners.json
 # (runner or fork uuid); the lead pane and session id from its key "lead", written by runner.sh
 # (an older "lead" entry with only the window resolves to that window's pane running claude).
 #
@@ -17,7 +20,8 @@
 # and non-printable character, whitespace is collapsed, and it is cut at 500 characters ("...").
 #
 # Dead loop: every NUDGE_RESUME_EVERY seconds (default 60) it runs run/check.py --tsv for the
-# release of each runner entry that is not stopped, in that entry's folder. A runner gets the line
+# release of each runner entry that is not stopped, in that entry's folder; an entry whose folder
+# does not exist is skipped without a log line. A runner gets the line
 # "ultracode resume" typed into its pane (the same line as runner.sh resume, so the turn may use
 # the Workflow tool) when it owns a row that is silent, finished or no run, and its own transcript
 # (<projects>/*/<uuid>.jsonl) has not changed for the stale threshold (NUDGE_STALE_MINUTES,
@@ -33,8 +37,9 @@
 # EXPEDITION_REGISTRY), NUDGE_INTERVAL, NUDGE_RESUME_EVERY, NUDGE_STALE_MINUTES,
 # NUDGE_RESUME_STATE, EXPEDITION_STATE_DIR, EXPEDITION_PROJECTS (default ~/.claude/projects),
 # EXPEDITION_TMUX_SOCKET (tmux -L <socket>).
-# State keeps the seen count, the offered (id, turn) pairs and the held notes, so a restart
-# replays nothing; a first run initialises from the current store without sending. Exits when
+# State keeps the seen list, the shown line of each session, the offered (id, turn) pairs and
+# the held notes, so a restart replays nothing; a first run, or a state in the old form ("seen"
+# a number), initialises from the current store without sending. Exits when
 # the registry has no "lead" or the lead window is gone (logged); a registry it cannot parse
 # is skipped for that poll.
 set -euo pipefail
@@ -154,26 +159,49 @@ def clean(s, cap=500):
     s = " ".join(s.split())
     return s if len(s) <= cap else s[:cap - 3].rstrip() + "..."
 
-data = load(store) or {}
+data = load(store)
+data = data if isinstance(data, dict) else {}
 seen = [s if isinstance(s, str) else json.dumps(s) for s in data.get("seen") or []]
-offered = {f"{s.get('id')}:{s.get('offeredTurn')}": s.get("id")
-           for s in data.get("sessions") or [] if isinstance(s, dict) and s.get("offeredTurn")}
+sessions = [s for s in data.get("sessions") or [] if isinstance(s, dict) and s.get("id")]
+offered = {f"{s['id']}:{s.get('offeredTurn')}": s["id"] for s in sessions if s.get("offeredTurn")}
+# lines: the shown line of each session, sessions[].view.line (empty when the session has none).
+lines = {}
+for s in sessions:
+    view = s.get("view")
+    line = view.get("line") if isinstance(view, dict) else None
+    lines[str(s["id"])] = line if isinstance(line, str) else ""
 old = load(state)
+old = old if isinstance(old, dict) else None
 held = [h for h in (old or {}).get("pending") or [] if isinstance(h, str)]
 new = []
-if old is not None:
-    start = old.get("seen", 0)
-    texts = seen[start:] if start <= len(seen) else []  # store pruned or reset: nothing new
-    new_ids = [i for k, i in offered.items() if k not in set(old.get("offered") or [])]
+# A state in the old form ("seen" a number, no "lines") is read like a first run: it keeps the
+# current line of each session and forwards nothing old. Its held notes are kept.
+if old is not None and isinstance(old.get("lines"), dict) and isinstance(old.get("seen"), list):
     reg = load(registry)
     reg = reg if isinstance(reg, dict) else {}
     names = {e.get("uuid"): name for name, e in reg.items()
              if name != "lead" and isinstance(e, dict) and e.get("uuid")}
-    others = [i for i in new_ids if i != lead]
-    if texts and not (new_ids and not others):  # only the lead was shown a note: it sees its own
-        source = ", ".join(dict.fromkeys(names.get(i, "unknown") for i in others)) or "unknown"
-        new = [f"NUDGE {clean(source, 100)}: {clean(t)}" for t in texts]
-state.write_text(json.dumps({"seen": len(seen), "offered": sorted(offered), "pending": held + new}) + "\n")
+    old_lines = old["lines"]
+    new_ids = [i for k, i in offered.items() if k not in set(old.get("offered") or [])]
+    # 1. A session whose shown line changed: forward that line, with that session's name. The
+    # plugin keeps at most 50 notes in "seen", so the count of that list cannot find a new note.
+    shown = []
+    for sid, line in lines.items():
+        if line and line != old_lines.get(sid):
+            shown.append(line)
+            if sid != lead:  # the lead sees its own note
+                new.append(f"NUDGE {clean(names.get(sid, 'unknown'), 100)}: {clean(line)}")
+    # 2. A newly offered session with no shown line (a plugin that writes no "view"): forward each
+    # text of "seen" that the last poll did not see and no shown line already covers.
+    blind = [i for i in new_ids if not lines.get(str(i))]
+    others = [i for i in blind if i != lead]
+    if others:
+        before = set(old["seen"])
+        texts = [t for t in seen if t not in before and t not in shown]
+        source = ", ".join(dict.fromkeys(names.get(i, "unknown") for i in others))
+        new += [f"NUDGE {clean(source, 100)}: {clean(t)}" for t in texts]
+state.write_text(json.dumps({"seen": seen, "lines": lines, "offered": sorted(offered),
+                             "pending": held + new}) + "\n")
 for line in held:
     print("held\t" + line)
 for line in new:
@@ -213,8 +241,11 @@ try:
     assert isinstance(reg, dict)
 except Exception:
     sys.exit(0)
+# An entry whose folder is gone is skipped without a log line: check.py would run in the
+# watcher's own folder and fail each period. The registry stays as it is (runner.sh writes it).
 runners = {n: e for n, e in reg.items() if n != "lead" and isinstance(e, dict) and e.get("kind", "runner") != "fork"
-           and e.get("state") != "stopped" and e.get("uuid") and e.get("release")}
+           and e.get("state") != "stopped" and e.get("uuid") and e.get("release")
+           and isinstance(e.get("cwd"), str) and e["cwd"] and os.path.isdir(e["cwd"])}
 try:
     typed = json.loads(state.read_text())
     typed = typed if isinstance(typed, dict) else {}
@@ -222,9 +253,9 @@ except Exception:
     typed = {}
 due = {}
 for release, cwd in sorted({(e["release"], e.get("cwd") or "") for e in runners.values()}):
-    try:
+    try:  # 120 s: check.py reads one release folder in a few seconds; more means it hangs
         out = subprocess.run(["python3", "-I", check, release, "--tsv", "--stale", str(stale / 60)],
-                             cwd=cwd if os.path.isdir(cwd) else None, capture_output=True, text=True, timeout=120)
+                             cwd=cwd, capture_output=True, text=True, timeout=120)
     except Exception as exc:
         log(f"{release}: check.py did not run ({exc})")
         continue
