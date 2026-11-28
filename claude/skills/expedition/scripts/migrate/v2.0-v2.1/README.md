@@ -40,7 +40,7 @@ The command refuses, and writes nothing, when the release is not in format 2.0, 
 
 ## How to check it worked
 
-- The command prints the counts: cards read and item files written, bullets read and bullets written. They are equal, or it commits nothing.
+- The command prints the counts: cards read and item files written, bullets read and bullets written. They are equal, or it commits nothing and names each card whose bullets differ. The usual cause is a line that starts with `## ` under the card: it ends `## Notes`. Change that line, commit, and run again.
 - `python3 -I <skill>/scripts/status/report.py <release>` exits 0, and its `Queue:` line counts as many items as there were cards.
 
 ## How to undo it

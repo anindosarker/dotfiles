@@ -24,7 +24,8 @@ In the release folder:
   files". decisions.md, the specs, the trackers and the statuses are not touched.
 
 Prints one line per item file and the counts: cards read, item files written, bullets read,
-bullets written. A difference stops it before the commit. --check prints the same and writes
+bullets written. A difference stops it before the commit and names each Q<n> whose count
+differs. --check prints the same and writes
 nothing.
 
 Refuses, writing nothing: a release that is not in format 2.0 (for 1.0 it names
@@ -185,7 +186,7 @@ def main():
     if lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
     cards = read_board(bd, q, folder)
-    files = {}
+    files, differ = {}, []
     for c, status in cards:
         p = q.item_path(folder, c["num"], c["title"])
         files[p] = item_text(q, c, status)
@@ -195,19 +196,24 @@ def main():
               + (f", {decision}" if decision else "") + f", {plural(bullets(c['subs']), 'bullet')}")
         for line in dropped:
             print(line)
+        got = bullets(q.notes(files[p]).split("\n"))
+        if got != bullets(c["subs"]):
+            differ.append(f"Q{c['num']} (bullets read {bullets(c['subs'])}, written {got}: "
+                          "a \"## \" heading line under the card ends its ## Notes)")
     read_n = (len(cards), sum(bullets(c["subs"]) for c, _ in cards))
     wrote_n = written_counts(q, list(files.values()))
     counts = lambda w: f"cards read {read_n[0]}, item files written {w[0]}; bullets read {read_n[1]}, bullets written {w[1]}"
+    which = "; differs: " + ", ".join(differ) if differ else ""
     if a.check:
         print(f"would write {C.QUEUE_MD}: a list of {len(files)} lines")
         print(f"would set format {TO} in {st.FILE}")
         print(counts(wrote_n))
         if read_n != wrote_n:
-            C.die("the counts differ: the migration would stop before its commit")
+            C.die(f"the counts differ{which}: the migration would stop before its commit")
         print("check; nothing written")
         return
     if read_n != wrote_n:
-        C.die(f"{counts(wrote_n)}: the counts differ; nothing written")
+        C.die(f"{counts(wrote_n)}: the counts differ{which}; nothing written")
     for p, text in files.items():
         q.write_item(p, text)
     q.write_list(folder)
