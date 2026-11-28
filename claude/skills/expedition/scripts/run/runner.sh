@@ -95,6 +95,8 @@ WATCHER="$SKILL_DIR/scripts/run/nudge-watch.sh"
 WATCH_PID="$STATE_DIR/nudge-watch.pid"
 PROJECTS="${EXPEDITION_PROJECTS:-$HOME/.claude/projects}"
 CLAUDE_BIN="${EXPEDITION_CLAUDE:-claude}"
+# Set by resume "<window name>" of a runner entry (D30): the entry cmd_start resumes.
+RESUME_NAME=""
 
 # Every tmux call goes to the default server, or to "tmux -L $EXPEDITION_TMUX_SOCKET" in tests.
 tmux() {
@@ -413,7 +415,10 @@ cmd_start() {
   local cwd
   cwd="$(new_cwd "$cwd_flag")"
   local name
-  if [ -n "$given" ]; then
+  if [ -n "$RESUME_NAME" ]; then
+    # resume "<window name>" of a runner entry (D30): that entry, not the newest of the release.
+    name="$RESUME_NAME"
+  elif [ -n "$given" ]; then
     # A name of the owner's, used exactly as given.
     [ "$new" = 1 ] || die "--name needs --new"
     [[ "$given" != *[/\\\|\&$'\t\n']* ]] && [ "$given" != lead ] && ! [[ "$given" =~ ^v[0-9]+\.[0-9]+\.x$ ]] \
@@ -611,27 +616,44 @@ cmd_fork() {
   fi
 }
 
-# resume <release | "<window name>">: a live window gets the word "resume" typed in (the runner
-# with the ultracode prefix, a fork without); a dead runner is started again (start resumes it);
-# a dead fork whose session transcript exists is resumed the same way, in a new window of the
-# lead's tmux session with its name ("claude --resume <uuid>", the voice line typed first, Voice
+# resume <release | "<window name>">: the kind of the registry entry picks the path (D30), not the
+# form of the argument; an entry with no kind is a runner, as in list. A runner, found by its
+# release or by its window name ("Exp-2.1-R", "v2.1.x runner3"): a live window gets "ultracode
+# resume" typed in; a dead one is started again as start resumes it (the runner's model, the brief,
+# the voice line), and it is the session of the named entry that comes back. A fork: a live window
+# gets "resume" typed in; a dead fork whose session transcript exists is resumed in a new window of
+# the lead's tmux session with its name ("claude --resume <uuid>", the voice line typed first, Voice
 # above); otherwise (entry stopped, no transcript, not inside tmux) its claude --resume line is
 # printed with the reason. Never stop a window on a usage limit.
 cmd_resume() {
   [ $# -eq 1 ] || usage
-  local name target uuid state line
+  local name target uuid state line release=""
   name="$(resolve_name "$1")"
-  if [[ "$1" =~ ^v[0-9]+\.[0-9]+\.x$ ]]; then line="ultracode resume"; else line="resume"; fi
   uuid="$(reg field "$name" uuid)"
   [ -n "$uuid" ] || die "no registry entry for $name"
+  if [[ "$1" =~ ^v[0-9]+\.[0-9]+\.x$ ]]; then
+    release="$1"
+  elif [ "$(reg field "$name" kind)" != fork ]; then
+    # A runner named by its window name: its release from the entry, else from an older name
+    # ("<release> runner<n>", "runner-<release>"). None found: the fork path, as before D30.
+    release="$(reg field "$name" release)"
+    if ! [[ "$release" =~ ^v[0-9]+\.[0-9]+\.x$ ]]; then
+      release=""
+      if [[ "$name" =~ ^(v[0-9]+\.[0-9]+\.x)\ runner[0-9]+$ ]] || [[ "$name" =~ ^runner-(v[0-9]+\.[0-9]+\.x)$ ]]; then
+        release="${BASH_REMATCH[1]}"
+      fi
+    fi
+  fi
+  if [ -n "$release" ]; then line="ultracode resume"; else line="resume"; fi
   state="$(reg field "$name" state)"
   target="$(reg field "$name" tmux)"
   if window_alive "$target"; then
     type_into "$name" "$line"
     echo "typed into $target ($TYPED_PANE): $line"
-  elif [[ "$1" =~ ^v[0-9]+\.[0-9]+\.x$ ]]; then
+  elif [ -n "$release" ]; then
     [ "$state" != "stopped" ] || reg put "$name" '{"state": "running"}'
-    cmd_start "$1"
+    [[ "$1" =~ ^v[0-9]+\.[0-9]+\.x$ ]] || RESUME_NAME="$name"
+    cmd_start "$release"
   else
     local cwd why="" pane
     cwd="$(reg field "$name" cwd)"
