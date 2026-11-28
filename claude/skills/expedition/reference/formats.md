@@ -188,7 +188,7 @@ Held:
 
 ## decisions.md
 
-The list of the decisions of the release, template [../templates/decisions-list.md](../templates/decisions-list.md): the title `# Decisions, <release>`, then one line per decision file, in the order of the numbers, linked to the file. The scripts write it again after each change of a decision; nobody edits it by hand. It holds no status, decider or epic: those are in the decision files. A filled list: [../example/decisions.md](../example/decisions.md).
+The list of the decisions of the release, template [../templates/decisions-list.md](../templates/decisions-list.md): the title `# Decisions, <release>`, then one line per decision file, in the order of the numbers, linked to the file. The scripts write it again after each change of a decision; nobody edits it by hand. It holds no status, decider or epic: those are in the decision files. A filled list: [../example/v1.0.x/owner/decisions.md](../example/v1.0.x/owner/decisions.md).
 
 ```md
 # Decisions, v0.9.x
@@ -201,7 +201,7 @@ A release that keeps its decisions on a board (format 2.1 or lower, or format 2.
 
 ## Decision file
 
-`decisions/D<n>-<slug>.md`, one accepted decision, template [../templates/decision.md](../templates/decision.md). Read the approved example before the first decision file is written: [../example/decisions/D8-queue-item-six-status-words-depends-on-and-decider.md](../example/decisions/D8-queue-item-six-status-words-depends-on-and-decider.md). More examples: [../example/decisions.md](../example/decisions.md).
+`decisions/D<n>-<slug>.md`, one accepted decision, template [../templates/decision.md](../templates/decision.md). Read the approved example before the first decision file is written: [../example/v1.0.x/owner/decisions/D58-the-sidebar-has-a-collapse-shortcut.md](../example/v1.0.x/owner/decisions/D58-the-sidebar-has-a-collapse-shortcut.md). More examples: [../example/v1.0.x/owner/decisions.md](../example/v1.0.x/owner/decisions.md).
 
 ```md
 ---

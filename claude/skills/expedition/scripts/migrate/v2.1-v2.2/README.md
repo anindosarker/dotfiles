@@ -20,7 +20,7 @@ Moves one release to the status words of format 2.2: the queue items, the decisi
   | `dropped` | `archived` |
   | (none) | `blocked`: it waits for an item that is not `done` |
 
-- One file per decision: `decisions/D<n>-<slug>.md`. Its front matter holds `status`, `decider`, `source`, `epic` and `replaced_by` (each line only when it has a value), then the title line `# D<n>. <title>`, then a free body. The approved example is [../../../example/decisions/D8-queue-item-six-status-words-depends-on-and-decider.md](../../../example/decisions/D8-queue-item-six-status-words-depends-on-and-decider.md).
+- One file per decision: `decisions/D<n>-<slug>.md`. Its front matter holds `status`, `decider`, `source`, `epic` and `replaced_by` (each line only when it has a value), then the title line `# D<n>. <title>`, then a free body. The approved example is [../../../example/v1.0.x/owner/decisions/D58-the-sidebar-has-a-collapse-shortcut.md](../../../example/v1.0.x/owner/decisions/D58-the-sidebar-has-a-collapse-shortcut.md).
 - `decisions.md` is a list, one line per decision file, which the scripts write again after each change. Nobody edits it by hand.
 - The status of a decision is one of six words, set by the scripts only:
 
