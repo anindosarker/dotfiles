@@ -115,7 +115,7 @@ function showUpdated() {
   const el = $("#upd");
   el.textContent = `updated ${relTime(D.updated)}`;
   el.title = `Updated ${D.updated ?? "?"}`;
-  $("#reload").dataset.tip = `Reload data (also every 30 seconds) · ${el.textContent}`;
+  $("#reload").dataset.tip = `Reload data (also every ${RELOAD_MS / 1000} seconds) · ${el.textContent}`;
   fitUpdated();
 }
 
@@ -697,7 +697,7 @@ $("#theme").addEventListener("click", () => {
 });
 $("#reload").addEventListener("click", () => { loadScript(true); loadDashScript(true); });
 
-// The reload button and the 30 second timer share this path. Unchanged data is not drawn again;
+// The reload button and the timer (RELOAD_MS) share this path. Unchanged data is not drawn again;
 // changed data keeps the view, the filters, the open rows, the selection and the scroll position.
 let dataText = null;
 function loadScript(bust) {
@@ -741,10 +741,14 @@ function loadDashScript(bust) {
   s.onerror = () => { s.remove(); if (dashText === null && D) render(); };
   document.head.appendChild(s);
 }
+// The page shows a status change within 2 seconds (D22): a status command writes the data files
+// and makes no commit, so the page is the place to see it. Two small script loads per tick, only
+// while the tab is visible; unchanged data is not drawn again.
+const RELOAD_MS = 2000;
 // Starts after parts.js and views.js have loaded (scripts at the end of <body> run before DOMContentLoaded).
 addEventListener("DOMContentLoaded", () => {
   syncControls();
   loadDashScript(false);
   loadScript(false);
-  setInterval(() => { if (!document.hidden) { loadScript(true); loadDashScript(true); } }, 30000);
+  setInterval(() => { if (!document.hidden) { loadScript(true); loadDashScript(true); } }, RELOAD_MS);
 });

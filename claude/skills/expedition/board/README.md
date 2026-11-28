@@ -11,7 +11,7 @@ board/
   dashboard.html   top bar, board and panel mount points, the <link> and <script> tags
   README.md        this page reference
   src/style.css    all styles
-  src/core.js      data loading and the 30 s reload, state and saved settings, filters, search, sort, keys, side panel, render
+  src/core.js      data loading and the 2 s reload, state and saved settings, filters, search, sort, keys, side panel, render
   src/parts.js     shared parts: icon sprite, id chips and pills, shared board (move, resize, hide columns, View menu, keys),
                    shared foldable list sections, swimlanes (Epics and Milestones), sprint folding
   src/views.js     the six views built from the parts: Dashboard, Epics and Milestones (swimlanes), Tasks, Sprints, Queue,
