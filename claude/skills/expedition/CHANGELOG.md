@@ -15,17 +15,25 @@ What is new:
 - `status/index.html` is the dashboard page in place of the task board: six views, Dashboard, Queue, Epics, Milestones, Tasks and Sprints. Dashboard shows what waits for whom. The page loads its scripts from `status/src/`, and its data from `status/data/dashboard.data.js` and `status/data/status.data.js`; `status/data/dashboard.json` holds the same rows for an agent. `queue.data.js` is no longer written. Reference: [board/README.md](board/README.md).
 - `plan/new_release.py` makes a new release in format 2.2.
 - `status/report.py` on a release of an older format names, in its last line, the migration folders to run, in order.
+- One file per decision: `decisions/D<n>-<slug>.md`, with the front matter `status`, `decider`, `source`, `epic` and `replaced_by`, the title line and a free body (bullets by default, a table or a code block where it reads better). `decisions.md` is the list of the decision files, written by the scripts. The rules: [reference/formats.md](reference/formats.md), Decision file.
+- A decision has the six status words and a `decider`. `to-do`, `in progress`, `blocked` and `done` come from the status rule, `backlog` from `decisions/close.py --backlog`, `archived` from `decisions/supersede.py`, which writes `replaced_by: D<new>` into the old file and nothing into the new one. Every `queue/item.py <release> D` call takes `--decider you`, `lead` or `agent`; a run agent records a deviation it settled with `--decider agent`.
+- A decision in no epic that shares a file with a running epic is `blocked`, and `to-do` again when that epic has merged. For a decision that no spec cites, the lead gives its files with `epics/overlap.py <release> D<n> --files "<files>"`.
+- `decisions/close.py <release> D<n> --backlog` moves a decision to another release (before: the bullet `- Deferred to`).
+- `decisions/decider.py <release> D<n> you|lead|agent` writes the decider of a decision file that has none: a decision recorded before its release moved to decision files.
+- The `Epic ready` message lists the blocked decisions under `**Blocked:**` (before: `**Decided, not in this epic:**`). The lead copies the ready lines and the blocked lines from `epics/overlap.py <release>`, which prints them.
 
 What changes for a release in work:
 
 - Nothing has to change at once. A release in format 2.1 or lower keeps its words, its epic file lines and its `status/sprints.md`, and every script reads and writes it as before. Its rules: the section Format 2.1 releases of `SKILL.md`, and [reference/old-form/format-2.1.md](reference/old-form/format-2.1.md).
-- To use the new words and the dashboard page, migrate the release. The migration is one commit, keeps every id and every line of the item files, and can be undone with `git revert`. A migrated `decided` or `dropped` item has no `decider` line, because the files of format 2.1 do not say who made the call.
+- To use the new words and the dashboard page, migrate the release. The migration is one commit, keeps every id and every line of the item files and of the decision cards, and can be undone with `git revert`. A migrated `decided` or `dropped` item, and a migrated decision, has no `decider` line, because the files of format 2.1 do not say who made the call.
+- A release of format 2.2 whose `decisions.md` is still the board keeps working as before. The same migration command moves only its decisions to decision files: [scripts/migrate/v2.1-v2.2/README.md](scripts/migrate/v2.1-v2.2/README.md), A release of format 2.2 with the board.
 - A session that read the skill before this version re-reads it before it creates a release or migrates one.
 
 What stops working:
 
 - Nothing that a 2.1 release used is removed. Every command and every flag stays, and a command takes the words of both formats.
 - In a release of format 2.2, no script writes `status/sprints.md`, and `queue.data.js` is not written.
+- In a release with decision files, `queue/item.py <release> D` without `--decider` is refused, and `decisions/supersede.py` writes no `- Supersedes` line into the new decision.
 
 Migration: [scripts/migrate/v2.1-v2.2/README.md](scripts/migrate/v2.1-v2.2/README.md).
 
