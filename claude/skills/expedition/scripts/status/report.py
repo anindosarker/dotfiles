@@ -15,7 +15,22 @@ specs citing them and their state from the Done rule (to do, in progress, done, 
 D<n>, deferred). Board gaps, one line each: a missing lane, a card without a **D<n>** token, a
 tag other than #superseded, #deferred, #E<n> and #R<n>, a duplicate id, ids out of order inside
 a lane, a card whose lane disagrees with the Done rule (a hand drag; the next sync moves it back),
-a tick that disagrees with its lane. Queue cards (queue.md, a kanban board, see
+a tick that disagrees with its lane. A release of format 2.2 whose decisions.md is still a board
+gets one more gap line that names scripts/migrate/v2.1-v2.2/format.py.
+In a release whose decisions are files (lib/decisions.py file_form, D9 and D16) the section is
+"Decisions: <n> in decisions/", one row per decision file (id, citing specs, its status line),
+"per status:" with the count per status word, and one line that counts the files with no
+"decider" line and names decisions/decider.py (no gap: they were recorded before the file form).
+Its gaps, one line each with the fix: a status that is none of the six words or differs from the
+status rule (sprints/refresh.py); a front matter line that is none of the five, a decider that is
+not you, lead or agent, a replaced_by, epic or source that names no decision file, epic file or
+queue item file (the line itself; a bad replaced_by or epic line hides the status gap it causes);
+a file with no "# D<n>. <title>" line or whose number differs from its file name (the file); a
+file the list lacks, a list line with no file, a list that differs otherwise (sprints/refresh.py);
+a D id a spec cites and no file has. Two files with one number end the report with the one line
+of lib/decisions.py decision_files. Under Queue a done item whose decision has no file is a gap;
+under Epics a decision is no longer editable in place once its status is archived, and the
+supersede marks of a board are not checked. Queue cards (queue.md, a kanban board, see
 lib/board.py) are listed with their lane. Queue gaps: an unknown or missing lane (a "**Complete**"
 marker line under a lane heading is tolerated), a card without a **Q<n>** token, a duplicate id,
 a tag on a title line that is not #D<n> or #E<n>, a leftover "Decision:" sub-bullet, a Decided
@@ -170,6 +185,9 @@ def decision_table(folder, path, docs, extra=()):
         w2 = max(len(r[1]) for r in rows) + 2
         for a, b, c in rows:
             print(f"  {a.ljust(w1)}{b.ljust(w2)}{c}")
+    gap = board_gap(folder)
+    if gap:
+        print(gap)
     names = [l["name"] for l in parsed["lanes"]]
     for n in dc.LANES:
         if n not in names:
@@ -200,6 +218,103 @@ def decision_table(folder, path, docs, extra=()):
     if dups:
         print(f"  duplicate numbers: {', '.join(f'D{n}' for n in dups)}")
     return cards, want
+
+
+LIST_LINE_RE = re.compile(r"^- \[D(\d+)\]\(([^)]*)\)")
+FILE_TITLE_RE = re.compile(r"^#\s+D(\d+)\.\s*\S")
+
+
+def board_gap(folder):
+    """The gap line of a release of format 2.2 whose decisions.md is still a board, else None."""
+    if not C.load("lib/status").new_form(folder) or C.load("lib/decisions").file_form(folder):
+        return None
+    return (f"  decisions.md is still a board: move the decisions to files with "
+            f"{C.load('lib/decisions').MIGRATE}/format.py")
+
+
+def file_decision_table(folder, docs, extra=()):
+    """The Decisions section of a release whose decisions are files (lib/decisions.py file_form):
+    one row per decision file (id, citing specs, the status line), the count per status word, the
+    decisions with no decider line, then the gaps of the files and of the list. Returns the cards
+    (lib/decisions.py file_cards)."""
+    dc = C.load("lib/decisions")
+    cards = dc.file_cards(folder)
+    print(f"Decisions: {len(cards)} in {dc.DECISIONS_DIR}/")
+    texts = {num: read(p) for num, p in docs}
+    texts.update(dict(extra))
+    cited = {num: cites(t, "D", True) for num, t in texts.items()}
+    rows = []
+    for c in cards:
+        citing = sorted((num for num, ci in cited.items() if c["num"] in ci), key=num_key)
+        rows.append((f"D{c['num']}", ", ".join(citing) or "-", c["stored"] or "-"))
+    if rows:
+        w1 = max(len(r[0]) for r in rows) + 2
+        w2 = max(len(r[1]) for r in rows) + 2
+        for a, b, s in rows:
+            print(f"  {a.ljust(w1)}{b.ljust(w2)}{s}")
+    counts = collections.Counter(c["stored"] for c in cards)
+    print("  per status: " + ", ".join(f"{w} {counts.get(w, 0)}" for w in dc.STATUS_WORDS))
+    none = [c["num"] for c in cards if not c["front"].get("decider")]
+    if none:
+        many = len(none) > 1
+        print(f"  {len(none)} decision{'s have' if many else ' has'} no decider line (recorded before the "
+              f"file form): {', '.join(f'D{n}' for n in none)}; set it with decisions/decider.py "
+              f"{folder.parent.name} D<n> you|lead|agent")
+    rule = dc.rule_status(folder, cards)
+    have = {c["num"] for c in cards}
+    Q = C.load("lib/queue")
+    items = {it["file_num"] for it in Q.items(folder)} if Q.item_form(folder) else set()
+    own = C.load("lib/ownership")
+    for c in cards:
+        n, rel, front = c["num"], c["file"], c["front"]
+        first = dc.rest_of(read(c["path"])).split("\n")[0]
+        m = FILE_TITLE_RE.match(first)
+        if not m:
+            print(f"  {rel}: no '# D<n>. <title>' line: write it as the first line after the front matter")
+        elif int(m.group(1)) != n:
+            print(f"  {rel}: the title says D{m.group(1)}, the file name D{n}: make the two agree")
+        # a replaced_by or epic line that names nothing is the gap; the status rule reads that line,
+        # so the status it gives is not named as a second gap of the same decision
+        bad = []
+        v = front.get("replaced_by")
+        if v and not ((r := re.fullmatch(r"D(\d+)", v)) and int(r.group(1)) in have):
+            bad.append(f"  D{n}: replaced_by '{v}' names no decision file; fix the line")
+        v = front.get("epic")
+        if v and not ((r := re.fullmatch(r"E(\d+)", v)) and own.epic_path(folder, int(r.group(1))).is_file()):
+            bad.append(f"  D{n}: epic '{v}' has no epic file in {EPICS_DIR}/; fix the line")
+        if c["stored"] not in dc.STATUS_WORDS:
+            print(f"  D{n}: status '{c['stored']}': only {', '.join(dc.STATUS_WORDS)}; run sprints/refresh.py")
+        elif c["stored"] != rule[n] and not bad:
+            print(f"  D{n}: status '{c['stored']}', the status rule gives '{rule[n]}': run sprints/refresh.py")
+        for k, v in front.items():
+            if k not in dc.FRONT_KEYS:
+                print(f"  D{n}: front matter line '{k}: {v}': only {', '.join(dc.FRONT_KEYS)}; remove the line")
+        if front.get("decider") and front["decider"] not in dc.DECIDERS:
+            print(f"  D{n}: decider '{front['decider']}': only {', '.join(dc.DECIDERS)}; fix the line")
+        for line in bad:
+            print(line)
+        v = front.get("source")
+        if v and not ((r := re.fullmatch(r"Q(\d+)", v)) and int(r.group(1)) in items):
+            print(f"  D{n}: source '{v}' names no queue item file; fix the line")
+    listed = {}
+    path = dc.path_of(folder)
+    for line in read(path).split("\n") if path.is_file() else []:
+        m = LIST_LINE_RE.match(line)
+        if m:
+            listed[int(m.group(1))] = m.group(2)
+    for c in cards:
+        if c["num"] not in listed:
+            print(f"  D{c['num']}: {c['file']} has no line in decisions.md: run sprints/refresh.py")
+    for n, target in sorted(listed.items()):
+        if n not in have or not (folder / target).is_file():
+            print(f"  decisions.md: the line of D{n} names {target}, which is no decision file: run sprints/refresh.py")
+    if set(listed) == have and all((folder / x).is_file() for x in listed.values()) and not dc.list_in_step(folder):
+        print("  decisions.md differs from the decision files: run sprints/refresh.py")
+    all_cited = set().union(*cited.values()) if cited else set()
+    undefined = sorted(all_cited - have)
+    if undefined:
+        print(f"  cited but undefined: {', '.join(f'D{n}' for n in undefined)}")
+    return cards
 
 
 def q_cites(text):
@@ -354,6 +469,8 @@ def status_items_report(folder, Q, docs, extra, dec_nums):
         for a, b, c in rows:
             print(f"  {a.ljust(w1)}{b.ljust(w2)}{c}")
     status_of = {f"Q{it['file_num']}": it["status"] for it in its}
+    dc = C.load("lib/decisions")
+    files = dc.file_form(folder)
     for it in its:
         n, rel, st = it["file_num"], it["path"].relative_to(folder).as_posix(), it["status"]
         if it["num"] is None:
@@ -372,7 +489,8 @@ def status_items_report(folder, Q, docs, extra, dec_nums):
             if not m:
                 print(f"  Q{n}: decision '{it['decision']}' is not like D<n>")
             elif int(m.group(1)) not in dec_nums:
-                print(f"  Q{n}: decision {it['decision']} is not in decisions.md")
+                print(f"  Q{n}: decision {it['decision']} " + (f"has no decision file in {dc.DECISIONS_DIR}/"
+                      if files else "is not in decisions.md"))
         dep_gap = False
         for i in it["depends_on"]:
             if not Q.ID_RE.match(i):
@@ -681,7 +799,8 @@ def main():
     d = own.new_collect(folder, plan)
     docs, statuses = d["docs"], d["statuses"]
 
-    dec_cards, _ = decision_table(folder, decisions, docs)
+    files = C.load("lib/decisions").file_form(folder)
+    dec_cards = file_decision_table(folder, docs) if files else decision_table(folder, decisions, docs)[0]
     Q = C.load("lib/queue")
     if Q.status_form(folder):
         open_q = status_items_report(folder, Q, docs, d["extra"], {c["num"] for c in dec_cards})
@@ -744,6 +863,11 @@ def main():
         print(f"  E{e}{state}: {', '.join(f'D{n}' for n in groups[e])}")
     heads, bullets = own.supersedes(folder)
     gone = {**bullets, **heads}
+    if files:
+        # the file form: a decision is gone when its status is archived (replaced_by gives the
+        # new one); no body is read, so there is no bullet to match a mark against
+        gone = {n: heads.get(n, "?") for n in nums if n in heads or card[n]["stored"] == "archived"}
+        bullets = heads = {}
     for old, new in sorted(bullets.items()):
         if heads.get(old) != new:
             print(f"  D{new} supersedes D{old}, but the D{old} title lacks (superseded by D{new})")
