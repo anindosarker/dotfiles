@@ -1,6 +1,6 @@
 # The queue board, for a release of format 2.0 or 1.0
 
-A release whose `status/data/status.json` says `"format": "2.0"`, or that has no status file (format 1.0), keeps its queue as this board. A release of format 2.1 keeps one item file per item and a list `queue.md` instead: [../formats.md](../formats.md), queue.md and Item file. To move a release of format 2.0 to item files: [../../scripts/migrate/v2.0-v2.1/README.md](../../scripts/migrate/v2.0-v2.1/README.md). The section below is the `queue.md` section of `formats.md` of format 2.0, with its links set for this folder.
+A release whose `status/data/status.json` says `"format": "2.0"`, or that has no status file (format 1.0), keeps its queue as this board. A release of format 2.1 or higher keeps one item file per item and a list `queue.md` instead: [../formats.md](../formats.md), queue.md and Item file; the status words of format 2.1: [format-2.1.md](format-2.1.md), Item file. To move a release of format 2.0 to item files: [../../scripts/migrate/v2.0-v2.1/README.md](../../scripts/migrate/v2.0-v2.1/README.md). The section below is the `queue.md` section of `formats.md` of format 2.0, with its links set for this folder.
 
 ## queue.md
 

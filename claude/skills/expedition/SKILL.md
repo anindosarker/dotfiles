@@ -154,9 +154,22 @@ Folded into stage 1: the run's items are queue items and come up through `queue/
 - The runner and the spec writer: `run/runner.sh start|list|stop|send|fork|resume|adopt`.
 - A release in an older format: [reference/migrate.md](reference/migrate.md). The skill's version is `metadata.version` in this file's front matter; what each version changed: [CHANGELOG.md](CHANGELOG.md).
 
+## Format 2.1 releases
+
+A release whose status file says `"format": "2.1"` is read as it is; no release is converted by itself. What differs there:
+
+- A queue item has the words `open`, `decided`, `later`, `dropped` and `autofix`: "record it" sets `decided`, "later" `later`, "drop it" `dropped`, and an item the run fixes is `autofix`.
+- An epic, a spec, a milestone and a task have the words `not started`, `in progress`, `blocked`, `done` and `skipped`; a planned epic is `not started`.
+- The epic file has the lines `decisions:` and `specs:` beside `status:` and `starts:`.
+- The grid is the committed file `status/sprints.md`, written by `sprints/refresh.py` and `sprints/mark.py`; the lead and the runner read that file where this skill says `sprints/grid.py`.
+- No item has a decider or waits for others: `queue/item.py --decider` is accepted and not stored, and `queue/item.py --depends` is refused.
+- `status/index.html` is the task board, with the Queue view reading `status/data/queue.data.js`.
+- The forms in full: [reference/old-form/format-2.1.md](reference/old-form/format-2.1.md).
+- To move the release to format 2.2: [scripts/migrate/v2.1-v2.2/README.md](scripts/migrate/v2.1-v2.2/README.md).
+
 ## Format 2.0 releases
 
-A release whose status file says `"format": "2.0"` is read as it is; no release is converted by itself. What differs there:
+A release whose status file says `"format": "2.0"` is read as it is; no release is converted by itself. Everything of Format 2.1 releases, above, holds there too, apart from the queue. What differs there:
 
 - The queue is a kanban board, `queue.md`, and an item is a card on it: a title and facts, in five lanes (Open, Decided, Later, Dropped, Autofix). There is no `queue/` folder and no item file; the scripts read and write the board, with the same commands, except one flag: a decision is recorded with `queue/item.py <release> D "<title>" --source Q<n>` and no `--option`, because the script refuses `--option` on a board.
 - The options of an item are only in chat, in the form of [templates/item.md](templates/item.md) (filled: [example/item-examples.md](example/item-examples.md)); nothing of them is written to a file.
@@ -168,7 +181,7 @@ A release whose status file says `"format": "2.0"` is read as it is; no release 
 A release with no status file is in format 1.0 and is read as it is; no release is converted by itself. What differs there:
 
 - A spec is one flat file `plan/specs/NN-<slug>.md` with `### Milestone: <name>` blocks and `- Task N: ... Checks: ...` lines; `- Files owned:` is required in each block.
-- A milestone's status is its grid mark and the `Status:` line of its tracker ([reference/formats.md](reference/formats.md), Milestone status); there is no status file and no task status.
+- A milestone's status is its grid mark and the `Status:` line of its tracker ([reference/old-form/format-2.1.md](reference/old-form/format-2.1.md), The grid file); there is no status file and no task status.
 - `plan/new_spec.py` writes the flat file there, from [templates/spec-flat.md](templates/spec-flat.md), and `plan/new_fix.py` adds a fix. How to write such a plan file: [reference/old-form/planning-guidelines.md](reference/old-form/planning-guidelines.md) and [reference/old-form/specs.md](reference/old-form/specs.md); an example plan: [reference/old-form/example-plan.md](reference/old-form/example-plan.md).
 - The status page is the swimlane page.
 - The queue is the kanban board of Format 2.0 releases, above.
