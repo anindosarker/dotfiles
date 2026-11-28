@@ -51,7 +51,7 @@ function msRow(m) {
   if (open) h += `<div class="mr-tasks"><ul class="checklist${fx.tog === m.id ? " reveal" : ""}">${shownKids(m, "ms").map((t, i) => taskCheck(t).replace("<li ", `<li style="--i:${Math.min(i, 10)}" `)).join("") || `<li class="ck">No tasks</li>`}</ul></div>`;
   return h;
 }
-const taskCheck = (t) => `<li class="ck ${skOf(t.status)}${isSel("task:" + t.id)}" data-pick="task:${esc(t.id)}" title="${esc(t.status + (t.reason ? ": " + t.reason : ""))}">${sicon(t.status)}${kc("task", t.number)}<span class="ck-name">${esc(t.title)}</span>${t.ownerCheck ? `<span class="owner">${icon("eye")}owner</span>` : ""}${t.type === "bug" ? `<span class="tag">bug</span>` : ""}</li>`;
+const taskCheck = (t) => `<li class="ck ${skOf(t.status)}${isSel("task:" + t.id)}" data-pick="task:${esc(t.id)}" title="${esc(t.status + (t.reason ? ": " + t.reason : ""))}">${sicon(t.status)}${kc("task", `${t.spec}-${t.number}`)}<span class="ck-name">${esc(t.title)}</span>${t.ownerCheck ? `<span class="owner">${icon("eye")}owner</span>` : ""}${t.type === "bug" ? `<span class="tag">bug</span>` : ""}</li>`;
 
 // ---- Tasks view: one column per status, newest first ----
 function renderTasks() {
@@ -174,7 +174,7 @@ function loadDash(data) {
   rows.forEach((r, i) => (r.order = i));
   dIdx = new Map(rows.map((r) => [r.id, r]));
   loadQueue(DD && { release: DD.release, root: DD.roots?.plan, items: rows.filter((r) => r.kind === "queue").map((r) => ({ ...r, number: +r.id.slice(1) })) });
-  dHay = new Map(rows.map((r) => [r, [r.kind, r.id, r.label, r.title, r.reason, r.depends_on, r.decider ? "decided by " + r.decider : "", r.turn, TURN_INFO[r.turn]?.[2], r.status, r.command, r.ready ? "ready" : "", r.details].join("\n").toLowerCase()]));
+  dHay = new Map(rows.map((r) => [r, [r.kind, r.id, r.label, chipText(r.kind, r.label), r.title, r.reason, r.depends_on, r.decider ? "decided by " + r.decider : "", r.turn, TURN_INFO[r.turn]?.[2], r.status, r.command, r.ready ? "ready" : "", r.details].join("\n").toLowerCase()]));
   if (state.sel?.startsWith("r:") && !dIdx.has(state.sel.slice(2))) state.sel = null;
 }
 const D_KEYS = { group: (r) => [GROUPS.indexOf(r.status), r.order], kind: (r) => [KINDS.indexOf(r.kind), r.order], order: (r) => r.order };
@@ -190,7 +190,7 @@ const dYou = (r) => { const t = TURN_INFO[r.turn]; return t ? `<span class="d-tu
 const DECIDER = { you: "you", lead: "the lead", agent: "an agent" };
 const dBy = (r) => r.decider && (r.kind === "decision" || r.kind === "queue") ? "decided by " + (DECIDER[r.decider] || r.decider) : "";
 // The chip shows the item's label in its kind's color; the kind word is the tooltip.
-const dKind = (r) => `<span class="kchip k-${esc(r.kind)}" title="${esc(r.kind)}">${esc(r.label)}</span>`;
+const dKind = (r) => `<span class="kchip k-${esc(r.kind)}" title="${esc(r.kind)}">${esc(chipText(r.kind, r.label))}</span>`;
 const dSub = (r) => !state.dlayout.sub ? "" : [r.progress ? `${r.progress.done}/${r.progress.total} done` : "", r.status === "blocked" ? r.reason : "", dBy(r)].filter(Boolean).join(" · ");
 function dRow(r) {
   return `<div class="qr${isSel("r:" + r.id)}" data-pick="r:${esc(r.id)}" title="${esc(r.label + ". " + r.title)}">
