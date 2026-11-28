@@ -4,7 +4,7 @@
     "query": "/expedition discuss v0.3.x  (an item Q14 is open in chat with its options; the owner then writes: \"hm, option one looks right. would that also change the export button?\")",
     "expected_behavior": [
       "Answers the question about the export button in chat",
-      "Writes nothing to a plan file in that turn: no queue/item.py call with D, --move or --fact, no edit of decisions.md, queue.md or a spec",
+      "Writes nothing to a plan file in that turn: no queue/item.py call with D, --move or --fact, no edit of decisions.md, the item file in queue/, the list queue.md or a spec",
       "Does not treat the picked option as a recorded decision, because the message holds a question mark",
       "Posts the item again with the new point folded in and waits for the owner's explicit word (\"record it\" or \"accepted\")",
       "Does not post the next item of the queue"
