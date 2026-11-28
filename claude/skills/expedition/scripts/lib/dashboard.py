@@ -17,14 +17,15 @@ reads. roots.plan and roots.status are both the release folder on this machine.
 One row per queue item (by number), per decision (with the board: per card of decisions.md, in
 file order; in the file form: per decision file, in the order of the numbers), then per epic,
 milestone and task (in the order of status/data/status.json). The fields of a row are FIELDS, in
-that order; "decision", "notes" and "options" are on queue rows only, "progress" on epic rows only,
+that order; "decision", "notes", "options" and "option_list" are on queue rows only, "progress" on epic rows only,
 "hold" on the decision rows of the file form only. A text field with no
 value is "", ready is true or false. Where the values come from:
 - queue: the item file (lib/queue.py). status and decider are the stored lines (the blocked check
   has stored "blocked" already); reason "Waits for <ids>" on a blocked item, the depends_on ids
   that are not done; depends_on and decision the lines as written; notes, details and options
   the text under "## Notes", "## Details" and "## Options:" ("" for a section the file does not
-  have; D21).
+  have; D21); option_list the same options as a list of option cards (option_list(), Q30), the
+  list the card code of board/src/views.js reads.
 - decision, the file form (lib/decisions.py file_form, D9 and D16): the decision file. status
   and decider are its stored lines (decider "" when the file has none); reason on a blocked
   decision the words of lib/decisions.py blocked_reason ("Waits for E11, same file"), on every
@@ -63,8 +64,8 @@ C = _common()
 SCRIPT = "status/data/dashboard.data.js"
 JSON_FILE = "status/data/dashboard.json"
 FIELDS = ("kind", "id", "label", "title", "status", "turn", "ready", "command", "hold", "depends_on", "decider",
-          "decision", "reason", "progress", "root", "file", "notes", "details", "options")
-ONLY_GIVEN = ("hold", "decision", "progress", "notes", "options")  # fields a row has only when the builder gives them
+          "decision", "reason", "progress", "root", "file", "notes", "details", "options", "option_list")
+ONLY_GIVEN = ("hold", "decision", "progress", "notes", "options", "option_list")  # fields a row has only when the builder gives them
 CLOSED = ("done", "archived", "backlog")  # no turn: nothing is left to move
 FINISHED = ("done", "archived")  # the tasks an epic's progress counts as done
 DECISION_STATUS = {"To do": "to-do", "In progress": "in progress", "Done": "done"}
@@ -118,6 +119,15 @@ def turn(kind, status, reason="", owner_check=False):
     return "agent"
 
 
+def option_list(Q, it):
+    """The option cards of a queue item (Q30): one {number, title, recommended, picked, body} per
+    option that lib/queue.py options() reads from "## Options:"; picked is true on the option whose
+    number is the "option" line of the item file. [] when the file has no option."""
+    pick = str(it["option"]).strip()
+    return [{"number": o["key"], "title": o["title"], "recommended": o["recommended"],
+             "picked": bool(pick) and o["key"] == pick, "body": o["body"]} for o in Q.options(it["text"])]
+
+
 def queue_rows(folder):
     Q = lib("queue")
     its = Q.items(folder)
@@ -134,7 +144,7 @@ def queue_rows(folder):
                        decider=it["decider"], decision=it["decision"],
                        reason=f"Waits for {', '.join(waits)}" if waits else "",
                        root="plan", file=it["path"].relative_to(folder).as_posix(), notes=s.get("notes", ""),
-                       details=s.get("details", ""), options=s.get("options", "")))
+                       details=s.get("details", ""), options=s.get("options", ""), option_list=option_list(Q, it)))
     return out
 
 

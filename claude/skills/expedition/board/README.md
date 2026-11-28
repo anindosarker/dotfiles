@@ -46,7 +46,7 @@ Scripts are classic `<script src>` files that share one global scope, loaded in 
   updated: "2026-11-28 07:00",                                          local time, YYYY-MM-DD HH:MM
   roots:   { plan: "/abs/plan/folder", status: "/abs/status/root" },   only in dashboard.data.js
   sources: { ... },                                                     for people, not shown
-  rows: [{ kind, id, label, title, status, turn, ready, command, hold, depends_on, decider, decision, reason, progress, root, file, notes, details, options }]
+  rows: [{ kind, id, label, title, status, turn, ready, command, hold, depends_on, decider, decision, reason, progress, root, file, notes, details, options, option_list }]
 }
 ```
 
@@ -56,7 +56,7 @@ A decision row copies the `status` line and the `decider` line of its decision f
 
 Format 2.2 releases with the board: a release whose `decisions.md` is still a board (not yet moved by `scripts/migrate/v2.1-v2.2/`) takes a decision row's `status` from the lane of its card (To do `to-do`, In progress `in progress`, Done `done`; Done with the tag `#deferred` `backlog`, with `#superseded` `archived`). Such a row is never `blocked`, has `decider: ""`, and its file is `decisions.md`. It has no `hold` field (a hold needs decision files); `ready` is `true` for a decision that is `to-do` with no epic tag, and its `turn` is `lead` while it is `to-do`.
 
-Fields of every row. A text field with no value is `""`; `ready` is always `true` or `false`; `progress` is present on epics only, `decision`, `notes` and `options` on queue rows only, `hold` on the decision rows of a release whose decisions are files only.
+Fields of every row. A text field with no value is `""`; `ready` is always `true` or `false`; `progress` is present on epics only, `decision`, `notes`, `options` and `option_list` on queue rows only, `hold` on the decision rows of a release whose decisions are files only.
 
 | Field | Stored or worked out | Meaning |
 |---|---|---|
@@ -78,8 +78,9 @@ Fields of every row. A text field with no value is `""`; `ready` is always `true
 | `notes` | stored | queue rows only: the text under `## Notes` of the item file, as it is (D21) |
 | `details` | stored | optional Markdown for the side panel; on a queue row the text under `## Details` of the item file |
 | `options` | stored | queue rows only: the text under `## Options:` of the item file, as it is, numbers and nested bullets kept (D21) |
+| `option_list` | stored | queue rows only: the same options as option cards, `[{ number, title, recommended, picked, body }]`, one per top-level `<n>.` line of `## Options:` (Q30). `title` without the `Recommended:` prefix; `recommended` is `true` when the line had it; `picked` is `true` on the option whose number is the `option` line of the item file; `body` the indented lines below, as Markdown. `[]` when the section has no option |
 
-The side panel of a queue card, in the Queue view and in the Dashboard view, shows `notes`, `details` and `options` in that order, each as Markdown under its own heading (Notes, Details, Options). A text that is `""` (the item file does not have the section) gets no heading. The panel of every other kind shows `details` only.
+The side panel of a queue card, in the Queue view and in the Dashboard view, shows `notes`, `details` and the options in that order. Notes and Details are Markdown under their own heading. The options are the option cards of `option_list` under the heading Options (n): each card shows its number, its title, the tag recommended and, on the picked option, the mark picked; the other cards are faded when one is picked. When `option_list` is `[]` and `options` is not `""`, the panel shows `options` as Markdown under the heading Options. A part with no text gets no heading. The panel of every other kind shows `details` only.
 
 Status: one list for every kind (D8, D9, D11). The stored word is copied.
 

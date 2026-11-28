@@ -21,6 +21,7 @@ What is new:
 - `decisions/close.py <release> D<n> --backlog` moves a decision to another release (before: the bullet `- Deferred to`).
 - `decisions/decider.py <release> D<n> you|lead|agent` writes the decider of a decision file that has none: a decision recorded before its release moved to decision files.
 - The `Epic ready` message lists the blocked decisions under `**Blocked:**` (before: `**Decided, not in this epic:**`). The lead copies the ready lines and the blocked lines from `epics/overlap.py <release>`, which prints them.
+- Item post rules, for a release of every format: during a discussion the lead answers in chat, and the whole item comes again only when the talk on it ended and the proposal changed, or on the new owner word `restate` (before: a repost after each reply that changed the item). Every post of an item, the first post too, passes four checks: each line is needed for this decision, what the owner needs to finish the item is in it, ASD-STE100 words in short lines, and option 2 is a different idea or there is one option. Inside an option: bullets by default, a table or a code block only where bullets do not work. Rules: [reference/discuss.md](reference/discuss.md), Item format.
 
 What changes for a release in work:
 

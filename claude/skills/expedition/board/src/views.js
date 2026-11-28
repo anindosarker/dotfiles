@@ -131,13 +131,27 @@ function qCard(x) {
     ${qSub(x) ? `<span class="d-sub" style="margin-top:3px">${esc(qSub(x))}</span>` : ""}
     ${x.changed ? `<span class="frac q-ch" title="${esc("Status changed " + x.changed)}">${esc(relTime(x.changed))}</span>` : ""}</div>`;
 }
-// The three texts of a queue item (D21): Notes, Details, Options, each Markdown under its own heading; an empty text has no heading.
-const qTexts = (x, sec) => [["Notes", x.notes], ["Details", x.details], ["Options", x.options]]
-  .filter(([, t]) => typeof t === "string" && t).map(([h, t]) => sec(h, `<div class="md">${md(t)}</div>`)).join("");
+// The picked option of a queue item: the number of the card of option_list that has picked set, "" when none.
+const qPicked = (x) => { const o = (x.option_list || []).find((y) => y.picked); return o ? String(o.number) : ""; };
+// The three texts of a queue item (D21): Notes and Details as Markdown, each under its own heading; an empty text has no heading.
+// Options as the option cards of the approved page (Q30), from option_list; the text of "options" as Markdown only when no card was read.
+const qTexts = (x, sec) => {
+  const opts = x.option_list || [], picked = qPicked(x);
+  let h = [["Notes", x.notes], ["Details", x.details]]
+    .filter(([, t]) => typeof t === "string" && t).map(([n, t]) => sec(n, `<div class="md">${md(t)}</div>`)).join("");
+  if (opts.length) h += sec(`Options (${opts.length})`, `<div class="opts">${opts.map((o) => {
+    const isPick = !!o.picked;
+    return `<div class="opt${isPick ? " picked" : picked ? " faded" : ""}"><div class="opt-h"><span class="opt-k">${esc(o.number)}.</span><span class="opt-t">${mdInline(o.title || "")}</span>
+      <span class="opt-tags">${o.recommended ? `<span class="tag rec">recommended</span>` : ""}${isPick ? `<span class="tag pick">${icon("check")}picked</span>` : ""}</span></div>
+      ${o.body ? `<div class="md">${md(o.body)}</div>` : ""}</div>`;
+  }).join("")}</div>`);
+  else if (typeof x.options === "string" && x.options) h += sec("Options", `<div class="md">${md(x.options)}</div>`);
+  return h;
+};
 function queuePanel(x) {
   const abs = QD.root && x.file ? QD.root.replace(/\/+$/, "") + "/" + x.file : "";
   const qsec = (h, body, none) => `<div class="p-sec"><h3>${h}</h3>${body || `<p class="none">${none}</p>`}</div>`;
-  const pos = qShown.findIndex((y) => y.id === x.id), picked = x.option ? String(x.option) : "";
+  const pos = qShown.findIndex((y) => y.id === x.id), picked = qPicked(x);
   let h = `<div class="p-top"><div class="crumbs"><span class="cur">${esc(QD.release || "")} queue${pos >= 0 ? ` · ${pos + 1} of ${qShown.length}` : ""}</span></div>
     <button class="ibtn sm" data-close aria-label="Close" data-tip="Close (Esc)" data-tip-end>${icon("x")}</button></div>
     <div class="p-kind">${KIND_LABEL.q} ${kc("queue", x.id)}</div><h2>${esc(x.title)}</h2>
