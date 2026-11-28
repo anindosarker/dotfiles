@@ -231,27 +231,21 @@ def ensure_gitignore(folder, page_src=False):
     return gi
 
 
+def older_than_v1(folder):
+    """The one refusal line for a folder older than format 1.0 (D31). The skill no longer has a
+    migration for it, so the line names no script; c86eacc is the last skill commit that has one."""
+    return (f"{folder} is older than format 1.0, and the skill does not support such a folder: "
+            f"its migration is only in skill commit c86eacc")
+
+
 def release_folder(root, owner, release):
-    """The release folder, refused with one line naming the migrate script when it is still on
-    an older layout."""
+    """The release folder. A folder older than format 1.0 is refused with one line: it has no
+    plan/ folder, or it still has status/ownership.md or free-standing fix trackers."""
     folder = root / ".ai" / "plans" / release / owner
     if not folder.is_dir():
         die(f"release folder missing: {folder}")
-    if not (folder / "plan").is_dir():
-        die(f"{folder} has the old layout (no plan/): run python3 -I "
-            f"{script('migrate/pre-v1.0/layout.py')} {release}")
-    # A release of format 2.1 keeps its queue in item files: its queue.md is a list, not a board.
-    queue_old = None if load("lib/queue").item_form(folder) else load("migrate/pre-v1.0/queue").refusal(folder, release)
-    old = queue_old or load("migrate/pre-v1.0/decisions").refusal(folder, release)
-    if old:
-        die(old)
-    if (folder / LEGACY_OWNERSHIP_MD).is_file():
-        die(f"{folder} still has {LEGACY_OWNERSHIP_MD}: run python3 -I "
-            f"{script('migrate/pre-v1.0/epics.py')} {release}")
-    fixes = legacy_fixes(folder)
-    if fixes:
-        die(f"{folder} still has {len(fixes)} free-standing fix trackers ({fixes[0].name}): run python3 -I "
-            f"{script('migrate/pre-v1.0/fixes.py')} {release} --dry-run, then without --dry-run")
+    if not (folder / "plan").is_dir() or (folder / LEGACY_OWNERSHIP_MD).is_file() or legacy_fixes(folder):
+        die(older_than_v1(folder))
     return folder
 
 
