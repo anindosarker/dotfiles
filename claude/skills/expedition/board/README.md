@@ -2,10 +2,12 @@
 
 The task board with a Dashboard view: one page that opens from disk (`file://`), no framework, no build step. The expedition skill keeps this README; it is not copied into releases.
 
+A release of format 2.2 gets the page as `status/index.html` and the files of `src/` as `status/src/` (`scripts/sprints/swimlanes.py`, `scripts/plan/new_release.py`). Its data is in `status/data/`. Script paths in this README are relative to the skill folder; the paths of release files are relative to the release folder.
+
 ## Files
 
 ```
-v2.1-dashboard/
+board/
   dashboard.html   top bar, board and panel mount points, the <link> and <script> tags
   README.md        this page reference
   src/style.css    all styles
@@ -14,9 +16,9 @@ v2.1-dashboard/
                    shared foldable list sections, swimlanes (Epics and Milestones), sprint folding
   src/views.js     the six views built from the parts: Dashboard, Epics and Milestones (swimlanes), Tasks, Sprints, Queue,
                    with the Queue and Dashboard side panels
-  src/build.js     writes data/dashboard.data.js and data/dashboard.json
-  data/            dashboard.data.js + .json, status.data.js
-  tests/keys.js    checks the key rules below in every view (Playwright); prints pass or fail per rule
+  task-board.html  the page of a release of format 2.0 and 2.1
+  swimlanes.html   the page of a release of format 1.0
+  swimlanes.tw.css the styles of swimlanes.html
 ```
 
 ## Keys
@@ -30,21 +32,13 @@ One handler (`core.js`) and one cursor per view (`parts.js`, `navStep`). The cur
 - A clicked card or row becomes the cursor. The mark shows from the next redraw.
 - The swimlanes (Epics, Milestones) have no cursor.
 
-Run the test: `PLAYWRIGHT=<path to the playwright package> node tests/keys.js`
-
 Scripts are classic `<script src>` files that share one global scope, loaded in the order core, parts, views; `core.js` starts the page on `DOMContentLoaded`, after all three ran.
-
-Build the dashboard data, in `status-board/v2.1-dashboard/`:
-
-```
-node src/build.js ~/Work/Personal/Expedition/.ai/plans/v2.1.x/anindo-mac data/status.data.js data
-```
 
 ## Data
 
 `dashboard.html` is the task board with one more view, Dashboard, picked from the view menu with the other five (keys 1 to 6). Dashboard shows one card per item of every kind, in every status, in six columns: a board, or a list grouped the same way (list / board toggle). Nothing is left out by a rule: the filter menu (Status, Kind, Turn, each multi-select) is the only way to hide cards, and by default every card shows. The title shows "N need you" (items with `turn: you`).
 
-`data/dashboard.json` and `data/dashboard.data.js` are generated output of `src/build.js`: never edit them by hand. `turn` and `ready` are computed at build time from the sources (rules below), never set by hand. An agent can read `dashboard.json` to find the items with `turn: "you"`. All data files are in `data/` (`DATA_DIR = "data/"` in `src/core.js`): Dashboard and Queue read `dashboard.data.js` (sets `window.DASHBOARD_DATA`), the other views read `status.data.js`; without `dashboard.data.js` the two views show an empty state. `dashboard.json` is the same data, indented, without `roots`. The release badge shows the dashboard data's `release` in this view.
+`data/dashboard.json` and `data/dashboard.data.js` are generated output of `scripts/lib/dashboard.py`: never edit them by hand. `turn` and `ready` are computed at build time from the sources (rules below), never set by hand. An agent can read `dashboard.json` to find the items with `turn: "you"`. All data files are in `data/` (`DATA_DIR = "data/"` in `src/core.js`): Dashboard and Queue read `dashboard.data.js` (sets `window.DASHBOARD_DATA`), the other views read `status.data.js`; without `dashboard.data.js` the two views show an empty state. `dashboard.json` is the same data, indented, without `roots`. The release badge shows the dashboard data's `release` in this view.
 
 ```
 {
@@ -56,7 +50,9 @@ node src/build.js ~/Work/Personal/Expedition/.ai/plans/v2.1.x/anindo-mac data/st
 }
 ```
 
-The skill's Python scripts write both files from this section (v2.1.x D14), in the step that writes `status.data.js`. The Queue view reads its rows (`kind: queue`) from the same file, so the page needs no `queue.data.js`. Every item of every kind is one row. The builder maps no status word: it copies the stored one. It never reads `status/sprints.md` (D13). `src/build.js` builds only the sample (Sample, below) and is not copied into the skill.
+The skill's Python scripts write both files from this section (v2.1.x D14), in the step that writes `status.data.js`. The Queue view reads its rows (`kind: queue`) from the same file, so the page needs no `queue.data.js`. Every item of every kind is one row. The builder maps no status word: it copies the stored one. It never reads `status/sprints.md` (D13). The writer is `scripts/lib/dashboard.py`; `scripts/lib/status.py` writes `status.data.js`. `scripts/sprints/refresh.py` writes both again after a hand edit.
+
+Until D9 is built, a decision row takes its `status` from the lane of its card in `decisions.md` (To do `to-do`, In progress `in progress`, Done `done`; Done with the tag `#deferred` `backlog`, with `#superseded` `archived`), is never `blocked`, and has `decider: ""`.
 
 Fields of every row. A text field with no value is `""`; `ready` is always `true` or `false`; `progress` is present on epics only, `decision` on queue rows only.
 
@@ -89,9 +85,9 @@ Status: one list for every kind (D8, D9, D11). The stored word is copied.
 
 Rules that are worked out, in this order:
 
-1. Queue item, `blocked`: an item that is `to-do` and has a `depends_on` id that is not `done` is `blocked`, with `reason: "Waits for <the ids that are not done>"`. An id that is not in the queue counts as not done. When every id is `done` the item is `to-do` again. (In the new format the script `queue/item.py --depends` stores this status; the builder then only copies it and writes the reason.)
-2. Epic, `blocked` (a planned epic): the epic's stored status is `to-do`, its file `plan/epics/E<n>.md` has an Ownership table with at least one row, every row has a value in the Spec column and in the Milestone column ("the specs are ready"), and the front matter has no `starts:` value (the owner has not said `delegate`). Then `status: blocked`, `reason: "Specs are ready; waits for your delegate"`. The lines `decisions:` and `specs:` of the front matter are not read (D12).
-3. Decision, `blocked`: stored, worked out by `epics/overlap.py`. `reason` is "Waits for E<n>, same file", the words of the `Blocked:` block of the `Epic ready` message (D10).
+1. Queue item, `blocked`: an item that is `to-do` and has a `depends_on` id that is not `done` is `blocked`, with `reason: "Waits for <the ids that are not done>"`. An id that is not in the queue counts as not done. When every id is `done` the item is `to-do` again. (In the new format the script `scripts/queue/item.py --depends` stores this status; the builder then only copies it and writes the reason.)
+2. Epic, `blocked` (a planned epic): the epic's stored status is `to-do`, its file `plan/epics/E<n>.md` has an Ownership table with at least one row, every row has a value in the Spec column and in the Milestone column ("the specs are ready"), and the front matter has no `starts:` value (the owner has not said `delegate`). Then `status: blocked`. In a release of format 2.2 the status file stores this status with the reason `waits for delegate`, and the row copies that reason. The lines `decisions:` and `specs:` of the front matter are not read (D12).
+3. Decision, `blocked`: stored, worked out by `scripts/epics/overlap.py`. `reason` is "Waits for E<n>, same file", the words of the `Blocked:` block of the `Epic ready` message (D10).
 
 Turn. An item that is `done`, `archived` or `backlog` has `turn: ""`. For every other item, the first rule that fits:
 
@@ -117,28 +113,11 @@ Decider:
 | Kind | `decider` |
 |---|---|
 | queue | stored; written when the item is closed (`done` or `archived`); `""` on every other item. `agent` means it was fixed without a decision |
-| decision | stored on every decision: `you` (the owner said "record it"), `lead` (the lead settled it alone), `agent` (a run agent recorded a deviation) |
+| decision | `""` until D9 is built. Then stored on every decision: `you` (the owner said "record it"), `lead` (the lead settled it alone), `agent` (a run agent recorded a deviation) |
 | epic | `you` |
-| milestone | the `decider` of its decision: the Decision cell of the Ownership table row that names the milestone. `agent` when that cell is empty or no row names it |
-| task | the `decider` of its own decision: the task's `decision` value in the status data. Only a task with no `decision` value takes the `decider` of its milestone |
+| milestone | stored in the status file by `scripts/lib/status.py`: the decider of the decision of its tasks, the first task that has one; `agent` when none has one |
+| task | stored in the status file by `scripts/lib/status.py`: the decider of the decision its module cites; `""` when the module cites none |
 
 Reason: a queue item's comes from rule 1, an epic's from rule 2; a decision's, a milestone's and a task's blocked reason is stored. No other item has a reason, except the epic id on a decision.
 
 Item files: a queue item's file is `<plan>/queue/Q<n>-*.md` (`root: plan`); a decision's is `decisions.md` (the storage of a decision's status and decider is not decided, queue item Q21); an epic's is `plan/epics/E<n>.md` and a task's is its task file (`root: status`); a milestone has none.
-
-### Sample
-
-`src/build.js` writes the sample from files that are still in the old form: the v2.1.x `queue.md` and `decisions.md`, `data/status.data.js` (v0.9.x), and the epic files under that status file's `root`. It turns the old words into the new ones:
-
-| Kind | Old | New |
-|---|---|---|
-| queue | lane Open | `to-do` |
-| queue | lane Decided | `done`, `decider` of its decision (`#D<n>`), else `you` |
-| queue | lane Autofix | `done`, `decider: agent` |
-| queue | lane Later | `backlog` |
-| queue | lane Dropped | `archived`, `decider: you` |
-| decision | lane To do / In progress / Done | `to-do` / `in progress` / `done` |
-| decision | lane Done, tag `#deferred` / `#superseded` | `backlog` / `archived` |
-| epic, milestone, task | `not started` / `skipped` | `to-do` / `archived` |
-
-Values the old files do not hold are in the `SAMPLE` table of `src/build.js`, so that the page shows every case: the `decider` of a decision (`you`, but `lead` for D14), one `blocked` decision (D10, "Waits for E2, same file"), one `depends_on` (Q10 waits for Q18). These three are examples, not facts of the release. An old item file's `waits_for:` line is read as `depends_on`. In the sample epic files the `starts` line is `Starts:` in the body text.
