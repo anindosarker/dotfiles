@@ -350,7 +350,7 @@ def run(a, own, root, folder, ids, decision, want_epic, lock):
             st.sync(folder, a.release)
     paths = [str(p) for p in writes]
     paths += [str(p) for p in load("lib/grid").grid_files(folder)]
-    paths += [str(folder / "decisions.md")] + [str(p) for p in Q.commit_paths(folder)]
+    paths += [str(p) for p in load("lib/decisions").commit_paths(folder)] + [str(p) for p in Q.commit_paths(folder)]
     paths += [str(p) for p in sorted((folder / own.EPICS_DIR).glob("E*.md"))]
     st.commit(root, folder, paths, f"docs(plan): {a.release} milestone {num} {a.name}")
     if ids and items:

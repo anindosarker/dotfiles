@@ -25,6 +25,11 @@ Refuses a superseded decision (heading "(superseded by D<n>)", or named by a lat
 Commits nothing. In a release of format 2.2 the status chain runs at the end (epics/table.py
 chain): with its "starts:" value the epic is counted from its specs, no longer "waits for
 delegate".
+
+A release whose decisions are files (lib/decisions.py file_form): each decision gets the line
+"epic: E<n>" in its file in place of the tag, then the status rule makes it in progress. A
+decision with an "epic" line keeps it and is printed under "kept:" as on a board. The lines
+printed are the same.
 """
 import argparse
 import fcntl
@@ -75,13 +80,16 @@ def tag_epic(folder, epic, items):
     for num in sorted(specs, key=own.num_key):
         own.refuse_superseded(folder, own.spec_cites(files[num]), f"spec {files[num].name}")
         nums |= own.spec_cites(files[num])
-    path = folder / "decisions.md"
-    if not path.is_file():
+    dc = C.load("lib/decisions")
+    in_files = dc.file_form(folder)
+    path = dc.path_of(folder)
+    if not in_files and not path.is_file():
         die(f"decisions.md missing: {path}")
     tags = own.read_tags(folder)
     missing = sorted(nums - set(tags))
     if missing:
-        die(f"not in decisions.md: {', '.join(f'D{n}' for n in missing)}")
+        die(f"no file in {folder / dc.DECISIONS_DIR}: {', '.join(f'D{n}' for n in missing)}" if in_files
+            else f"not in decisions.md: {', '.join(f'D{n}' for n in missing)}")
     marked, kept_specs = [], []
     for num in sorted(specs, key=own.num_key):
         old = own.spec_epic(files[num])
@@ -113,10 +121,13 @@ def tag_epic(folder, epic, items):
         print(f"warning: {plan.name} missing, Epic cells not written")
     if kept_specs:
         print(f"kept specs: {', '.join(kept_specs)}")
-    dc = C.load("lib/decisions")
     tagged, kept = [], []
     with open(C.lock_file(folder), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
+        if in_files:
+            moved = tag_files(folder, epic, nums, dc, tagged, kept)
+            fcntl.flock(lock, fcntl.LOCK_UN)
+            return report(epic, tagged, moved, kept, folder, own, dc)
         text = path.read_text(encoding="utf-8")
         cards = {c["num"]: c for c in dc.parse(text)["cards"]}
         for n in sorted(nums):
@@ -132,6 +143,29 @@ def tag_epic(folder, epic, items):
             C.load("lib/board").write(path, text)
         moved = dc.sync_file(folder)
         fcntl.flock(lock, fcntl.LOCK_UN)
+    report(epic, tagged, moved, kept, folder, own, dc)
+
+
+def tag_files(folder, epic, nums, dc, tagged, kept):
+    """The line "epic: E<n>" in the file of each decision without one, then the status rule.
+    Fills tagged and kept; returns the files the status rule changed."""
+    cards = {c["num"]: c for c in dc.file_cards(folder)}
+    for n in sorted(nums):
+        c = cards[n]
+        if c["epic"]:
+            kept.append(f"D{n} E{c['epic']}" + (" done" if c["lane"] == dc.DONE else ""))
+            continue
+        p = c["path"]
+        p.write_text(dc.set_front(p.read_text(encoding="utf-8"), epic=epic), encoding="utf-8")
+        tagged.append(n)
+    moved = dc.sync_file(folder)
+    if tagged:
+        dc.write_data(folder)
+    return [(n, old, new) for n, old, new in moved if n not in tagged] if moved else moved
+
+
+def report(epic, tagged, moved, kept, folder, own, dc):
+    """The lines of tag_epic after the decisions are tagged."""
     print(f"{epic}: {', '.join(f'D{n}' for n in sorted(tagged)) or 'nothing tagged'}")
     if moved:
         print(f"decisions.md lanes synced: {dc.moved_text(moved)}")

@@ -24,6 +24,11 @@ format: below 2.1 the board stub from templates/queue.md; from 2.1 on queue.md f
 templates/queue-list.md, an empty list, and an empty queue/ folder for the item files
 (lib/queue.py).
 
+The decisions take the form of the skill's version too: from 2.2 on decisions.md is the list of
+templates/decisions-list.md with no decision line (lib/decisions.py render_list) and an empty
+decisions/ folder for the decision files (templates/decision.md); below 2.2 the board of
+templates/decisions.md.
+
 Usage: python3 -I plan/new_release.py <release> [--owner X] [--root PATH]
 """
 import argparse
@@ -136,7 +141,15 @@ def main():
         plan = plan.replace(PLAN_DECISIONS, PLAN_DECISIONS + PLAN_LINK, 1)
     write_new(folder / f"{c}-plan.md", plan)
     today = datetime.date.today().isoformat()
-    write_new(folder / "decisions.md", from_template("decisions.md", c, today))
+    dc = C.load("lib/decisions")
+    if C.load("lib/status").version(C.skill_version()) >= dc.FILE_FORMAT:
+        if not (C.TEMPLATES / "decisions-list.md").is_file():
+            die(f"bundled template missing: {C.TEMPLATES / 'decisions-list.md'}")
+        write_new(dc.path_of(folder), dc.render_list(c, []))
+        dc.dir_of(folder).mkdir()
+        print(dc.dir_of(folder))
+    else:
+        write_new(dc.path_of(folder), from_template("decisions.md", c, today))
     Q = C.load("lib/queue")
     if Q.version(C.skill_version()) >= Q.ITEM_FORMAT:
         text = "".join(l + "\n" for l in from_template("queue-list.md", c, today).splitlines()

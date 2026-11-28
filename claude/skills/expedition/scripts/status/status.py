@@ -140,7 +140,7 @@ def main():
             late = st.pending(folder) and st.commit(root, folder, [], f"docs(plan): {a.release} {kind} {ident} {now}")
             print(f"{kind} {ident}: already {now}, nothing changed" + ("; an earlier failed commit is made now" if late else ""))
             return
-        paths = [*C.load("lib/grid").grid_files(folder), folder / "decisions.md",
+        paths = [*C.load("lib/grid").grid_files(folder), *C.load("lib/decisions").commit_paths(folder),
                  *C.load("lib/queue").commit_paths(folder)]
         paths += sorted((folder / C.EPICS_DIR).glob("E*.md"))
         st.commit(root, folder, paths, f"docs(plan): {a.release} {kind} {ident} {stored}")

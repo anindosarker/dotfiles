@@ -28,7 +28,12 @@ the decider of the decision its module cites ("" when it cites none); a mileston
 the first of its tasks that has a decision ("agent" when none has); a spec the decider of the first
 decision a module of it cites ("" when none cites one). The decider of a decision is the "decider"
 line of the queue item whose "decision" line names it (lib/queue.py); "" when no item names it or
-the item has no such line. decisions.md is only read.
+the item has no such line. decisions.md is only read. In the file form of the decisions
+(lib/decisions.py file_form) the decider of a decision is the "decider" line of its file first.
+In a release of format 2.2 the key "decisions" holds one entry per decision of the file form,
+"D<n>": {"round": <n>} (spec 07, D16 keeps the round out of the decision file): queue/item.py D
+writes it (set_decision), every build keeps it as it is, and a release with no such entry has no
+key.
 Everything else in the file is rebuilt from the specs on every write (build), in the shape of
 the status board: release, updated, root, statuses, sprints, epics, specs, milestones, tasks.
 
@@ -356,15 +361,56 @@ def build(folder, release, stored=None):
         inside = [m["status"] for m in milestones if m["sprint"] == f"S{c}"]
         sprints.append({"id": f"S{c}", "status": rollup(inside),
                         "done": sum(1 for w in inside if w in CLOSED), "total": len(inside)})
-    return {"release": release, "format": fmt,
-            "updated": now(), "statuses": list(STATUSES),
-            "sprints": sprints, "epics": epics, "specs": specs, "milestones": milestones, "tasks": tasks}
+    out = {"release": release, "format": fmt,
+           "updated": now(), "statuses": list(STATUSES),
+           "sprints": sprints, "epics": epics, "specs": specs, "milestones": milestones, "tasks": tasks}
+    kept = decision_entries(folder)
+    if kept:
+        out["decisions"] = kept
+    return out
+
+
+def decision_entries(folder):
+    """{"D<n>": entry} of the key "decisions" of the stored file; {} when there is none."""
+    got = (load(folder) or {}).get("decisions")
+    return got if isinstance(got, dict) else {}
+
+
+def set_decision(folder, ident, **fields):
+    """The entry of decision ident in the key "decisions" with fields set (None removes a field;
+    an entry left empty is removed), the entries in the order of the numbers; then status.json
+    written. The caller writes the page data (write_page_data) after its commit. Returns the path
+    of status.json."""
+    data = load(folder)
+    if data is None:
+        C.die(f"{path(folder)} missing: run sprints/refresh.py {folder.parent.name} first")
+    entries = dict(data.get("decisions") or {})
+    entry = dict(entries.get(ident) or {})
+    for k, v in fields.items():
+        if v is None:
+            entry.pop(k, None)
+        else:
+            entry[k] = v
+    if entry:
+        entries[ident] = entry
+    else:
+        entries.pop(ident, None)
+    order = lambda k: int(re.sub(r"\D", "", k) or 0)
+    data["decisions"] = {k: entries[k] for k in sorted(entries, key=order)}
+    if not data["decisions"]:
+        data.pop("decisions")
+    write_json(path(folder), dump(data))
+    CHANGED.append(path(folder))
+    return path(folder)
 
 
 def deciders(folder):
-    """{"D<n>": decider} of a release of format 2.2: the "decider" line of the queue item whose
-    "decision" line names the decision, the first such item with one, in number order."""
-    out = {}
+    """{"D<n>": decider} of a release of format 2.2: in the file form the "decider" line of the
+    decision file; else the "decider" line of the queue item whose "decision" line names the
+    decision, the first such item with one, in number order."""
+    dc = C.load("lib/decisions")
+    out = {f"D{c['num']}": c["decider"] for c in dc.file_cards(folder) if c["decider"]} \
+        if dc.file_form(folder) else {}
     for it in C.load("lib/queue").items(folder):
         if it["decision"] and not out.get(it["decision"]):
             out[it["decision"]] = it["decider"]
