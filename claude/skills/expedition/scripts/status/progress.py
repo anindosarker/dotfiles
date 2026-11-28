@@ -18,7 +18,9 @@ same line lists the decided items whose decision is in the To do lane of decisio
 release of format 2.2 the block comes from status/data/status.json alone: the grid rows are those
 of lib/ownership.py grid (one per milestone with a sprint), status/sprints.md is not read, a
 milestone stopped by a decision is one stored as archived, and "Ready for an epic" lists the done
-items whose decision is in the To do lane.
+items whose decision is in the To do lane. When the decisions are files (lib/decisions.py
+file_form) it lists the done items whose decision file has the status to-do; a blocked decision,
+which waits for a running epic, is not ready.
 
 Sources, for each milestone whose grid cell is not "[x]":
 - the grid cell of status/sprints.md ("[ ]" running, "[~]" waiting, "·" not started, "[!]"
@@ -253,9 +255,12 @@ def print_progress(root, folder, plan, own, bd, q_text):
         # a decided item whose decision is still in To do: the unticked Decided card of a board
         lanes = bd.decision_tags(own, folder)
         closed_word = "done" if Q.status_form(folder) else "decided"
+        # in the file form the status word itself: to-do, never blocked (both are in To do)
+        files = C.load("lib/decisions").file_form(folder)
+        key, want = ("status", "to-do") if files else ("lane", "To do")
         ready = [f"**Q{it['file_num']}**" for it in Q.items(folder) if it["status"] == closed_word
                  and (m := re.match(r"^D(\d+)$", it["decision"]))
-                 and lanes.get(int(m.group(1)), {}).get("lane") == "To do"]
+                 and lanes.get(int(m.group(1)), {}).get(key) == want]
     else:
         ready = [f"**Q{c['num']}**" for c in bd.parse(q_text)["cards"]
                  if c["lane"] == "Decided" and c["box"] != "x"]
