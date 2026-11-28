@@ -16,6 +16,8 @@ Requires: tmux, the `claude` command, python3.
 
 Voice: at its start, every session of a release (lead, runner, spec writer) loads the skill `caveman:ultracave` when it is listed, and keeps that voice in chat for the whole session, also after a roll over. Plan files, commits and the lines typed to another session stay in plain prose.
 
+How the owner works in a release is in its `process.md`: a change to it is a `process.md` update, and every agent follows it.
+
 ## The model
 
 - A release is one folder, the release folder `.ai/plans/v0.<n>.x/<owner>/`, and one version:
@@ -85,7 +87,6 @@ The P rules printed below bind this session. After a handoff, a compaction or a 
 
 - The release's `process.md` holds project facts only: branches, the milestone branch and worktree, merge, release, checks on the shared machine, the agent sandbox, the public surface, commits, shared files, plans.
 - The process itself is this skill; commands are in the package manifests; code rules in the project's coding standards; what a milestone must run is in its spec (`Local CI:` line).
-- An owner instruction about how the project is worked is a decision (`D<n>`) first; it becomes a `P<n>` bullet only when it is a standing project fact every spec needs.
 - A lesson from the run goes to the tracker's Notes or to this skill, never to `process.md`.
 - Before writing or auditing a process file, read [templates/process.md](templates/process.md) and [example/v1.0.x/owner/process.md](example/v1.0.x/owner/process.md), and set the `updated` line of its front matter in the same edit.
 
@@ -180,4 +181,4 @@ Only when the project has no `.ai/plans/` folder, in the repo or in the root, an
 - A Workflow only for several builders at the same time, a second opinion (`Review: fable`, a judged check), the release milestone, or a word from the lead or the owner. Every other milestone: one agent builds, checks and commits, and the runner merges. Inline for mechanical edits.
 - `ultracode` permits a Workflow and never asks for one.
 - The next step needs a decision: end the Workflow at that boundary (`needs-decision`).
-- `opus` for the shared milestone, build, fix, verify, check, baselines and lookups; `fable` for review, judges and plan writing.
+- `opus` for the shared milestone, build, fix, verify, check, baselines and lookups; `fable` for review, judges and plan writing. Session defaults: the lead `fable`, the runner `opus`.
