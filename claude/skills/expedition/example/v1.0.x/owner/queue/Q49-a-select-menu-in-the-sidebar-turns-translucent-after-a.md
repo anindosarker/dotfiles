@@ -1,7 +1,8 @@
 ---
-status: decided
+status: done
 decision: D62
 option: 1
+decider: you
 ---
 # Q49. A select menu in the sidebar turns translucent after a short scroll
 

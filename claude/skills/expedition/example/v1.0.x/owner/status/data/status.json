@@ -1,13 +1,14 @@
 {
   "release": "v1.0.x",
-  "format": "2.1",
-  "updated": "2026-11-27 09:10",
+  "format": "2.2",
+  "updated": "2026-11-28 13:15",
   "statuses": [
-    "not started",
+    "to-do",
     "in progress",
     "blocked",
     "done",
-    "skipped"
+    "backlog",
+    "archived"
   ],
   "sprints": [
     {
@@ -28,6 +29,8 @@
       "id": "E11",
       "name": "Sidebar",
       "status": "in progress",
+      "reason": "",
+      "decider": "you",
       "specs": [
         "27"
       ]
@@ -39,7 +42,8 @@
       "title": "Sidebar",
       "path": "plan/specs/27-sidebar/27-sidebar.md",
       "epic": "E11",
-      "status": "in progress"
+      "status": "in progress",
+      "decider": "you"
     }
   ],
   "milestones": [
@@ -56,10 +60,12 @@
       "reason": "",
       "changed": "2026-11-27 08:40",
       "commit": "7be03d5",
+      "launched": true,
       "critical": true,
       "depends": [],
       "outcome": "The sidebar holds the settings pages, a collapse shortcut and a numbered layout picker; its menus keep their blur.",
-      "files": []
+      "files": [],
+      "decider": "you"
     },
     {
       "id": "27-collapse-shortcut",
@@ -74,10 +80,12 @@
       "reason": "",
       "changed": "2026-11-27 08:55",
       "commit": "",
+      "launched": true,
       "critical": false,
       "depends": [],
       "outcome": "The sidebar holds the settings pages, a collapse shortcut and a numbered layout picker; its menus keep their blur.",
-      "files": []
+      "files": [],
+      "decider": "you"
     },
     {
       "id": "27-layout-picker",
@@ -88,16 +96,18 @@
       "epic": "E11",
       "spec": "27",
       "sprint": "S2",
-      "status": "not started",
+      "status": "to-do",
       "reason": "",
       "changed": "",
       "commit": "",
+      "launched": false,
       "critical": false,
       "depends": [],
       "outcome": "The sidebar holds the settings pages, a collapse shortcut and a numbered layout picker; its menus keep their blur.",
       "files": [
         "apps/web/src/lib/layouts.ts"
-      ]
+      ],
+      "decider": "lead"
     },
     {
       "id": "27-sidebar-menus-keep-their-blur",
@@ -112,10 +122,12 @@
       "reason": "waits for the owner's look",
       "changed": "2026-11-27 09:05",
       "commit": "",
+      "launched": false,
       "critical": false,
       "depends": [],
       "outcome": "The sidebar holds the settings pages, a collapse shortcut and a numbered layout picker; its menus keep their blur.",
-      "files": []
+      "files": [],
+      "decider": "you"
     }
   ],
   "tasks": [
@@ -131,7 +143,8 @@
       "ownerCheck": false,
       "type": "feat",
       "decision": "D57",
-      "file": "plan/specs/27-sidebar/tasks/01-settings-pages-in-sidebar.md"
+      "file": "plan/specs/27-sidebar/tasks/01-settings-pages-in-sidebar.md",
+      "decider": "you"
     },
     {
       "id": "27-02",
@@ -145,7 +158,8 @@
       "ownerCheck": false,
       "type": "feat",
       "decision": "D57",
-      "file": "plan/specs/27-sidebar/tasks/02-remove-settings-side-menu.md"
+      "file": "plan/specs/27-sidebar/tasks/02-remove-settings-side-menu.md",
+      "decider": "you"
     },
     {
       "id": "27-03",
@@ -159,7 +173,8 @@
       "ownerCheck": false,
       "type": "feat",
       "decision": "D58",
-      "file": "plan/specs/27-sidebar/tasks/03-shortcut.md"
+      "file": "plan/specs/27-sidebar/tasks/03-shortcut.md",
+      "decider": "you"
     },
     {
       "id": "27-04",
@@ -167,13 +182,14 @@
       "spec": "27",
       "number": "04",
       "title": "Layout picker as a numbered list",
-      "status": "not started",
+      "status": "to-do",
       "reason": "",
       "changed": "",
       "ownerCheck": false,
       "type": "feat",
       "decision": "D61",
-      "file": "plan/specs/27-sidebar/tasks/04-layout-picker-numbered-list.md"
+      "file": "plan/specs/27-sidebar/tasks/04-layout-picker-numbered-list.md",
+      "decider": "lead"
     },
     {
       "id": "27-05",
@@ -181,13 +197,14 @@
       "spec": "27",
       "number": "05",
       "title": "Remove layout versions 2 and 7",
-      "status": "not started",
+      "status": "to-do",
       "reason": "",
       "changed": "",
       "ownerCheck": false,
       "type": "feat",
       "decision": "D61",
-      "file": "plan/specs/27-sidebar/tasks/05-remove-layouts-2-and-7.md"
+      "file": "plan/specs/27-sidebar/tasks/05-remove-layouts-2-and-7.md",
+      "decider": "lead"
     },
     {
       "id": "27-06",
@@ -201,7 +218,22 @@
       "ownerCheck": true,
       "type": "bug",
       "decision": "D62",
-      "file": "plan/specs/27-sidebar/tasks/06-menu-keeps-blur.md"
+      "file": "plan/specs/27-sidebar/tasks/06-menu-keeps-blur.md",
+      "decider": "you"
     }
-  ]
+  ],
+  "decisions": {
+    "D57": {
+      "round": 1
+    },
+    "D58": {
+      "round": 1
+    },
+    "D61": {
+      "round": 2
+    },
+    "D62": {
+      "round": 2
+    }
+  }
 }

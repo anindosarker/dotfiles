@@ -15,13 +15,28 @@ the "Decisions:" line (the ids already there plus the new ones, in number order)
 row per decision, "| D<n> <title from decisions.md> |  |  |  |  |"; on a rerun only the missing
 rows are added, every other row kept as it is. Refuses, writing nothing, a decision that is
 missing from decisions.md, superseded, already tagged with another epic, or done with nothing to
-run (in Done without an epic tag).
+run (in Done without an epic tag). In a release whose decisions are files (lib/decisions.py
+file_form) the title of a row is the title line of the decision file, and the refusals are: an
+id with no decision file, an archived decision, a backlog decision, a decision with the "epic"
+line of another epic, and a decision that is done with nothing to run. A blocked decision is
+accepted: the owner may put it in an epic. In the file form the hold of each decision taken
+(spec 10, D17: "hold" and "hold_reason" in decisions.D<n> of status/data/status.json) is
+removed, also on a rerun that adds no row, and the change goes into the same commit.
+
+A release of format 2.2 (lib/status.py new_form): the front matter holds "status" and "starts"
+only, with no "decisions:" and no "specs:" line; the epic's decisions are the D ids of the
+Decision column of its table (the one copy). After the write of a stub or a start the status
+chain runs (lib/status.py sync), so status.json and the "status:" lines follow at once, and
+they are committed with the epic file.
 
 Note (--note): appends "- <text>" at the end of the "## Notes" section, creating the section at
 the end of the file when it is missing. An urgent note starts with "Urgent:".
 """
 import argparse
+import contextlib
+import fcntl
 import importlib.util
+import io
 import re
 import sys
 from pathlib import Path
@@ -44,10 +59,14 @@ die = C.die
 
 
 def stub(own, epic, folder):
-    """An empty epic file: front matter (status, decisions, specs, starts) in a release with
-    status/data/status.json, the "Decisions:", "Specs:", "Starts:" lines in an earlier one."""
+    """An empty epic file: front matter (status, starts) in a release of format 2.2, (status,
+    decisions, specs, starts) in a release with status/data/status.json below 2.2, the
+    "Decisions:", "Specs:", "Starts:" lines in an earlier one."""
     table = "\n".join([own.OWN_HEAD, ""] + own.render_table([])) + "\n"
-    if C.load("lib/status").active(folder):
+    st = C.load("lib/status")
+    if st.new_form(folder):
+        return f"---\nstatus: {st.say(folder, st.STATUSES[0])}\nstarts:\n---\n# {epic}\n\n" + table
+    if st.active(folder):
         return f"---\nstatus: not started\ndecisions:\nspecs:\nstarts:\n---\n# {epic}\n\n" + table
     return f"# {epic}\n\nDecisions:\nSpecs:\nStarts:\n\n" + table
 
@@ -59,12 +78,15 @@ def start(own, folder, path, epic, nums):
     heads, bullets = own.supersedes(folder)
     gone = {**bullets, **heads}
     bad = []
+    files = C.load("lib/decisions").file_form(folder)
     for d in nums:
         t = tags.get(d)
         if t is None:
-            bad.append(f"D{d} is not in decisions.md")
+            bad.append(f"D{d} has no decision file" if files else f"D{d} is not in decisions.md")
         elif d in gone:
             bad.append(f"D{d} is superseded by D{gone[d]}")
+        elif files and t["status"] == "backlog":
+            bad.append(f"D{d} is backlog: it moved to another release")
         elif t["epic"] and t["epic"] != n:
             bad.append(f"D{d} is already in E{t['epic']}")
         elif t["done"] and not t["epic"]:
@@ -77,12 +99,14 @@ def start(own, folder, path, epic, nums):
         die(f"{path}: {err}")
     rows = rows or []
     have = {r["decision"] for r in rows}
-    ids = sorted(set(own.epic_decisions(text)) | set(nums))
+    ids = sorted(set(own.epic_decision_ids(folder, text)) | set(nums))
     titles = own.decision_titles(folder)
     added = [d for d in ids if d not in have]
     rows += [{"decision": d, "title": titles.get(d, ""), "files": [], "spec": "",
               "milestone": "", "sprint": ""} for d in added]
-    new = own.put_table(own.set_field(text, "Decisions", ", ".join(f"D{d}" for d in ids)), rows)
+    if not own.table_form(folder):
+        text = own.set_field(text, "Decisions", ", ".join(f"D{d}" for d in ids))
+    new = own.put_table(text, rows)
     print(f"{epic}: Decisions {', '.join(f'D{d}' for d in ids)}; rows added: "
           f"{', '.join(f'D{d}' for d in added) or 'none'}")
     if path.is_file() and new == own.read(path):
@@ -138,14 +162,49 @@ def main():
         note(own, path, a.note)
         C.commit(root, [path], f"docs(plan): {a.release} {a.epic} note")
     elif items:
-        if start(own, folder, path, a.epic, [int(D_RE.match(i).group(1)) for i in items]):
-            C.commit(root, [path], f"docs(plan): {a.release} {a.epic} epic started")
+        nums = [int(D_RE.match(i).group(1)) for i in items]
+        changed = start(own, folder, path, a.epic, nums)
+        if changed or held(folder, nums):
+            commit(root, folder, a.release, path, f"docs(plan): {a.release} {a.epic} epic started", nums)
     else:
         if path.exists():
             die(f"refusing to overwrite {path}")
         path.write_text(stub(own, a.epic, folder), encoding="utf-8")
-        C.commit(root, [path], f"docs(plan): {a.release} {a.epic} epic file")
+        commit(root, folder, a.release, path, f"docs(plan): {a.release} {a.epic} epic file")
     print(path)
+
+
+def held(folder, nums):
+    """The D numbers of nums whose entry in the status file has a hold (lib/decisions.py
+    HOLD_KEYS); [] for a release whose decisions are not files."""
+    dc = C.load("lib/decisions")
+    if not dc.file_form(folder):
+        return []
+    entries = C.load("lib/status").decision_entries(folder)
+    return [n for n in nums if any(k in (entries.get(f"D{n}") or {}) for k in dc.HOLD_KEYS)]
+
+
+def commit(root, folder, release, path, message, nums=()):
+    """Commit the epic file. In a release of format 2.2 the hold of each decision of nums is
+    removed and the status chain runs first (the epic's status is counted from this file); its
+    writes go into the same commit."""
+    st = C.load("lib/status")
+    if not st.new_form(folder):
+        C.commit(root, [path], message)
+        return
+    with open(C.lock_file(folder), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        drop = held(folder, nums)
+        for n in drop:
+            st.set_decision(folder, f"D{n}", hold=None, hold_reason=None)
+        left = held(folder, drop)  # read back: the holds just removed
+        if left:
+            die(f"the hold of {', '.join(f'D{n}' for n in left)} is still in {st.path(folder)}: "
+                f"remove it with decisions/hold.py {release} D<n> --off")
+        with contextlib.redirect_stdout(io.StringIO()):
+            st.sync(folder, release)
+        st.commit(root, folder, [path], message)
+        fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 if __name__ == "__main__":

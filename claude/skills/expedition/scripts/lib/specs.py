@@ -131,9 +131,10 @@ def add_pointer(text, number, title, module, rel):
     return _append(text, "Tasks", lambda *_: [f"- {number} {title} · module {module} · {rel}"])
 
 
-def task_file_text(title, kind):
-    """templates/task.md for a new task: its title and type, "status: not started", no quote (an
-    agent never writes the owner's words) and no Instructions section (added when needed)."""
+def task_file_text(title, kind, status="not started"):
+    """templates/task.md for a new task: its title and type, "status: <status>" (the first word of
+    the release's format, lib/status.py say; "not started" by default), no quote (an agent never
+    writes the owner's words) and no Instructions section (added when needed)."""
     out, skip = [], False
     for line in C.template("task.md").splitlines():
         if line.startswith("## "):
@@ -142,6 +143,8 @@ def task_file_text(title, kind):
             continue
         if line.startswith("type:"):
             line = f"type: {kind}"
+        elif line.startswith("status:"):
+            line = f"status: {status}"
         elif line.startswith("# "):
             line = f"# {title}"
         out.append(line)
@@ -223,14 +226,16 @@ def check_decision(folder, d, epic):
     o = own()
     tag = o.read_tags(folder).get(d)
     if tag is None:
-        C.die(f"D{d} is not in decisions.md")
+        dc = C.load("lib/decisions")
+        C.die(f"D{d} has no file in {dc.DECISIONS_DIR}/" if dc.file_form(folder) else f"D{d} is not in decisions.md")
     o.refuse_superseded(folder, {d}, "--decision")
     if tag["epic"] and tag["epic"] != epic:
         C.die(f"D{d} is in E{tag['epic']} already")
 
 
 def grid_cells(folder, num):
-    """{milestone name: its grid cell} of the rows of spec num in status/sprints.md."""
+    """{milestone name: its grid cell} of the rows of spec num in the grid (lib/ownership.py grid:
+    the status file in format 2.2, status/sprints.md below)."""
     out = {}
     for label, cells in own().grid(folder)[1]:
         m = re.match(r"^E\d+\s+(\d{2}(?:\.\d+)?)\s+(.*)$", label)
@@ -242,15 +247,26 @@ def grid_cells(folder, num):
 def tag_decision(folder, epic, d):
     """Decision D<d> joins epic E<epic> after its go: its id on the epic file's "Decisions:" line,
     the Ownership table rebuilt (lib/ownership.py fill_epic), and the "#E<n>" tag that moves the
-    card to In progress (epics/tag.py). Prints nothing."""
+    card to In progress (epics/tag.py). In a release of format 2.2 (lib/ownership.py table_form)
+    the decision becomes a table row only: the file has no "Decisions:" line. In the file form of
+    the decisions epics/tag.py writes "epic: E<n>" in the decision file in place of the tag.
+    Prints nothing."""
     o = own()
     path = o.epic_path(folder, epic)
     if path.is_file():
         text = o.read(path)
-        if d not in o.epic_decisions(text):
-            m = o.DECISIONS_LINE_RE.search(text)
-            value = m.group(1) if m else ""
-            path.write_text(o.set_field(text, "Decisions", f"{value}, D{d}".lstrip(", ")), encoding="utf-8")
+        if d not in o.epic_decision_ids(folder, text):
+            if o.table_form(folder):
+                rows, err = o.read_table(text)
+                if err:
+                    C.die(f"{path}: {err}")
+                row = {"decision": d, "title": o.decision_titles(folder).get(d, ""), "files": [],
+                       "spec": "", "milestone": "", "sprint": ""}
+                path.write_text(o.put_table(text, (rows or []) + [row]), encoding="utf-8")
+            else:
+                m = o.DECISIONS_LINE_RE.search(text)
+                value = m.group(1) if m else ""
+                path.write_text(o.set_field(text, "Decisions", f"{value}, D{d}".lstrip(", ")), encoding="utf-8")
         with contextlib.redirect_stdout(io.StringIO()):
             o.fill_epic(folder, epic, quiet=True)
             C.load("epics/tag").tag_epic(folder, f"E{epic}", [f"D{d}"])

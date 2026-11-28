@@ -1,7 +1,8 @@
 ---
-status: decided
+status: done
 decision: D58
 option: 1
+decider: you
 ---
 # Q42. The sidebar has no shortcut to open and close it
 

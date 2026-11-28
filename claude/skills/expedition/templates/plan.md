@@ -5,7 +5,7 @@ The index of a release. A script adds one row per spec; the goals are written by
 Example of a filled file: ../example/v1.0.x/owner/v1.0.x-plan.md.
 -->
 
-Decisions: [decisions.md](decisions.md). Sprints: [status/sprints.md](status/sprints.md). Specs implement decisions and never re-decide.
+Decisions: [decisions.md](decisions.md). Specs implement decisions and never re-decide.
 
 ## Goals
 

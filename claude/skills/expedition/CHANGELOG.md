@@ -2,6 +2,49 @@
 
 One section per version of the skill, newest first. The version is `metadata.version` in the front matter of `SKILL.md`. A release folder states the format it has in `status/data/status.json` (`format`); a release with no status file is format 1.0.
 
+## 2.2
+
+What is new:
+
+- Six status words: `to-do`, `in progress`, `blocked`, `done`, `backlog`, `archived`. A queue item uses `to-do`, `blocked`, `done`, `backlog` and `archived` (before: `open`, `decided`, `autofix`, `later`, `dropped`). An epic, a spec, a milestone and a task use `to-do`, `in progress`, `blocked`, `done` and `archived` (before: `not started` and `skipped` in place of `to-do` and `archived`). The owner words "record it", "later" and "drop it" stay; they set `done`, `backlog` and `archived`.
+- A closed queue item has a `decider` line: `you`, `lead` or `agent`, who made the call. A command that closes an item takes `--decider`: `queue/item.py <release> D "<title>" --source Q<n> --decider you` (or `lead`), and `--move Q<n> Dropped --decider lead` or `--move Q<n> Autofix --decider agent`. Without it the command writes nothing. The status file gives a `decider` for each epic, spec, milestone and task too, worked out on each write.
+- A queue item can wait for other items: `queue/item.py <release> --depends Q<n> "Q14, Q15"` writes its `depends_on` line. The scripts set it `blocked` while an item it names is not `done`, and `to-do` again after that. `queue/next.py` skips a blocked item.
+- An epic whose specs are ready is `blocked`, with the reason `waits for delegate`, until the owner says `delegate`.
+- The epic file `plan/epics/E<n>.md` has no `decisions:` and no `specs:` line. Its `## Ownership` table is the one copy of both.
+- There is no `status/sprints.md`. The status file holds the sprint of each milestone, and `sprints/grid.py <release>` prints the grid and writes nothing.
+- `status/index.html` is the dashboard page in place of the task board: six views, Dashboard, Queue, Epics, Milestones, Tasks and Sprints. Dashboard shows what waits for whom. The page loads its scripts from `status/src/`, and its data from `status/data/dashboard.data.js` and `status/data/status.data.js`; `status/data/dashboard.json` holds the same rows for an agent. `queue.data.js` is no longer written. Reference: [board/README.md](board/README.md).
+- The side panel of a queue item, in the Dashboard and Queue views, shows its notes, details and options.
+- `queue/list.py <release> all` counts the six status words in a release of format 2.2: one line per word with its item count.
+- `plan/new_release.py` makes a new release in format 2.2.
+- `plan/new_spec.py` writes the flat file `plan/specs/NN-<slug>.md` in a format 1.0 release.
+- `status/report.py` on a release of an older format names, in its last line, the migration folders to run, in order.
+- One file per decision: `decisions/D<n>-<slug>.md`, with the front matter `status`, `decider`, `source`, `epic` and `replaced_by`, the title line and a free body (bullets by default, a table or a code block where it reads better). `decisions.md` is the list of the decision files, written by the scripts. The rules: [reference/formats.md](reference/formats.md), Decision file.
+- A decision has the six status words and a `decider`. `to-do`, `in progress`, `blocked` and `done` come from the status rule, `backlog` from `decisions/close.py --backlog`, `archived` from `decisions/supersede.py`, which writes `replaced_by: D<new>` into the old file and nothing into the new one. Every `queue/item.py <release> D` call takes `--decider you`, `lead` or `agent`; a run agent records a deviation it settled with `--decider agent`.
+- A decision in no epic that shares a file with a running epic is `blocked`, and `to-do` again when that epic has merged. For a decision that no spec cites, the lead gives its files with `epics/overlap.py <release> D<n> --files "<files>"`.
+- `decisions/close.py <release> D<n> --backlog` moves a decision to another release (before: the bullet `- Deferred to`).
+- `decisions/decider.py <release> D<n> you|lead|agent` writes the decider of a decision file that has none: a decision recorded before its release moved to decision files.
+- `decisions/decider.py <release> D<n> you|lead|agent --change` replaces the decider of a decision file that has one.
+- The `Epic ready` message lists the blocked decisions under `**Blocked:**` (before: `**Decided, not in this epic:**`). The lead copies the ready lines and the blocked lines from `epics/overlap.py <release>`, which prints them.
+- Item post rules, for a release of every format: during a discussion the lead answers in chat, and the whole item comes again only when the talk on it ended and the proposal changed, or on the new owner word `restate` (before: a repost after each reply that changed the item). Every post of an item, the first post too, passes four checks: each line is needed for this decision, what the owner needs to finish the item is in it, ASD-STE100 words in short lines, and option 2 is a different idea or there is one option. Inside an option: bullets by default, a table or a code block only where bullets do not work. Rules: [reference/discuss.md](reference/discuss.md), Item format.
+- A Waits for you line under every message of the lead in a release of format 2.2: `status/waits.py <release>` prints each thing that waits for the owner (`E3 planned: delegate · D14 ready: compose · 05-04: your look`) and, after `Held:`, each decision the owner holds. An entry stays until the owner answers it; the `Epic ready` message is no longer posted once per set. The owner's `hold D<n>` is stored in the status file by `decisions/hold.py`, with `--until <id>` or a reason in words; when the id of `--until` is closed, the line says `D14: hold over, ready: compose`. The held block (`status/waits.py <release> --held`) comes in the first message of a session and with `DONE E<n>`. One push (`PushNotification`, when the session has the tool) when a run is done or blocked and when a thing starts to wait that the owner did not cause; the runner sends `NOTE <task id>: waits for the owner's look` for that. On the dashboard page a ready decision file gets the turn `you`, and a held one gets no turn. A release of format 2.1 or lower works as before. Rules: [reference/discuss.md](reference/discuss.md), Waits for you line, Hold and Push.
+- `run/go.py` writes "RUN sent" only when the RUN line is in the runner's own transcript: it waits until the runner's window takes input, types the line, types it once more when it is not there, and else stops with `go E<n> stopped at step 6 (run): <reason>`; the next call does the step again. `run/runner.sh send --confirm` does that wait and check; `send` with no flag is unchanged.
+- The note watcher (`run/nudge-watch.sh`) finds a new note by the session it was shown to, so side notes reach the lead also after the store holds 50 notes.
+
+What changes for a release in work:
+
+- Nothing has to change at once. A release in format 2.1 or lower keeps its words, its epic file lines and its `status/sprints.md`, and every script reads and writes it as before. Its rules: the section Format 2.1 releases of `SKILL.md`, and [reference/old-form/format-2.1.md](reference/old-form/format-2.1.md).
+- To use the new words and the dashboard page, migrate the release. The migration is one commit, keeps every id and every line of the item files and of the decision cards, and can be undone with `git revert`. A migrated `decided` or `dropped` item, and a migrated decision, has no `decider` line, because the files of format 2.1 do not say who made the call.
+- A release of format 2.2 whose `decisions.md` is still the board keeps working as before. The same migration command moves only its decisions to decision files: [scripts/migrate/v2.1-v2.2/README.md](scripts/migrate/v2.1-v2.2/README.md), A release of format 2.2 with the board.
+- A session that read the skill before this version re-reads it before it creates a release or migrates one.
+
+What stops working:
+
+- Nothing that a 2.1 release used is removed. Every command and every flag stays, and a command takes the words of both formats.
+- In a release of format 2.2, no script writes `status/sprints.md`, and `queue.data.js` is not written.
+- In a release with decision files, `queue/item.py <release> D` without `--decider` is refused, and `decisions/supersede.py` writes no `- Supersedes` line into the new decision.
+
+Migration: [scripts/migrate/v2.1-v2.2/README.md](scripts/migrate/v2.1-v2.2/README.md).
+
 ## 2.1
 
 What is new:

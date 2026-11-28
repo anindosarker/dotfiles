@@ -8,10 +8,13 @@ A D id resolves to the specs citing it. Each named spec gets the line "- Epic: E
 under its title line; each decision those specs cite (and each named D id) gets the tag "#E<n>"
 on its card in decisions.md and moves to In progress (lib/decisions.py, under the .ids.lock
 lock, then the Done rule sync), and the spec's Deliverables row gets E<n> in
-its Epic cell, and plan/epics/E<n>.md gets "Starts: S<n>" under its Specs: line: the current
-sprint of status/sprints.md as it is at that moment (the first column holding a "[ ]", "[~]" or
-"·" cell of another epic's row, else the column after the last column holding another epic's row;
-S1 for an empty grid). An existing Epic line, epic tag or Starts value is kept and reported; a
+its Epic cell, and plan/epics/E<n>.md gets "Starts: S<n>" under its Specs: line (in a release of
+format 2.2, which has no Specs: line, "starts: S<n>" directly after the "status:" line): the current
+sprint of the grid as it is at that moment (the first column holding a "[ ]", "[~]" or "·" cell
+of another epic's row, else the column after the last column holding another epic's row; S1 for
+an empty grid). The grid is status/sprints.md below format 2.2; in a release of format 2.2 it is
+read from status/data/status.json (lib/ownership.py grid): the lowest sprint holding a to-do,
+in progress or blocked milestone of another epic. An existing Epic line, epic tag or Starts value is kept and reported; a
 missing epic file is refused. Each file is read right before its write. Then the Decided cards
 of queue.md are synced with the lanes (lib/board.py sync): each card whose decision is now In
 progress is ticked and gets "#E<n>". A release of format 2.1 keeps its queue in item files
@@ -19,7 +22,14 @@ progress is ticked and gets "#E<n>". A release of format 2.1 keeps its queue in 
 
 Refuses a superseded decision (heading "(superseded by D<n>)", or named by a later
 "- Supersedes D<n>." bullet): a named spec that cites one, or a named D id that is one.
-Commits nothing.
+Commits nothing. In a release of format 2.2 the status chain runs at the end (epics/table.py
+chain): with its "starts:" value the epic is counted from its specs, no longer "waits for
+delegate".
+
+A release whose decisions are files (lib/decisions.py file_form): each decision gets the line
+"epic: E<n>" in its file in place of the tag, then the status rule makes it in progress. A
+decision with an "epic" line keeps it and is printed under "kept:" as on a board. The lines
+printed are the same.
 """
 import argparse
 import fcntl
@@ -70,13 +80,16 @@ def tag_epic(folder, epic, items):
     for num in sorted(specs, key=own.num_key):
         own.refuse_superseded(folder, own.spec_cites(files[num]), f"spec {files[num].name}")
         nums |= own.spec_cites(files[num])
-    path = folder / "decisions.md"
-    if not path.is_file():
+    dc = C.load("lib/decisions")
+    in_files = dc.file_form(folder)
+    path = dc.path_of(folder)
+    if not in_files and not path.is_file():
         die(f"decisions.md missing: {path}")
     tags = own.read_tags(folder)
     missing = sorted(nums - set(tags))
     if missing:
-        die(f"not in decisions.md: {', '.join(f'D{n}' for n in missing)}")
+        die(f"no file in {folder / dc.DECISIONS_DIR}: {', '.join(f'D{n}' for n in missing)}" if in_files
+            else f"not in decisions.md: {', '.join(f'D{n}' for n in missing)}")
     marked, kept_specs = [], []
     for num in sorted(specs, key=own.num_key):
         old = own.spec_epic(files[num])
@@ -108,10 +121,13 @@ def tag_epic(folder, epic, items):
         print(f"warning: {plan.name} missing, Epic cells not written")
     if kept_specs:
         print(f"kept specs: {', '.join(kept_specs)}")
-    dc = C.load("lib/decisions")
     tagged, kept = [], []
     with open(C.lock_file(folder), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
+        if in_files:
+            moved = tag_files(folder, epic, nums, dc, tagged, kept)
+            fcntl.flock(lock, fcntl.LOCK_UN)
+            return report(epic, tagged, moved, kept, folder, own, dc)
         text = path.read_text(encoding="utf-8")
         cards = {c["num"]: c for c in dc.parse(text)["cards"]}
         for n in sorted(nums):
@@ -127,6 +143,29 @@ def tag_epic(folder, epic, items):
             C.load("lib/board").write(path, text)
         moved = dc.sync_file(folder)
         fcntl.flock(lock, fcntl.LOCK_UN)
+    report(epic, tagged, moved, kept, folder, own, dc)
+
+
+def tag_files(folder, epic, nums, dc, tagged, kept):
+    """The line "epic: E<n>" in the file of each decision without one, then the status rule.
+    Fills tagged and kept; returns the files the status rule changed."""
+    cards = {c["num"]: c for c in dc.file_cards(folder)}
+    for n in sorted(nums):
+        c = cards[n]
+        if c["epic"]:
+            kept.append(f"D{n} E{c['epic']}" + (" done" if c["lane"] == dc.DONE else ""))
+            continue
+        p = c["path"]
+        p.write_text(dc.set_front(p.read_text(encoding="utf-8"), epic=epic), encoding="utf-8")
+        tagged.append(n)
+    moved = dc.sync_file(folder)
+    if tagged:
+        dc.write_data(folder)
+    return [(n, old, new) for n, old, new in moved if n not in tagged] if moved else moved
+
+
+def report(epic, tagged, moved, kept, folder, own, dc):
+    """The lines of tag_epic after the decisions are tagged."""
     print(f"{epic}: {', '.join(f'D{n}' for n in sorted(tagged)) or 'nothing tagged'}")
     if moved:
         print(f"decisions.md lanes synced: {dc.moved_text(moved)}")
@@ -156,6 +195,7 @@ def main():
     root = C.repo_root(a.root, a.release)
     folder = C.release_folder(root, C.detect_owner(root, a.owner), a.release)
     tag_epic(folder, a.epic, items)
+    C.load("epics/table").chain(folder, a.release)
 
 
 if __name__ == "__main__":

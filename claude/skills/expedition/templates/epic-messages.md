@@ -1,5 +1,7 @@
 # Epic messages
 
+In a release of format 2.2 the Waits for you line follows the `Say:` block as the last line of the message ([../reference/formats.md](../reference/formats.md), Waits for you line).
+
 ## Epic ready
 
 ```Markdown
@@ -7,7 +9,7 @@
 - D<n>: <the decision's title, one plain line>
 - D<n>: <the decision's title, one plain line>
 
-**Decided, not in this epic:**                      optional: only when a decision waits
+**Blocked:**                                        optional: only when a decision is blocked
 - D<n>: <the decision's title>. Waits for E<n>, same file.
 
 **Say:**

@@ -6,7 +6,7 @@
       "Answers the question about the export button in chat",
       "Writes nothing to a plan file in that turn: no queue/item.py call with D, --move or --fact, no edit of decisions.md, the item file in queue/, the list queue.md or a spec",
       "Does not treat the picked option as a recorded decision, because the message holds a question mark",
-      "Posts the item again with the new point folded in and waits for the owner's explicit word (\"record it\" or \"accepted\")",
+      "Answers in chat, does not post the item Q14 again, and waits for the owner's explicit word (\"record it\" or \"accepted\")",
       "Does not post the next item of the queue"
     ]
   },
@@ -18,7 +18,7 @@
       "Says in one line where each goes: the blur remark belongs to spec 27, the billing area is a decision for a new spec",
       "Records each decision only after the owner's explicit word",
       "For the blur remark runs plan/milestone.py add <release> 27 \"<Name>\" --decision D<n>, which adds the next module, a task file and a milestone to spec 27, and tells the runner with one NOTE line",
-      "Does not add the billing work to spec 27; it stays a decision in To do until an epic and a delegate",
+      "Does not add the billing work to spec 27; it stays a `to-do` decision until an epic and a delegate",
       "Fills the new module and task file after the script; edits no status by hand"
     ]
   },
@@ -58,13 +58,71 @@
   },
   {
     "skills": ["expedition"],
-    "query": "/expedition discuss v0.3.x  (the lead has posted this item in chat:\n\n# Q70. The settings page loses unsaved changes when the user leaves it.\n- Now\n  - The form keeps edits in memory only.\n  - Leaving the page drops them with no warning.\n- Two users reported lost work this week.\n## Options:\n1. Recommended: warn before leaving\n   - Settings page: a warning shows when the user leaves with unsaved changes.\n2. Save a draft\n   - Settings form: a draft is saved every 10 seconds and restored on return.\n\n**Say:**\n- A. `record it`: record.\n- B. `iterate`: record and start now.\n\nThe owner writes: \"in option 2, make it every 30 seconds\". After the lead's reply, the owner writes: \"does the warning also show when the browser tab closes?\")",
+    "query": "/expedition discuss v0.3.x  (the lead has posted this item in chat:\n\n# Q70. The settings page loses unsaved changes when the user leaves it.\n- Now\n  - The form keeps edits in memory only.\n  - Leaving the page drops them with no warning.\n- Two users reported lost work this week.\n## Options:\n1. Recommended: warn before leaving\n   - Settings page: a warning shows when the user leaves with unsaved changes.\n2. Save a draft\n   - Settings form: a draft is saved every 10 seconds and restored on return.\n\n**Say:**\n- A. `record it`: record.\n- B. `iterate`: record and start now.\n\nThe owner writes: \"in option 2, make it every 30 seconds\". After the lead's reply, the owner writes: \"does the warning also show when the browser tab closes?\". After the lead's reply, the owner writes: \"restate\")",
     "expected_behavior": [
-      "After the change, posts the whole item again: the title, every bullet, the Now group, both options with their bullets and the Say: block",
-      "In the repost, option 2 says every 30 seconds, and every line the owner did not name is the same as before, word for word, with no rephrasing",
-      "No line in the repost says that a part is unchanged, and no part is left out",
-      "After the question, answers it, names the open item Q70 in one line, and does not post the item again",
+      "After \"in option 2, make it every 30 seconds\", confirms the change in chat and does not post the item",
+      "After the question about the browser tab, answers it in chat and does not post the item",
+      "After \"restate\", posts the whole item one time: the title, every bullet, the Now group, both options with their bullets and the Say: block",
+      "In that post, option 2 says every 30 seconds, and every line the owner did not name is the same as before, word for word, with no rephrasing",
+      "No line in that post says that a part is unchanged, and no part is left out",
       "Records nothing: no queue/item.py call with D, no edit of decisions.md or of a plan file, because the owner gave no explicit word"
+    ]
+  },
+  {
+    "skills": ["expedition"],
+    "query": "/expedition discuss v0.3.x  (the lead posts the item Q71 for the first time. The owner's remark: \"the export menu should also offer CSV\". Decision D40, recorded, already settled that every export runs as a background job and puts a download link in the notifications. Facts from the lookup: the export menu offers PDF and XLSX; `ExportService.run` takes the format name; CSV needs one new writer class, `CsvWriter`; the export page got a new color last month. No other real way to give CSV was found. Post the item Q71.)",
+    "expected_behavior": [
+      "No line of the item says again that an export runs as a background job or that a download link goes to the notifications",
+      "No line names the new color of the export page",
+      "The item says that the export menu offers PDF and XLSX now, and that CSV needs one new writer",
+      "Each line is short and in plain words: no line joins several facts with commas or semicolons",
+      "The item has one option only, and no option that is the first option with a small addition",
+      "The item is headed # Q71. with one plain sentence, has the option numbered and marked Recommended, and ends with the Say: block, with no question after it"
+    ]
+  },
+  {
+    "skills": ["expedition"],
+    "query": "/expedition discuss v0.3.x  (the lead posts the item Q72 \"the release notes page shows no date\" for the first time. Facts for the one real option: four files change, one fact each: `pages/notes.tsx` shows the date; `lib/notes.ts` reads the date from the front matter; each file of `content/notes/` gets a `date:` line; `tests/notes.test.ts` checks the date. The check after the change is one command: `npm test -- notes`. Post the item Q72.)",
+    "expected_behavior": [
+      "Inside the option, each of the four files is one bullet with its fact",
+      "The item has no table",
+      "The item has no code block; the command npm test -- notes is in a bullet",
+      "The item has the title # Q72. with one plain sentence, the numbered options, the recommended option first, and the Say: block at the end"
+    ]
+  },
+  {
+    "skills": ["expedition"],
+    "query": "/expedition discuss v0.3.x  (the lead has posted this item in chat:\n\n# Q70. The settings page loses unsaved changes when the user leaves it.\n- Now\n  - The form keeps edits in memory only.\n  - Leaving the page drops them with no warning.\n- Two users reported lost work this week.\n## Options:\n1. Recommended: warn before leaving\n   - Settings page: a warning shows when the user leaves with unsaved changes.\n2. Save a draft\n   - Settings form: a draft is saved every 10 seconds and restored on return.\n\n**Say:**\n- A. `record it`: record.\n- B. `iterate`: record and start now.\n\nThe owner writes: \"in option 2, make it every 30 seconds\". After the lead's reply, which confirms the change, the owner writes: \"good, nothing more on this one\".\n\nSecond part, a new session of the same release: the lead has posted this item in chat:\n\n# Q73. The search box keeps the old query after a reset.\n- Reset clears the results but not the text in the search box.\n## Options:\n1. Recommended: clear the search box on reset\n   - Search page: reset also empties the search box.\n\n**Say:**\n- A. `record it`: record.\n- B. `iterate`: record and start now.\n\nThe owner writes: \"makes sense\")",
+    "expected_behavior": [
+      "After \"in option 2, make it every 30 seconds\", confirms the change in chat and does not post the item",
+      "After \"good, nothing more on this one\", posts the whole item Q70 one time: the title, every bullet, the Now group, both options with their bullets and the Say: block",
+      "In that post, option 2 says every 30 seconds, and every other line is the same as before, word for word, with no part left out",
+      "Records nothing for Q70, because \"good\" is no explicit word: no queue/item.py call with D, no decision is recorded and no status changes; writing the item's Details and Options to its item file when the talk on it ends is allowed (Storing)",
+      "After \"makes sense\" on Q73, does not post the item and records nothing"
+    ]
+  },
+  {
+    "skills": ["expedition"],
+    "query": "/expedition discuss v0.3.x  (the release is in format 2.2. Epic E12 is planned and waits for the owner's `delegate`; the lead posted the `Epic planned: E12` message earlier in the session. Decision D65 is held until Q80, which is open. Item Q70 is open in chat with its options. The item file of Q70 holds notes only: it has no `## Details` and no `## Options:`. The owner writes: \"does option 1 also cover the mobile layout?\")",
+    "expected_behavior": [
+      "Answers the question about the mobile layout in chat",
+      "Runs `status/waits.py <release> --skip Q70` (or `status/waits.py <release>`) one time, with no `--new`, after its last plan write of the turn",
+      "The last line of its message is the first line that command printed, character for character: `Waits for you: E12 planned: delegate · Held: D65`",
+      "Sends no push (no PushNotification call) in that turn",
+      "Does not post the `Epic planned: E12` message again",
+      "Writes nothing to a plan file in that turn, because the message holds a question mark"
+    ]
+  },
+  {
+    "skills": ["expedition"],
+    "query": "/expedition discuss v0.3.x  (the release is in format 2.2. The owner is away. The message `DONE E11 4f2c9a1 queue none` arrives from the runner by SendMessage. Task 27-06 of E11 is blocked, \"waits for the owner's look\", and `status/data/waits.json` has no key for it yet. Decision D65 is held until Q80, which is open.)",
+    "expected_behavior": [
+      "Reads the grid with `sprints/grid.py <release>`, the tracker and `queue/next.py <release>`, and sets no status by hand",
+      "Makes one call of `status/waits.py <release> --new` for its message, and no second call of `status/waits.py` without `--held`",
+      "Sends exactly one push with PushNotification, and its message starts with the release name and names `E11 done` and `27-06: your look`, for example `v0.3.x: E11 done · 27-06: your look`; in a replay session that has no PushNotification tool this line is `not run`, not `fail`",
+      "Its message in chat holds the held block, the output of `status/waits.py <release> --held`, with the line `- D65 <title>: until Q80`",
+      "The last line of its message in chat is the first line the `--new` call printed, character for character, and no `new:` line is in the message",
+      "In a later turn on another message of another session, sends no second push for `E11 done` or `27-06: your look`"
     ]
   }
 ]

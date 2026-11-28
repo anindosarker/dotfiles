@@ -4,7 +4,8 @@
 
 Usage: python3 -I sprints/swimlanes.py <release> [--owner X] [--root PATH]
 
-Reads status/sprints.md (grid), the ownership facts (lib/ownership.py compute, in memory: each
+Below status/data/status.json (a release without it, see the last paragraph): reads
+status/sprints.md (grid), the ownership facts (lib/ownership.py compute, in memory: each
 milestone's dependencies and files, each epic's critical path computed on the fly) and
 <release>-plan.md (Deliverables). Each epic's path milestones are marked critical; the data
 holds criticalPaths {"E6": [names]} and criticalPath, their union, for older pages.
@@ -14,10 +15,15 @@ status/progress.py shows for it without "waits on the " ("owner: <what>"), or fo
 its first ## Attention bullet, else the detail of its tracker's Status line, from the same
 tracker copies status/progress.py reads (the milestone's own worktree included); empty when none
 is found.
-In a release with status/data/status.json none of that is written: the page is
-board/task-board.html, which reads status/data/status.data.js (lib/status.py) and, in a release
-of format 2.1, status/data/queue.data.js for its Queue view (lib/queue.py), and this script only
-keeps the page and those files current (refresh_board).
+In a release with status/data/status.json none of that is written: this script only keeps the
+page and its data files current (refresh_board), and it reads no grid file there; a release of
+format 2.2 has none. The page is picked by the format of the release:
+- format 2.2: board/dashboard.html (D15) as status/index.html, and status/src/ with the files of
+  board/src/, each copied when it is missing or differs (install_dashboard). Its data is
+  status.data.js (lib/status.py) and dashboard.data.js (lib/dashboard.py); a status/data/
+  queue.data.js that is left over is removed.
+- format 2.0 and 2.1: board/task-board.html, which reads status.data.js and, in a release of
+  format 2.1, status/data/queue.data.js for its Queue view (lib/queue.py).
 Refreshes status/index.html from board/swimlanes.html when the template is newer or the
 page is missing. Both are renders, ignored by git (plan/new_release.py and migrate/pre-v1.0/layout.py add
 the .gitignore lines), never committed. Writes nothing else. sprints/refresh.py runs it last, after
@@ -164,17 +170,57 @@ def build(folder, release, own):
 
 
 BOARD = C.BOARD / "task-board.html"
+DASHBOARD = C.BOARD / "dashboard.html"
+DASHBOARD_SRC = C.BOARD / "src"
+# The release format from which status/index.html is the dashboard page: format 2.2 holds the
+# status words and the data (dashboard.data.js) that the page reads (D15).
+DASHBOARD_FORMAT = (2, 2)
+
+
+def dashboard_release(folder):
+    """True for a release of format 2.2 or higher: its page is the dashboard page."""
+    st = C.load("lib/status")
+    return st.version(st.release_format(folder)) >= DASHBOARD_FORMAT
+
+
+def install_dashboard(folder):
+    """status/index.html from board/dashboard.html and status/src/ with the files of board/src/,
+    each copied when it is missing or differs; a file in status/src/ that board/src/ does not hold
+    is removed. Checks each copy after it. Returns the paths written."""
+    src = sorted(p for p in DASHBOARD_SRC.glob("*") if p.is_file()) if DASHBOARD_SRC.is_dir() else []
+    if not DASHBOARD.is_file() or not src:
+        die(f"template missing: {DASHBOARD} or the files of {DASHBOARD_SRC}; restore board/ of the skill from git")
+    out = folder / "status" / "src"
+    out.mkdir(parents=True, exist_ok=True)
+    want = [(DASHBOARD, folder / "status" / "index.html")] + [(p, out / p.name) for p in src]
+    written = []
+    for tpl, dst in want:
+        if not dst.is_file() or dst.read_bytes() != tpl.read_bytes():
+            shutil.copyfile(tpl, dst)
+            if dst.read_bytes() != tpl.read_bytes():
+                die(f"{dst} differs from {tpl} after the copy: check the disk and run sprints/refresh.py again")
+            written.append(dst)
+    names = {p.name for p in src}
+    for p in sorted(out.iterdir()):
+        if p.is_file() and p.name not in names:
+            p.unlink()
+    return written
 
 
 def refresh_board(folder):
-    """A release with status/data/status.json: status/index.html is board/task-board.html,
-    copied when the page is missing or differs; its data, status.data.js, is written from the
-    status file, and the swimlane data files of the earlier page are removed. Returns True when
-    the page was written."""
+    """A release with status/data/status.json: its data, status.data.js (and the queue or the
+    dashboard data, lib/status.py write_page_data), is written from the status file, and the
+    swimlane data files of the earlier page are removed. Format 2.2: the dashboard page
+    (install_dashboard), and a left-over queue.data.js is removed. Below: status/index.html is
+    board/task-board.html, copied when the page is missing or differs. Returns True when the
+    page was written."""
     st = C.load("lib/status")
     st.write_page_data(folder)
     for old in ("sprints.json", "sprints.data.js"):
         (folder / "status" / "data" / old).unlink(missing_ok=True)
+    if dashboard_release(folder):
+        (folder / C.load("lib/queue").DATA).unlink(missing_ok=True)
+        return folder / "status" / "index.html" in install_dashboard(folder)
     page = folder / "status" / "index.html"
     if not BOARD.is_file():
         die(f"template missing: {BOARD}")

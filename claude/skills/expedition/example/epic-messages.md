@@ -14,14 +14,30 @@ Filled messages in the shapes of [../templates/epic-messages.md](../templates/ep
 - B. `compose delegate`: plan and start.
 ```
 
-## Epic ready, with a decision that waits
+## Epic ready, with the Waits for you line
+
+In a release of format 2.2: D65 is held until Q80, and task 27-06 waits for the owner's look.
 
 ```Markdown
 **Epic ready: E12**
 - D63: Sidebar menu scrolls above a fixed footer.
 - D64: Billing is its own sidebar section with three pages.
 
-**Decided, not in this epic:**
+**Say:**
+- A. `compose`: plan.
+- B. `compose delegate`: plan and start.
+
+Waits for you: D63 ready: compose · D64 ready: compose · 27-06: your look · Held: D65
+```
+
+## Epic ready, with a blocked decision
+
+```Markdown
+**Epic ready: E12**
+- D63: Sidebar menu scrolls above a fixed footer.
+- D64: Billing is its own sidebar section with three pages.
+
+**Blocked:**
 - D65: Sidebar header shows the team name. Waits for E11, same file.
 
 **Say:**

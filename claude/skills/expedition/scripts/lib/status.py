@@ -7,9 +7,40 @@ A release that has the file is read through it. A release without it (made befor
 is read as before: grid marks, tracker "Status:" lines. plan/new_release.py writes the first file.
 
 Five words (STATUSES): "not started", "in progress", "blocked", "done", "skipped". A blocked or
-skipped item carries a short reason. Stored: the status, reason, changed time and merge commit
+skipped item carries a short reason. A release of format 2.2 (new_form) stores and prints
+"to-do" for "not started" and "archived" for "skipped" (WORDS_22), in the file, in the "status:"
+lines and in every output; its key "statuses" is STATUSES_22. The code keeps the words of
+STATUSES: load gives them, dump and say turn them into the words of the release's format, and
+canon takes either set from a command, in every format. This is the one place that maps them. Stored: the status, reason, changed time and merge commit
 of each milestone, and the status, reason and changed time of each task. Counted on every
-write (rollup): the status of a spec, an epic and a sprint, from the milestones inside.
+write (rollup): the status of a spec, an epic and a sprint, from the milestones inside. In a
+release of format 2.2 an epic is counted so only once it has gone (a "starts:" value); before
+that it is to-do, and blocked with the reason DELEGATE_REASON while every row of its Ownership
+table has a Spec cell (epic_state). Its entry has "reason" there.
+In a release of format 2.2 (spec 04, D13) this file is also the store of each milestone's
+"sprint" (kept for a started milestone, placed again for the others by lib/ownership.py
+compute, which reads the started columns from here) and of "launched", true from its first
+sprints/mark.py launch on; lib/ownership.py grid reads the grid rows from here, and the release
+has no status/sprints.md. Below 2.2 "sprint" is the column of status/sprints.md.
+In a release of format 2.2 (spec 05, D8) every epic, spec, milestone and task entry also has
+"decider", worked out on every build (deciders) and stored in no plan file: an epic "you"; a task
+the decider of the decision its module cites ("" when it cites none); a milestone the decider of
+the first of its tasks that has a decision ("agent" when none has); a spec the decider of the first
+decision a module of it cites ("" when none cites one). With the decisions.md board the decider of
+a decision is the "decider" line of the queue item whose "decision" line names it (lib/queue.py); "" when no item names it or
+the item has no such line. decisions.md is only read. In the file form of the decisions
+(lib/decisions.py file_form) the decider of a decision is the "decider" line of its file alone, ""
+when the file has none (a decision moved from a board has none until decisions/decider.py sets it);
+no queue item is read for it.
+In a release of format 2.2 the key "decisions" holds one entry per decision of the file form,
+"D<n>": {"round": <n>} (spec 07, D16 keeps the round out of the decision file): queue/item.py D
+writes it (set_decision), every build keeps it, and a release with no such entry has no key. An
+entry also holds "files", the files the lead gave for a decision no spec cites yet
+(epics/overlap.py --files, spec 07 module 1.6.2); every build drops them by the rule of
+lib/decisions.py kept_entries. An entry also holds the hold of the decision (spec 10, D17):
+"hold" ("yes" or "until <id>") and, with "yes", "hold_reason", written by decisions/hold.py
+(set_decision); every build keeps them, in status.data.js too, until the decision is no longer
+to-do or blocked (kept_entries), and epics/new.py removes them from each decision it takes.
 Everything else in the file is rebuilt from the specs on every write (build), in the shape of
 the status board: release, updated, root, statuses, sprints, epics, specs, milestones, tasks.
 
@@ -18,8 +49,8 @@ task is "<spec>-<number>" ("27-03"), a spec its number, an epic "E11".
 
 set_status changes one milestone or task, then runs the chain: the roll-up of a task into its
 milestone, the JSON file, the grid (lib/grid.py refresh, which draws status/sprints.md from this
-file and ends in sync), status.data.js (and, for a release of format 2.1, queue.data.js, the
-queue data of the page, lib/queue.py), and the "status:" front matter line of every task, spec
+file below format 2.2, writes no grid file in format 2.2, and ends in sync), status.data.js (and, for a release of format 2.1 and higher, queue.data.js, the
+queue data of the page, lib/queue.py; for format 2.2 also the dashboard data, lib/dashboard.py), and the "status:" front matter line of every task, spec
 and epic file (mirror). Nobody writes a status by hand.
 - A task set to done with an open "Owner:" box in its Verification list becomes blocked with
   the reason OWNER_REASON; with any other open box the change is refused.
@@ -54,6 +85,13 @@ WITH_REASON = ("blocked", "skipped")
 CLOSED = ("done", "skipped")
 MARKS = {"not started": "·", "in progress": "[ ]", "blocked": "[~]", "done": "[x]", "skipped": "[!]"}
 OWNER_REASON = "waits for the owner's look"
+NEW_FORMAT = (2, 2)
+DELEGATE_REASON = "waits for delegate"
+# Format 2.2 (spec 04, D11): the stored and printed words. The code keeps the words of STATUSES.
+WORDS_22 = {"not started": "to-do", "skipped": "archived"}
+ALIASES = {new: old for old, new in WORDS_22.items()}
+STATUSES_22 = ("to-do", "in progress", "blocked", "done", "backlog", "archived")
+KINDS = ("sprints", "epics", "specs", "milestones", "tasks")
 PENDING = "status/data/.pending"
 COMMIT_RE = re.compile(r"^[0-9a-f]{7,40}$")
 BOX_RE = re.compile(r"^\s*-\s*\[( |x|X)\]\s*(.*)$")
@@ -84,7 +122,36 @@ def load(folder):
         C.die(f"{path(folder)} is not valid JSON ({e}): restore it from git; no status was changed")
     if not (isinstance(data, dict) and isinstance(data.get("milestones"), list) and isinstance(data.get("tasks"), list)):
         C.die(f"{path(folder)} has no milestone and task lists: restore it from git; no status was changed")
+    if version(data.get("format")) >= NEW_FORMAT:
+        for kind in KINDS:
+            for e in data.get(kind) or []:
+                if isinstance(e, dict) and "status" in e:
+                    e["status"] = canon(e["status"])
+        data["statuses"] = list(STATUSES)
     return data
+
+
+def canon(word):
+    """The word of the code for a word of either format: "to-do" is "not started", "archived"
+    is "skipped"; any other word as it is."""
+    return ALIASES.get(word, word)
+
+
+def stored(data):
+    """data in the words of its own "format": for 2.2 and higher a copy with WORDS_22 and the key
+    "statuses" STATUSES_22; data itself for a lower format."""
+    if version(data.get("format")) < NEW_FORMAT:
+        return data
+    out = dict(data, statuses=list(STATUSES_22))
+    for kind in KINDS:
+        out[kind] = [dict(e, status=WORDS_22.get(e["status"], e["status"])) if "status" in e else e
+                     for e in data.get(kind) or []]
+    return out
+
+
+def dump(data):
+    """The text of status.json for data, in the words of its format."""
+    return json.dumps(stored(data), indent=2, ensure_ascii=False) + "\n"
 
 
 def write_json(p, text):
@@ -98,6 +165,40 @@ def write_json(p, text):
 def release_format(folder):
     """The format a release is in: the "format" key of its status file; "1.0" with no file."""
     return (load(folder) or {}).get("format") or "1.0"
+
+
+def version(text):
+    """A format or version string as a tuple to compare: "2.2" is (2, 2)."""
+    return tuple(int(x) for x in re.findall(r"\d+", text or "")) or (1, 0)
+
+
+def say(folder, word):
+    """The word a release stores and prints for the word of the code (STATUSES): in a release of
+    format 2.2 "to-do" for "not started" and "archived" for "skipped" (WORDS_22)."""
+    return WORDS_22.get(word, word) if new_form(folder) else word
+
+
+def words(folder):
+    """The five words a release of this format stores and prints, in the order of STATUSES."""
+    return [say(folder, w) for w in STATUSES]
+
+
+def stamp(folder, text):
+    """text of a new task, spec or epic file with the "status:" front matter line set to the
+    first word of the release's format, when that line holds a first word of either format."""
+    m = re.match(r"\A---\n(.*?)\n---\n", text, re.S)
+    if not m:
+        return text
+    lines = [f"status: {say(folder, STATUSES[0])}" if re.fullmatch(r"status:\s*(not started|to-do)\s*", l) else l
+             for l in m.group(1).split("\n")]
+    return "---\n" + "\n".join(lines) + "\n---\n" + text[m.end():]
+
+
+def new_form(folder):
+    """True for a release of format 2.2 or higher (spec 04): the words of WORDS_22 and the epic
+    file with its Ownership table as the one copy of its decisions and specs. The skill's own
+    version plays no part."""
+    return version(release_format(folder)) >= NEW_FORMAT
 
 
 def entries(folder):
@@ -174,12 +275,25 @@ def build(folder, release, stored=None):
     links = dict(coll["rows"])
     scope = {m.group(1): m.group(5) for m in C.load("sprints/swimlanes").PLAN_ROW_RE.finditer(
         C.read(plan) if plan.is_file() else "")}
-    gcols = o.grid_columns(folder)
     by_name = {m["name"]: m for m in comp["milestones"]}
     stem = {b["name"]: b["tracker"].name.removesuffix("-tracker.md")
             for bl in coll["blocks"].values() for b in bl}
     epic_of = {num: o.spec_epic(p) for num, p in coll["docs"]}
+    fmt = (load(folder) or {}).get("format") or C.skill_version()
+    new = version(fmt) >= NEW_FORMAT
+    if new:
+        # Format 2.2: the status file is the store of the sprint. The placement (comp, which
+        # keeps the column of a started milestone from this file) gives it to each milestone of
+        # a spec in an epic; there is no grid file to read it back from.
+        gcols = {m["name"]: comp["col"][m["name"]] for m in comp["milestones"]
+                 if epic_of.get(m["spec"]) and m["name"] in comp["col"]}
+    else:
+        gcols = o.grid_columns(folder)
     milestones, tasks = [], []
+    dec_of = deciders(folder) if new else None
+
+    def decider(d):
+        return dec_of.get(d, "") if d else ""
 
     def task_entry(num, t, mid):
         tid = f"{num}-{t['id']}"
@@ -191,6 +305,8 @@ def build(folder, release, stored=None):
         e.update(ownerCheck=e["status"] == "blocked" and e["reason"] == OWNER_REASON,
                  type=kind if kind in ("feat", "bug") else "feat", decision=t["decision"] or "",
                  file=t["path"].relative_to(folder).as_posix() if has_file else "")
+        if new:
+            e["decider"] = decider(e["decision"])
         return e
 
     for num, p in coll["docs"]:
@@ -204,6 +320,8 @@ def build(folder, release, stored=None):
             e = {"id": mid, "name": b["name"], "number": n, "section": b["id"] or f"2.2.{n}", "ref": f"{num}.{n}",
                  "epic": epic, "spec": num, "sprint": f"S{col}" if col else ""}
             e.update(keep(old_m.get(mid, {}), with_commit=True))
+            if new:
+                e["launched"] = bool(old_m.get(mid, {}).get("launched"))
             e.update(critical=b["name"] in comp["paths"].get(epic_of.get(num), []),
                      depends=[stem[d] for d in m.get("deps", []) if d in stem],
                      outcome=scope.get(num, ""), files=m.get("files", []))
@@ -211,6 +329,9 @@ def build(folder, release, stored=None):
             for t in b["tasks"]:
                 placed.add(t["id"])
                 tasks.append(task_entry(num, t, mid))
+            if new:
+                first = next((x for x in tasks if x["milestone"] == mid and x["decision"]), None)
+                e["decider"] = decider(first["decision"]) if first else "agent"
         for t in o.read_spec(p)["tasks"].values():
             if t["id"] not in placed:
                 tasks.append(task_entry(num, t, ""))
@@ -227,6 +348,9 @@ def build(folder, release, stored=None):
         inside = mine + [t["status"] for t in tasks if t["spec"] == num] if mine else []
         specs.append({"id": num, "title": titles.get(num, ""), "path": links[num],
                       "epic": f"E{epic_of[num]}" if epic_of.get(num) else "", "status": rollup(inside)})
+        if new:
+            cite = next((c for c in o.read_spec(p)["modules"].values() if c), None)
+            specs[-1]["decider"] = decider(f"D{cite[0]}" if cite else "")
     epics = []
     for n in o.epic_numbers(folder):
         mine = [s for s in specs if s["epic"] == f"E{n}"]
@@ -234,14 +358,92 @@ def build(folder, release, stored=None):
         epics.append({"id": f"E{n}", "name": head.group(1) if head else (mine[0]["title"] if mine else ""),
                       "status": rollup(s["status"] for s in mine),
                       "specs": [s["id"] for s in mine]})
+    if new:
+        for e in epics:
+            word, why = epic_state(o, folder, int(e["id"][1:]), e["status"], milestones, tasks)
+            specs_ = e.pop("specs")
+            e.update(status=word, reason=why, decider="you", specs=specs_)
     sprints = []
     for c in sorted({int(m["sprint"][1:]) for m in milestones if m["sprint"]}):
         inside = [m["status"] for m in milestones if m["sprint"] == f"S{c}"]
         sprints.append({"id": f"S{c}", "status": rollup(inside),
                         "done": sum(1 for w in inside if w in CLOSED), "total": len(inside)})
-    return {"release": release, "format": (load(folder) or {}).get("format") or C.skill_version(),
-            "updated": now(), "statuses": list(STATUSES),
-            "sprints": sprints, "epics": epics, "specs": specs, "milestones": milestones, "tasks": tasks}
+    out = {"release": release, "format": fmt,
+           "updated": now(), "statuses": list(STATUSES),
+           "sprints": sprints, "epics": epics, "specs": specs, "milestones": milestones, "tasks": tasks}
+    kept = C.load("lib/decisions").kept_entries(folder, decision_entries(folder))
+    if kept:
+        out["decisions"] = kept
+    return out
+
+
+def decision_entries(folder):
+    """{"D<n>": entry} of the key "decisions" of the stored file; {} when there is none."""
+    got = (load(folder) or {}).get("decisions")
+    return got if isinstance(got, dict) else {}
+
+
+def set_decision(folder, ident, **fields):
+    """The entry of decision ident in the key "decisions" with fields set (None removes a field;
+    an entry left empty is removed), the entries in the order of the numbers; then status.json
+    written. The caller writes the page data (write_page_data) after its commit. Returns the path
+    of status.json."""
+    data = load(folder)
+    if data is None:
+        C.die(f"{path(folder)} missing: run sprints/refresh.py {folder.parent.name} first")
+    entries = dict(data.get("decisions") or {})
+    entry = dict(entries.get(ident) or {})
+    for k, v in fields.items():
+        if v is None:
+            entry.pop(k, None)
+        else:
+            entry[k] = v
+    if entry:
+        entries[ident] = entry
+    else:
+        entries.pop(ident, None)
+    order = lambda k: int(re.sub(r"\D", "", k) or 0)
+    data["decisions"] = {k: entries[k] for k in sorted(entries, key=order)}
+    if not data["decisions"]:
+        data.pop("decisions")
+    write_json(path(folder), dump(data))
+    CHANGED.append(path(folder))
+    return path(folder)
+
+
+def deciders(folder):
+    """{"D<n>": decider} of a release of format 2.2: in the file form the "decider" line of the
+    decision file alone (a file with no such line has no entry: its decider is "", never the one
+    of a queue item); with the board the "decider" line of the queue item whose "decision" line
+    names the decision, the first such item with one, in number order."""
+    dc = C.load("lib/decisions")
+    if dc.file_form(folder):
+        return {f"D{c['num']}": c["decider"] for c in dc.file_cards(folder) if c["decider"]}
+    out = {}
+    for it in C.load("lib/queue").items(folder):
+        if it["decision"] and not out.get(it["decision"]):
+            out[it["decision"]] = it["decider"]
+    return out
+
+
+def epic_state(o, folder, n, counted, milestones, tasks):
+    """(status, reason) of epic n in a release of format 2.2, from its file: with a "starts:"
+    value (the owner said delegate) the status counted from its specs, blocked with the reason
+    of its first blocked milestone (else task); without one, blocked with DELEGATE_REASON when
+    its Ownership table has a row and every row has a Spec cell (the specs are ready), else not
+    started (the specs are being written)."""
+    if o.SPRINT_VALUE_RE.match(o.epic_starts(folder).get(n) or ""):
+        if counted != "blocked":
+            return counted, ""
+        mine = [m for m in milestones if m["epic"] == f"E{n}"]
+        ids = {m["id"] for m in mine}
+        held = [m for m in mine if m["status"] == "blocked"]
+        held += [t for t in tasks if t["milestone"] in ids and t["status"] == "blocked"]
+        return counted, next((x["reason"] for x in held if x["reason"]), "")
+    rows, _ = o.read_table(C.read(o.epic_path(folder, n)))
+    if rows and all(r["spec"] for r in rows):
+        return "blocked", DELEGATE_REASON
+    return STATUSES[0], ""
 
 
 def save(folder, data):
@@ -252,15 +454,17 @@ def save(folder, data):
     if old is not None and {**old, "updated": ""} == {**data, "updated": ""}:
         data = old
     else:
-        write_json(p, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+        write_json(p, dump(data))
         CHANGED.append(p)
     write_page_data(folder, data)
 
 
 def write_page_data(folder, data=None):
     """status.data.js, the data of the page status/index.html: the stored file plus "root". For a
-    release of format 2.1 also queue.data.js, the data of its Queue view (lib/queue.py)."""
-    data = data or load(folder)
+    release of format 2.1 also queue.data.js, the data of its Queue view (lib/queue.py); for a
+    release of format 2.2 also dashboard.data.js and dashboard.json, which lib/queue.py write_data
+    writes through lib/dashboard.py, so they are written with status.data.js in every step."""
+    data = stored(data or load(folder))
     page = {k: v for k, v in data.items() if k in ("release", "format", "updated")}
     page.update(root=str(folder), **{k: v for k, v in data.items() if k not in page})
     write_json(folder / SCRIPT, f"window.STATUS_DATA = {json.dumps(page, indent=2, ensure_ascii=False)};\n")
@@ -268,8 +472,10 @@ def write_page_data(folder, data=None):
 
 
 def mirror(folder, data):
-    """The "status:" front matter line of every task, spec and epic file, from data."""
+    """The "status:" front matter line of every task, spec and epic file, from data, in the words
+    of the release's format."""
     o = own()
+    data = stored(data)
     want = [(folder / t["file"], t["status"]) for t in data["tasks"] if t["file"]]
     want += [(folder / s["path"], s["status"]) for s in data["specs"]]
     want += [(o.epic_path(folder, int(e["id"][1:])), e["status"]) for e in data["epics"]]
@@ -285,7 +491,7 @@ def differences(folder):
     """[(file, its status line, the stored status)] of each front matter line that differs from
     status.json: a status edited by hand."""
     o = own()
-    data = load(folder) or {}
+    data = stored(load(folder) or {})
     want = [(folder / t["file"], t["status"]) for t in data.get("tasks", []) if t["file"]]
     want += [(folder / s["path"], s["status"]) for s in data.get("specs", [])]
     want += [(o.epic_path(folder, int(e["id"][1:])), e["status"]) for e in data.get("epics", [])]
@@ -345,7 +551,7 @@ def drop(folder, release, ident):
         left = [e for e in data[kind] if e["id"] != ident]
         if len(left) != len(data[kind]):
             data[kind] = left
-            write_json(path(folder), json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+            write_json(path(folder), dump(data))
             CHANGED.append(path(folder))
             return kind[:-1]
     return None
@@ -360,14 +566,18 @@ def find(data, ident):
     return None, None
 
 
-def set_status(folder, release, ident, status, reason="", commit="", locked=False, boxes_in=None):
-    """Set one milestone or task and run the chain. Returns (kind, entry, the word stored), the
-    word None when nothing changed (then nothing is written). Dies on an unknown id, a spec or
-    an epic, a word that is not one of the five, a missing reason, a task set to done with an
-    open box that is not an "Owner:" line, a milestone set to done without a commit hash or
-    with a task that is not finished."""
+def set_status(folder, release, ident, status, reason="", commit="", locked=False, boxes_in=None,
+               launched=False):
+    """Set one milestone or task and run the chain. launched (sprints/mark.py launch): in a
+    release of format 2.2 the milestone's "launched" becomes true, and stays true. Returns (kind, entry, the word stored), the
+    word None when nothing changed (then nothing is written); the word is that of the release's
+    format (say), and status may be a word of either format (canon). Dies on an unknown id, a
+    spec or an epic, a word that is not one of the five, a missing reason, a task set to done
+    with an open box that is not an "Owner:" line, a milestone set to done without a commit hash
+    or with a task that is not finished."""
+    status = canon(status)
     if status not in STATUSES:
-        C.die(f"bad status '{status}': one of {', '.join(STATUSES)}")
+        C.die(f"bad status '{status}': one of {', '.join(words(folder))}")
     data = build(folder, release)
     kind, e = find(data, ident)
     if kind is None:
@@ -383,7 +593,7 @@ def set_status(folder, release, ident, status, reason="", commit="", locked=Fals
         if owner:
             status, reason = "blocked", OWNER_REASON
     if status in WITH_REASON and not reason:
-        C.die(f'{status} needs --reason "<text>"')
+        C.die(f'{say(folder, status)} needs --reason "<text>"')
     mine = [t for t in data["tasks"] if t["milestone"] == (ident if kind == "milestone" else e["milestone"])]
     if kind == "milestone" and status == "done":
         if not COMMIT_RE.match(commit):
@@ -395,22 +605,24 @@ def set_status(folder, release, ident, status, reason="", commit="", locked=Fals
     new = {"status": status, "reason": reason if status in WITH_REASON else ""}
     if kind == "milestone":
         new["commit"] = commit if status == "done" else ""
+        if launched and new_form(folder):
+            new["launched"] = True
     if all(e[k] == v for k, v in new.items()):
         return kind, e, None
     e.update(new, changed=now())
     if kind == "task":
         e["ownerCheck"] = status == "blocked" and reason == OWNER_REASON
         m = find(data, e["milestone"])[1] if e["milestone"] else None
-        words = [t["status"] for t in mine]
-        if m and m["status"] not in CLOSED and any(w not in (STATUSES[0], "skipped") for w in words):
-            word = rollup(words)
+        mine_words = [t["status"] for t in mine]
+        if m and m["status"] not in CLOSED and any(w not in (STATUSES[0], "skipped") for w in mine_words):
+            word = rollup(mine_words)
             word = "in progress" if word in CLOSED else word
             why = next((t["reason"] for t in mine if t["status"] == "blocked"), "") if word == "blocked" else ""
             if (m["status"], m["reason"]) != (word, why):
                 m.update(status=word, reason=why, changed=now())
-    write_json(path(folder), json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    write_json(path(folder), dump(data))
     CHANGED.append(path(folder))
     C.load("lib/grid").refresh(folder, release, quiet=True, locked=locked)
-    if (folder / C.SPRINTS_MD).is_file():
+    if new_form(folder) or (folder / C.SPRINTS_MD).is_file():
         C.load("sprints/swimlanes").write(folder, release, quiet=True)
-    return kind, e, status
+    return kind, e, say(folder, status)

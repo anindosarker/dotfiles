@@ -2,6 +2,13 @@
 
 How to write an implementation plan for this repository. Applies to humans and agents.
 
+## Contents
+
+- Location
+- Rules
+- Template
+- Example
+
 ## Location
 
 ```

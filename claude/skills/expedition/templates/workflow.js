@@ -4,8 +4,8 @@
 //   build(p), filesCheck(p, build), reviewBounce(p, build) (only when p.review === 'fable'), verify(p),
 //   judges(p, src) (when p.judged is set), merge(p, verify), check(sprint), release(sprint).
 // The composition at the bottom runs the one MILESTONES entry (this milestone) build to merge. Only the release milestone's
-// script sets RELEASE_MILESTONE and composes check and release over MERGED_MILESTONES (the [x] rows of status/sprints.md).
-// The MILESTONES entry is one milestone: a "### Milestone:" block of an epic (a row of status/sprints.md).
+// script sets RELEASE_MILESTONE and composes check and release over MERGED_MILESTONES (the `[x]` rows of the grid (`sprints/grid.py <release>`; `status/sprints.md` below format 2.2)).
+// The MILESTONES entry is one milestone: a "### Milestone:" block of an epic (a row of the grid (`sprints/grid.py <release>`; `status/sprints.md` below format 2.2)).
 // Tracker Status, the five of reference/formats.md, Milestone status: the builder sets running. A milestone that
 // is built and stopped until someone acts is "waiting (lead: <what>)" or "waiting (owner: <what>)": the verifier
 // writes it when RUN_MERGE is off, a builder writes it when only the lead or the owner can finish the step, and the
@@ -46,7 +46,7 @@ const SERIAL_GATES = false // true: check bases one after another (loaded machin
 const SHIP_PARTIAL = true // release what merged when some milestone stopped
 // Release milestone only: RELEASE_MILESTONE true runs check and release after this milestone's own stages.
 const RELEASE_MILESTONE = false
-const MERGED_MILESTONES = [] // release milestone: the milestones marked [x] in status/sprints.md, by their grid names
+const MERGED_MILESTONES = [] // release milestone: the milestones of the `[x]` rows of the grid (`sprints/grid.py <release>`; `status/sprints.md` below format 2.2), by their grid names
 const STOPPED_MILESTONES = [] // release milestone: { milestone: '<name>', status: 'blocked' | ... } for rows not merged
 const MILESTONES = [
   // One entry: this milestone (empty for a release milestone with no build of its own). `epic` is the epic number; `plan` is the epic file and `tracker` the milestone's tracker (a string or an array).
@@ -310,7 +310,7 @@ async function runMilestone(p) {
 // One milestone per script: a throw becomes a blocked result. Other milestones of the sprint run in their own scripts.
 const milestone = MILESTONES[0] ? await runMilestone(MILESTONES[0]).catch(e => blocked(MILESTONES[0], `threw: ${e?.message || e}`)) : null
 const ownOk = !milestone || ['merged', 'done'].includes(milestone.status)
-// Release milestone only: check and release over the milestones status/sprints.md marks merged.
+// Release milestone only: check and release over the milestones of the `[x]` rows of the grid (`sprints/grid.py <release>`; `status/sprints.md` below format 2.2).
 const sprint = { merged: MERGED_MILESTONES, stopped: STOPPED_MILESTONES }
 const gateResult = RELEASE_MILESTONE && RUN_GATE && ownOk && sprint.merged.length ? await check(sprint) : null
 const ship = RELEASE_MILESTONE && RUN_RELEASE && ownOk && sprint.merged.length && (!RUN_GATE || gateResult?.pass) && (!sprint.stopped.length || SHIP_PARTIAL)

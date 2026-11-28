@@ -59,14 +59,14 @@ write one plan file (template below).
     that are built and merged together.
 15. **New work is the same three additions.** The next module, one or more task files, a
     milestone. Numbers only go up. Each new piece of work is its own milestone; a task joins
-    an existing milestone only while that milestone has not started.
+    an existing milestone only while that milestone is still to do.
 16. **A finished plan takes nothing.** A plan that is not done takes new modules, tasks and
     milestones. Once it is done, later work on the same subject is a new plan.
 17. **Suggestions, not rules.** `Files owned` on a milestone is written when it could clash
     with other work in progress, `Depends on` only where two milestones touch the same thing.
     Sections 1.3, 1.4, 1.5 and 1.7 are left out when they would be empty.
 18. **No status by hand.** The `status` line of a plan file or a task file is one of
-    `not started`, `in progress`, `blocked`, `done`, `skipped`. A tool, not a person, may
+    `to-do`, `in progress`, `blocked`, `done`, `archived`. A tool, not a person, may
     maintain it.
 
 ## Template
@@ -79,7 +79,7 @@ numbers stay as they are.
 
 ````markdown
 ---
-status: not started
+status: to-do
 ---
 # [Feature name] plan
 
@@ -307,7 +307,7 @@ the title, Goals, Verification. Optional, left out when unused: the quote, Instr
 
 ````markdown
 ---
-status: not started
+status: to-do
 type: [feat | bug]
 ---
 # [The result, in one line]
@@ -332,5 +332,5 @@ type: [feat | bug]
   browser. An `Owner:` line is checked by the owner; the builder does not open a browser for it.
 - A line that would be true for every task does not belong in the file: lint, type-check and
   build are never listed.
-- `status` is one of `not started`, `in progress`, `blocked`, `done`, `skipped`. A tool, not a
+- `status` is one of `to-do`, `in progress`, `blocked`, `done`, `archived`. A tool, not a
   person, may maintain it.

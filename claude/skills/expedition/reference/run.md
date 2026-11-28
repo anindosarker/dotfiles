@@ -37,27 +37,28 @@ The release's `process.md` (`.ai/plans/<release>/<owner>/process.md`) holds the 
 - Messages, one line each, nothing else in a message:
   - Lead to runner: `HELLO from <lead session name>`, typed by `run/runner.sh send` from a lead that starts fresh on a release with a live runner. No work starts.
   - Lead to runner: `RUN E<n> <release folder> epic <release folder>/plan/epics/E<n>.md from <lead session name>`, typed into the runner window by `run/runner.sh send` (as `ultracode RUN ...`, so the turn is opted in to the Workflow tool)
-  - Lead to runner, typed the same way: `HOLD <target>` and `RESUME <target>`. The target is an epic (`E14`), a spec number (`56`) or one milestone (its tracker file name without `-tracker.md`, `56-story-texts-a-to-c`). The milestone is the unit: a hold on an epic or a spec is a hold on each of its unfinished milestones (not `[x]`, not `[!]`). What the runner does: Milestones and sprints.
-  - Lead to runner, typed: `SKIP <spec number>`: stop the Workflow of each running milestone of that spec, mark each unmerged row `[!]` (`sprints/mark.py <release> <milestone> stop --reason "D<new> replaces it"`; in a format 1.0 release: `stop` with no flag and the tracker line `Status: stopped (D<new>)`) (the D id from the epic file's SKIP note), branch left in place for salvage; reply `NOTE <spec>: skipped`.
+  - Lead to runner, typed the same way: `HOLD <target>` and `RESUME <target>`. The target is an epic (`E14`), a spec number (`56`) or one milestone (its tracker file name without `-tracker.md`, `56-story-texts-a-to-c`). The milestone is the unit: a hold on an epic or a spec is a hold on each of its unfinished milestones (not `done`, not `archived`). What the runner does: Milestones and sprints.
+  - Lead to runner, typed: `SKIP <spec number>`: stop the Workflow of each running milestone of that spec, set each unmerged milestone to `archived` (`sprints/mark.py <release> <milestone> stop --reason "D<new> replaces it"`; in a format 1.0 release: `stop` with no flag and the tracker line `Status: stopped (D<new>)`) (the D id from the epic file's SKIP note), branch left in place for salvage; reply `NOTE <spec>: skipped`.
   - Lead to runner, typed: `NOTE E<n>: <note>`, a Notes line of that epic file. `RULES: <files>, <why>`: a rule file changed; re-read the files named, reply `ACK RULES <the first words of that line>` (for `RULES: run.md, tick.md, ...` the reply is `ACK RULES run.md, tick.md`), so the lead knows which line each reply answers.
   - Lead to runner, typed: `LEAD <lead session name>`, from a new lead after a roll over (Roll over). The runner replies `ACK LEAD` to that name.
   - Runner to lead, by `SendMessage` to the name after `from`: `DONE E<n> <merge sha> queue <Q ids or none>`, when every milestone of the epic has merged
   - Runner to lead, the same way: `BLOCKED E<n> <tracker path>`, when a bounce loop or a gate cannot be resolved
+  - Runner to lead, the same way, in a release of format 2.2 only: `NOTE <task id>: waits for the owner's look`, when a task of a milestone it runs gets that status ([tick.md](tick.md), step 5). The lead's turn on it may send the owner a push.
   - Spec writer to lead, by `SendMessage`: `SPECS E<n> <spec numbers>`, from the spec writer `run/runner.sh fork` opened
   - Watcher to lead, typed into the lead window by `scripts/run/nudge-watch.sh`: `NUDGE <runner or spec writer name, or unknown>: <text>`, a You Should Know note shown to an unattended session. The lead treats it as owner feedback (SKILL.md, Owner input). The runner never sees nudges.
-  - Either direction: `NOTE <id>: <one line>`, only when the meaning of an id the other session may hold changes (a duplicate closed as another id, `NOTE D7: superseded by D15` from whoever supersedes, an item moved into a fix through `plan/milestone.py add`). Never status, apart from the wake check's `NOTE <milestone>: resumed` ([tick.md](tick.md), step 3).
+  - Either direction: `NOTE <id>: <one line>`, only when the meaning of an id the other session may hold changes (a duplicate closed as another id, `NOTE D7: superseded by D15` from whoever supersedes, an item moved into a fix through `plan/milestone.py add`). Never status, apart from the wake check's `NOTE <milestone>: resumed` ([tick.md](tick.md), step 3) and `NOTE <task id>: waits for the owner's look` (above).
 - Reply target: the name after `from` in the latest RUN or HELLO line, or the name in the latest LEAD line; every line to the lead goes there from then on.
 - On every RUN line, before launching anything: re-read the release's `process.md`, this file, [tick.md](tick.md) and the brief, then the epic's specs and its epic file.
 - On RUN and on every line typed to it: read the epic file of every epic it runs, re-read whatever a note names, append ` [ack HH:MM]` to each note it read, commit (Shared files rules). A note without ack is unread.
-- RUN is idempotent: an epic whose `status/sprints.md` rows are already running or done is not started again; the runner replies with the current state. A RUN for a held epic lifts the hold on all of it, like `RESUME E<n>`.
+- RUN is idempotent: an epic whose milestones are already `in progress` or `done` is not launched again; the runner replies with the current state. A RUN for a held epic lifts the hold on all of it, like `RESUME E<n>`.
 - Several epics run at once, no slot limit. One worktree per milestone from the pool. Machine load as today: `process.md` P5, `SERIAL_GATES` when loaded.
-- Every mark in `status/sprints.md` is written by `sprints/mark.py <release> <milestone> launch|wait|resume|merge|stop`; nothing under `status/` is edited by hand, no exception.
+- Every status of a milestone is set by `sprints/mark.py <release> <milestone> launch|wait|resume|merge|stop`; nothing under `status/` is edited by hand, no exception.
   - Its arguments, what it writes and what it commits: [scripts.md](scripts.md).
-  - The cell each word sets: [formats.md](formats.md), Milestone status.
-  - A `merge` mark is what moves a decision to Done (the Done rule reads the trackers, so the tracker says `done` first); the runner never moves a decision card or edits its tick or tags, and never edits an item file by hand.
-  - The merger of the workflow runs `merge` right after the merge commit; the runner runs it as the fallback for a merged milestone whose cell is not `[x]`.
+  - The status each verb sets: [formats.md](formats.md), Milestone status.
+  - A `merge` mark is what makes a decision `done` (the status rule reads the milestone statuses, so the milestone is `done` first); the runner never sets the status of a decision, never edits the front matter of a decision file, and never edits an item file by hand.
+  - The merger of the workflow runs `merge` right after the merge commit; the runner runs it as the fallback for a merged milestone that is not `done`.
   - When every milestone of an epic has merged it files its queue items, writes the handoff, sends DONE.
-- Shared files (`decisions.md`, the queue, the epic files): the rules in [formats.md](formats.md), Shared files.
+- Shared files (`decisions.md` and the decision files, the queue, the epic files): the rules in [formats.md](formats.md), Shared files.
 - On `progress` (or "status"): the rule in [formats.md](formats.md), Progress reply and reports.
 
 ## Each tick
@@ -66,24 +67,24 @@ The steps of one tick, the wake check, the tick economy and the rules for enviro
 
 ## Milestones and sprints
 
-The run follows `status/sprints.md` and the specs' milestone blocks ([files.md](files.md), Ownership) and decides nothing the plan left out.
+The run follows the statuses and sprints of the status file (`sprints/grid.py <release>` prints them as the grid) and the specs' milestone blocks ([files.md](files.md), Ownership), and decides nothing the plan left out.
 
 - The run unit is the milestone, not the spec: one team, its own worktree, branch and tracker, one builder end to end. It edits only its files while it runs. How milestones are grouped into Workflows: Orchestration.
 - A sprint is one column of the grid, computed by `lib/ownership.py` across every epic.
-  - A later epic's rows start at its start sprint (`Starts:` in its epic file), so a running sprint accepts them and a finished sprint never does.
+  - A later epic's milestones start at its start sprint (`starts` in its epic file), so a running sprint accepts them and a finished sprint never does.
   - A milestone branches from the integration branch after the milestones it depends on have merged.
-  - Each epic's critical path is the longest chain inside that epic (`status/report.py` prints it, the swimlane page marks it); launch its milestones first when a sprint is crowded.
-- Each boundary is marked with `sprints/mark.py` (Epics): `launch`, `wait`, `resume`, `merge` or `stop`, a stop's reason in the tracker's `## Attention`. A fix added mid-run gets its row from `plan/milestone.py add`.
+  - Each epic's critical path is the longest chain inside that epic (`status/report.py` prints it); launch its milestones first when a sprint is crowded.
+- Each boundary is marked with `sprints/mark.py` (Epics): `launch`, `wait`, `resume`, `merge` or `stop`, a stop's reason in the tracker's `## Attention`. A fix added mid-run gets its sprint from `plan/milestone.py add`.
 - A milestone that is built and stopped until the lead or the owner acts is not a stop: it waits (`sprints/mark.py <release> <milestone> wait --reason "lead: <what>"` or `"owner: <what>"`; a format 1.0 release takes `wait` with no flag and the tracker line).
   - There its tracker says `Status: waiting (lead: <what>)` or `Status: waiting (owner: <what>)`, written by whoever stops it in the tracker copy it already writes: the builder or the verifier in the milestone worktree (templates/workflow.js), or the runner for a `needs-decision` result (owner) or a `review-open` result (lead).
   - The runner runs `sprints/mark.py <release> <milestone> wait --reason "<lead or owner>: <what>"` at that moment (a format 1.0 release takes `wait` with no flag, at the moment the tracker gets that status).
   - The progress reply lists it under Blocked as `waits on the lead: <what>`.
   - When the lead or the owner has acted, the milestone resumes: its tracker goes back to `running` and the runner runs `sprints/mark.py <release> <milestone> launch`.
-- A lead hold (`HOLD`) waits too (`wait --reason "lead: hold"`; in a format 1.0 release the tracker `Status: waiting (lead: hold)`), and the runner never launches a held row.
-  - A held milestone that runs (`[ ]`): the runner stops its Workflow once the current agent step has committed what is coherent, keeps the branch and the worktree, writes the status in the milestone worktree's tracker (the run id stays in the record of `run/runs.py`), then runs `mark.py ... wait --reason "lead: hold"` (no flag in a format 1.0 release).
+- A lead hold (`HOLD`) waits too (`wait --reason "lead: hold"`; in a format 1.0 release the tracker `Status: waiting (lead: hold)`), and the runner never launches a held milestone.
+  - A held milestone that is `in progress`: the runner stops its Workflow once the current agent step has committed what is coherent, keeps the branch and the worktree, writes the status in the milestone worktree's tracker (the run id stays in the record of `run/runs.py`), then runs `mark.py ... wait --reason "lead: hold"` (no flag in a format 1.0 release).
   - A milestone already in its merge step finishes the merge and is not held.
-  - A held milestone that has not started (`·`): the runner writes the status in the main checkout's tracker copy (no worktree exists yet), then runs `mark.py ... wait --reason "lead: hold"` (no flag in a format 1.0 release).
-- The hold ends on `RESUME` or a RUN for the epic: the runner runs `mark.py ... resume`, which gives `[ ]` (in progress) to a milestone launched before and `·` (not started) to one that never started, and is refused for a milestone that is not waiting or blocked (formats.md, Milestone status).
+  - A held milestone that is `to-do`: the runner writes the status in the main checkout's tracker copy (no worktree exists yet), then runs `mark.py ... wait --reason "lead: hold"` (no flag in a format 1.0 release).
+- The hold ends on `RESUME` or a RUN for the epic: the runner runs `mark.py ... resume`, which gives `in progress` to a milestone launched before and `to-do` to one that never started, and is refused for a milestone that is not waiting or blocked (formats.md, Milestone status).
   - One launched before: tracker `Status: running`, and its Workflow restarts with `resumeFromRunId` and the run id `run/runs.py <release> get <milestone>` prints, finished steps coming from cache; when that id is not usable (a new runner session), a fresh Workflow on the existing branch, the builder continuing from the tracker.
   - One that never started: tracker `Status: planned` in the main checkout's copy; the normal rule launches it when its dependencies are done.
 - The first bullet under `## Attention` in the tracker of a stopped milestone is one plain sentence saying what the owner has to decide or do, because the progress reply (`status/progress.py`) shows it as written.
@@ -91,7 +92,7 @@ The run follows `status/sprints.md` and the specs' milestone blocks ([files.md](
 - No new work exists outside an epic.
   - A fix found mid-run: `plan/milestone.py add <release> <spec> "<Name>" --files a,b --checks "<checks>" --cites "Q3, Q4"`, with `<spec>` the spec it repairs.
   - While that spec is not done, the fix is one more milestone of it; once the spec is done, the fix is a follow-up spec `NN.M` in a running epic (`--epic E<n>` when several run); a done spec is never reopened.
-  - Its tracker cites its queue items on the first line, for example `(Q3, Q4)`, and the script sets the `status` of each cited item to `autofix`.
+  - Its tracker cites its queue items on the first line, for example `(Q3, Q4)`, and the script closes each cited item as fixed by a run agent: `status: done` and `decider: agent`.
   - A bug in another milestone's merged file goes the same way, on the integration branch, never as an edit by the running milestone.
   - A fix never carries a decision: a choice is a queue item.
 - Shared files: per the release's `process.md`. Generated outputs (registry json, installed docs copies) are regenerated by whoever merges, never hand-merged. A comment-only hunk in conflict yields to the code change.
@@ -103,14 +104,14 @@ The run follows `status/sprints.md` and the specs' milestone blocks ([files.md](
   - When its script stopped early, the release runs inline.
 - The run never stops for one milestone.
   - A builder that cannot finish its milestone (it contradicts an accepted decision, or its Acceptance is unreachable) stops that milestone only: commits what is coherent, writes the reason under `## Attention` in the tracker, returns blocked.
-  - Milestones that depend on it are skipped the same way and marked `[!]`.
+  - Milestones that depend on it are stopped the same way (`sprints/mark.py <release> <milestone> stop --reason "<text>"`).
   - Every other milestone merges, the release ships what merged, the handoff lists what did not, the triage round decides.
   - Only a failed shared milestone of the first sprint (nothing can start) or a usage limit stops the whole run.
   - `needs-decision` and `review-open` results stop their own milestone only, as `waiting` (above).
 
 ## Orchestration
 
-The spec says what must be proven (`Acceptance:`); the runner decides how, per milestone, by what the milestone needs: the smallest set of agents that still proves every Acceptance. No lane line in specs. The runner launches milestones, reads reports and trackers, marks `status/sprints.md` through `sprints/mark.py`, files queue items and merges on green.
+The spec says what must be proven (`Acceptance:`); the runner decides how, per milestone, by what the milestone needs: the smallest set of agents that still proves every Acceptance. No lane line in specs. The runner launches milestones, reads reports and trackers, sets the milestone statuses through `sprints/mark.py`, files queue items and merges on green.
 
 - The runner judges every milestone before it launches it. A Workflow only when the milestone needs what one agent cannot do:
   - several builders at the same time (more than one file set);
@@ -197,6 +198,9 @@ The runner then files a queue item and continues with work that does not depend 
   - One plain line per item, no jargon.
   - Problems found in the code are filed the same way.
   - A fact for an existing item: `queue/item.py <release> --fact Q<n> "<text>"` (it goes under `## Notes`).
+  - An item the run fixed itself, with no decision and no fix milestone, is closed by the runner with `queue/item.py <release> --move Q<n> Autofix --decider agent` (`status: done`, `decider: agent`).
+  - A run agent records no decision from a queue item: `queue/item.py <release> D --source Q<n>` takes `--decider you` or `--decider lead` and refuses `agent`. A choice is a queue item for the lead.
+  - A deviation from the letter of a decision that keeps its intent, which the run settles itself (SKILL.md, Owner input), is recorded as a decision file with no `--source`: `queue/item.py <release> D "<title>" --decider agent --bullet "<the rule>"`. Then `decisions/close.py <release> D<n>`: it has nothing to run.
   - Never a hand edit of `queue.md` or of an item file.
 - The run reports; it does not solve. Do not research solutions for a queue item. A deviation is reported as keep or revert with the exact strings, never as an implementation question.
 - An accepted decision that no longer fits: a queue item, never a silent change.
@@ -224,23 +228,23 @@ The runner then files a queue item and continues with work that does not depend 
 
 ## Status and tasks
 
-For a release with `status/data/status.json`. Where the sections above name a tracker `Status:` line or a grid mark, such a release uses the status file ([formats.md](formats.md), Status); the rest of this file holds as written.
+For a release with `status/data/status.json`. Where the sections above name a tracker `Status:` line, such a release uses the status file ([formats.md](formats.md), Status); the rest of this file holds as written. A release of format 2.1 or 2.0 stores `not started` for `to-do` and `skipped` for `archived`, and keeps its grid in a file ([../SKILL.md](../SKILL.md), Format 2.1 releases).
 
 - A milestone's status is set with `sprints/mark.py <release> <milestone> launch|wait|resume|merge|stop [--reason "<text>"] [--commit <sha>]`:
   - `launch`: in progress;
-  - `resume`, on a blocked milestone only: in progress when it was launched before, not started when it never was;
+  - `resume`, on a blocked milestone only: `in progress` when it was launched before (`launched` in the status file), `to-do` when it never was;
   - `merge --commit <sha>`: done;
   - `wait --reason "<text>"` and `stop --reason "<text>"`: blocked;
-  - `stop --reason "D<n> ..."` (a SKIP, the superseding decision first): skipped.
+  - `stop --reason "D<n> ..."` (a SKIP, the superseding decision first): `archived`.
   - The reason is a few words; its full text goes under `## Attention` of the tracker.
   - No tracker has a `Status:` line.
 - A task's status is set by its builder with `status/status.py <release> set <spec>-<number> "<status>"`: `in progress` before the work; `done` when every Verification box that is not an `Owner:` line is ticked in the task file and the commit is pushed; `blocked --reason "<text>"` when it cannot go on.
   - The command works from the milestone worktree and writes in the release folder the scripts find, never in the worktree's copy.
 - A task set to done with an open `Owner:` box is stored as blocked, "waits for the owner's look".
   - The builder never opens a browser for an `Owner:` line.
-  - The milestone merges as usual once every other task is done or skipped: `sprints/mark.py <release> <milestone> merge --commit <merge sha>` is refused only while a task is not started, in progress or blocked for another reason.
+  - The milestone merges as usual once every other task is done or archived: `sprints/mark.py <release> <milestone> merge --commit <merge sha>` is refused only while a task is `to-do`, `in progress` or blocked for another reason.
   - The spec then shows blocked until the lead sets the task done after the owner's word.
 - A builder reads what it read before (the spec whole, `process.md`, its tracker) and the task files its milestone lists in `- Tasks:`. Each task file's Goals, Instructions and Verification list are the task.
-- A milestone added to a spec in progress (`plan/milestone.py add`, by the lead after a decision, or by the runner for a fix) has its row in the current sprint. It is launched like any other row, at the same time as the others unless a `Depends on` line says otherwise.
+- A milestone added to a spec in progress (`plan/milestone.py add`, by the lead after a decision, or by the runner for a fix) is placed in the current sprint. It is launched like any other milestone, at the same time as the others unless a `Depends on` line says otherwise.
 - `status/status.py <release> list --status blocked` shows what waits; `list --kind task` every task.
 - After a merge that adds routes into a worktree where a dev server runs, the runner tells the owner that the server may need a restart.

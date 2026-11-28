@@ -13,7 +13,8 @@ and the numbers only go up:
 - the module "#### 1.6.N <Name> (<ids>)" with one line to fill; the cite is --decision, then
   the --cites cards. --module names an existing module instead, and no module is written;
 - one task per --task (with none, one task named like the milestone): the file
-  tasks/NN-<slug>.md from templates/task.md, "status: not started", --type (default feat), and
+  tasks/NN-<slug>.md from templates/task.md, "status: not started" ("status: to-do" in a release
+  of format 2.2), --type (default feat), and
   its pointer line in 2.1 Tasks;
 - the milestone "#### 2.2.N Milestone: <Name>" with "- Tasks:", "- Files owned:" when --files,
   "- Depends on:" when a dependency exists (every other milestone owning one of the --files,
@@ -23,6 +24,8 @@ task line; --files and --checks are required there.
 While the spec is in an epic: the block gets "- Starts: S<n>", the current sprint, and the name
 joins the Milestone cell of the spec's rows in the epic file. --decision also adds the decision
 to that epic (its decisions line, an Ownership row, the "#E<n>" tag, the card to In progress).
+In a release of format 2.2 the epic file has no decisions and no specs line: a decision or a
+follow-up spec that joins an epic becomes an Ownership row only.
 A spec in no epic yet gets the additions only; the go tags it.
 The tracker is run/trackers/NN-<name slug>-tracker.md.
 
@@ -38,7 +41,10 @@ each cited card moves to Autofix; the refresh chain (lib/grid.py refresh, which 
 status.json) and the page data run; everything written is committed, never pushed. Prints one
 line naming the spec, the milestone, its sprint and its tracker. In a release of format 2.1
 (item files, lib/queue.py) a Q id is checked against the item files, and each cited item gets
-"status: autofix" (losing a "decision" and "option" line) and queue.md is written again.
+"status: autofix" (losing a "decision" and "option" line) and queue.md is written again. In a
+release of format 2.2 each cited item is closed as done by an agent ("status: done" and "decider:
+agent", losing a "decision" and "option" line); the blocked check then runs, so an item that waited
+for it becomes to-do. The words come from lib/queue.py, as queue/item.py --move Autofix writes them.
 """
 import argparse
 import contextlib
@@ -69,7 +75,7 @@ UNFINISHED = ("[ ]", "[~]", "·")
 die, load = C.die, C.load
 
 FOLLOW_UP = """---
-status: not started
+status: {status}
 ---
 # {num}: {title}
 - Epic: E{epic}
@@ -165,7 +171,8 @@ def spec_done(own, st, folder, num, rows):
 
 
 def grid_by_spec(own, folder):
-    """{spec number: [(epic, cells)]} of status/sprints.md."""
+    """{spec number: [(epic, cells)]} of the grid (lib/ownership.py grid: the status file in
+    format 2.2, status/sprints.md below)."""
     out = {}
     for label, cells in own.grid(folder)[1]:
         m = re.match(r"^E(\d+)\s+(\d{2}(?:\.\d+)?)\s", label)
@@ -240,7 +247,8 @@ def run(a, own, root, folder, ids, decision, want_epic, lock):
         tail = f" ({', '.join(ids)})" if ids else ""
         if new:
             path = folder / own.SPECS_DIR / f"{num}-{slug}" / f"{num}-{slug}.md"
-            text = FOLLOW_UP.format(num=num, title=a.name, epic=epic, spec=a.spec, cites=tail)
+            text = FOLLOW_UP.format(num=num, title=a.name, epic=epic, spec=a.spec, cites=tail,
+                                    status=st.say(folder, st.STATUSES[0]))
             link = f"plan/specs/{num}-{slug}/{num}-{slug}.md"
         else:
             path = folder / own.SPECS_DIR / f"{num}-{slug}.md"
@@ -263,7 +271,7 @@ def run(a, own, root, folder, ids, decision, want_epic, lock):
             n = f"{number + len(tasks):02d}"
             rel = f"tasks/{n}-{sp.file_slug(title)}.md"
             text = sp.add_pointer(text, n, title, module, rel)
-            writes[path.parent / rel] = sp.task_file_text(title, a.type)
+            writes[path.parent / rel] = sp.task_file_text(title, a.type, st.say(folder, st.STATUSES[0]))
             tasks.append(n)
         text, _ = sp.add_milestone(text, [b["id"] for b in doc["blocks"] if b["id"]], a.name, tasks,
                                    a.files, deps, start)
@@ -287,9 +295,10 @@ def run(a, own, root, folder, ids, decision, want_epic, lock):
         et = own.read(epic_file)
         table, err = own.read_table(et)
         if follow:
-            sm = own.SPECS_LINE_RE.search(et)
-            have_specs = [s.strip() for s in (sm.group(1) if sm else "").split(",") if s.strip()]
-            et = own.set_field(et, "Specs", ", ".join(sorted(have_specs + [num], key=own.num_key)))
+            if not own.table_form(folder):  # format 2.2: the table row is the one copy
+                sm = own.SPECS_LINE_RE.search(et)
+                have_specs = [s.strip() for s in (sm.group(1) if sm else "").split(",") if s.strip()]
+                et = own.set_field(et, "Specs", ", ".join(sorted(have_specs + [num], key=own.num_key)))
             if table is not None and not err:
                 table.append({"decision": None, "title": "", "files": a.files, "spec": num,
                               "milestone": a.name, "sprint": ""})
@@ -315,9 +324,13 @@ def run(a, own, root, folder, ids, decision, want_epic, lock):
                 p.write_text(t, encoding="utf-8")
         own.print_errors(comp["errors"], "the milestone does not schedule; nothing written")
     if ids and items:
+        new = Q.status_form(folder)
+        word = Q.move_status("Autofix", new)  # a fix closes the item as done by an agent
         for i in ids:
             it = Q.find(folder, int(i[1:]))
-            Q.write_item(it["path"], Q.set_front(it["text"], status="autofix", decision=None, option=None))
+            Q.write_item(it["path"], Q.set_front(it["text"], status=word, decision=None, option=None,
+                                                 decider=Q.CLOSERS[word][0] if new else None))
+        Q.settle(folder)  # format 2.2: an item that waited for a cited item; nothing below 2.2
         Q.write_list(folder)
     elif ids:
         q_text = own.read(queue)
@@ -336,7 +349,8 @@ def run(a, own, root, folder, ids, decision, want_epic, lock):
         elif st.active(folder):
             st.sync(folder, a.release)
     paths = [str(p) for p in writes]
-    paths += [str(folder / own.SPRINTS_MD), str(folder / "decisions.md")] + [str(p) for p in Q.commit_paths(folder)]
+    paths += [str(p) for p in load("lib/grid").grid_files(folder)]
+    paths += [str(p) for p in load("lib/decisions").commit_paths(folder)] + [str(p) for p in Q.commit_paths(folder)]
     paths += [str(p) for p in sorted((folder / own.EPICS_DIR).glob("E*.md"))]
     st.commit(root, folder, paths, f"docs(plan): {a.release} milestone {num} {a.name}")
     if ids and items:
