@@ -9,6 +9,7 @@ For a session that works on a release whose `status/data/status.json` says `"for
 - Epic file
 - The grid file
 - Files and pages
+- Decision board
 
 ## What differs
 
@@ -18,6 +19,7 @@ For a session that works on a release whose `status/data/status.json` says `"for
 - The grid is the committed file `status/sprints.md`, written by the scripts (The grid file).
 - No `decider` is stored: `queue/item.py --decider` is accepted and not stored. `queue/item.py --depends` is refused with one line that names `scripts/migrate/v2.1-v2.2`, so no item has `depends_on` and no item is `blocked`.
 - The page `status/index.html` is the task board; its Queue view reads `status/data/queue.data.js` (Files and pages).
+- `decisions.md` is a kanban board of cards in three lanes, and there is no `decisions/` folder (Decision board).
 
 ## Status words
 
@@ -124,3 +126,89 @@ A release of format 1.0 has no status file: the grid is its only status. A miles
 - The page is the task board, `status/index.html`, copied from `board/task-board.html`; it reads `status/data/status.data.js` (`window.STATUS_DATA`, git-ignored) and reloads it every 30 seconds. That file is the same data plus `root`, the release folder on this machine, after `updated`: a machine path is never committed.
 - In a release of format 2.1 the task board also has a Queue view: every item with its status, notes, details and options. It reads `status/data/queue.data.js` (`window.QUEUE_DATA`, git-ignored, never committed), written from the item files by `queue/item.py` and by the refresh chain of `sprints/refresh.py` and `status/status.py`; it holds `root` like `status.data.js`. A release of a lower format has no queue data.
 - The `<release>-plan.md` of a release below format 2.2 links `status/sprints.md` in its first lines.
+
+## Decision board
+
+For a release whose decisions are on a board: a release of format 2.1, 2.0 or 1.0, and a release of format 2.2 whose `decisions.md` is still the board. [../../scripts/migrate/v2.1-v2.2/README.md](../../scripts/migrate/v2.1-v2.2/README.md) moves the decisions of either to decision files. The commands are the same as in the file form, apart from three that are refused on a board: `decisions/close.py --backlog`, `decisions/decider.py`, and `epics/overlap.py` with `--files` or with no id.
+
+### decisions.md
+
+One file per release, template [../../templates/decisions.md](../../templates/decisions.md): a kanban board in the card grammar of the queue board of format 2.0 ([queue-board.md](queue-board.md)). Triage decisions continue the numbering.
+
+```md
+---
+kanban-plugin: basic
+---
+
+## To do
+
+- [ ] **D96** A click in a date filter box starts typing at its first part #R4
+	- Native date inputs put the caret on the segment under the click, so typed digits fill only the year.
+	- Source: Q80
+
+## In progress
+
+- [ ] **D89** Release 0.9.4 ships E12 #E12 #R4
+	- Spec 48 ships E12 as 0.9.4.
+
+## Done
+
+- [x] **D9** Process file audited #R1
+	- First bullet, required: explains the decision.
+- [x] **D15** Release 0.9.0 after E2 (superseded by D28) #superseded #E3 #R2
+	- ...
+- [x] **D28** The 0.9.0 release waits for the owner's approval #E7 #R3
+	- Supersedes D15.
+	- Then anything: bullets, code blocks, examples, sub-bullets.
+
+%% kanban:settings
+{"kanban-plugin":"basic","lane-width":600,"date-format":"YYYY-MM-DD","time-format":"HH:mm","tag-action":"kanban","set-view":"list","full-list-lane-width":true,"show-add-list":false,"show-archive-all":false,"custom-title":"v0.9.x decisions"}
+%%
+```
+
+- Accepted decisions only. Questions stay in chat.
+- Three lanes, always all present, in this order. The lane is the decision's state, and the checkbox is `[x]` only in Done:
+
+  | Lane | Meaning |
+  |---|---|
+  | To do | Decided, in no epic |
+  | In progress | In an epic, its own work not all merged |
+  | Done | Its own work merged, closed with nothing to run, superseded, or deferred to another release |
+
+- A card is `- [ ] **D<n>** <title> <tags>`; the decision's bullets follow, each indented with one tab. A bullet's nested lines and a fenced code block keep their own indentation after that tab; a blank line inside a fence is a lone tab, so the card stays one card. Cards are ordered by D number inside each lane. A number is never reused; the next is the highest in the file plus one.
+- Tags, at the end of the title line only, space separated, in this order: `#superseded` or `#deferred` when it applies, `#E<n>` when the decision is in an epic, `#R<n>` the round it was recorded in. No other tag. A new decision takes the highest round in the file; `queue/item.py <release> D "<title>" --new-round` starts the next one.
+- The Done rule, computed by `lib/decisions.py` for every script:
+  1. A `(superseded by D<n>)` mark or a `- Deferred to` bullet: Done.
+  2. Rows with a Spec cell in the Ownership table of an epic that has gone (a `Starts: S<n>` value): its own specs are the row specs that cite it `(D<n>)` in a heading line (the title line, a `### Milestone:` heading or any `#` heading), else every row spec. Done when every milestone tracker of every own spec is `done` or `stopped`, else In progress. In a new-form spec only the milestones count that hold a task of a module citing it: the decision is Done when each of them is `done` or `skipped`, also while other milestones of the spec run; a citing module with no task in a milestone keeps it In progress.
+  3. No such row: Done when it is closed by hand (a ticked card in Done: `decisions/close.py <release> D<n>` for a decision with nothing to run) or when any spec citing it has merged; In progress when it carries `#E<n>`; else To do.
+  A release spec that only names a decision in its text does not keep that decision open.
+- The board may be viewed in the Unified Kanban extension, but a drag or a tick there is not a state change: `status/report.py` flags a card whose lane disagrees with the Done rule or whose tick disagrees with its lane, and the next sync moves it back.
+- Built: a milestone citing the decision has a `[ ]`, `[~]` or `[x]` cell in `status/sprints.md`; a `[~]` row never launched does not count (Milestone status). In format 2.2, with no `status/sprints.md`: a milestone citing it is `in progress`, `blocked` after its launch, or `done`. Before that, a change is an edit of its bullets, same id; from then on, a supersede.
+- Supersede: `decisions/supersede.py <release> D7 D15` marks both sides: D7 gets `(superseded by D15)` at the end of its title and `#superseded`, and moves to Done; D15's first bullet is `- Supersedes D7.` The mark is the only edit an old decision ever gets.
+- Deferred to another release: add the bullet `- Deferred to v0.5.x`; the sync adds `#deferred` and moves the card to Done. That release's specs cite it as `(v0.4.x D9)`.
+- A decision that came from a queue item ends with `- Source: Q<n>`, the last bullet.
+- Specs cite a decision as `(D7)`.
+
+### Recording on a board
+
+`queue/item.py <release> D "<title>" --source Q<n> --decider you` makes the card. In format 2.2 the decider is stored in the item file (`decider: you`); below 2.2 it is not stored; the card never holds a decider. Then write the bullets under the card it made (lines taken from the picked option stay word for word), each indented with one tab, above a `- Source:` line (targeted edit, then commit), and reply with the id it printed. The item has no D number before that.
+
+### The Epic ready message on a board
+
+- Epic hint: a nudge, never a question and never a step the owner must take. After each recorded decision, take the cards in the To do lane of `decisions.md` whose dependencies are satisfied, and run `epics/overlap.py` on them. As soon as 1 item is ready, add the `Epic ready: E<n>` message under the next item, in the shape below: the ready decisions, one plain line each. A decision that overlaps a running epic is not in the list; it is under `Decided, not in this epic:` with the epic it waits for, and that block is absent when no decision waits; a decision never waits for others to fill an epic, and an epic of one decision is normal. Post it once per set, and not again until another item becomes ready. The next item is posted in the same message; discussion never waits for `compose`. The owner says `compose` when they choose, or names items to add (`compose with D<n>`) or hold. Nothing else triggers it.
+
+The shape of the message on a board:
+
+```Markdown
+**Epic ready: E<n>**
+- D<n>: <the decision's title, one plain line>
+- D<n>: <the decision's title, one plain line>
+
+**Decided, not in this epic:**                      optional: only when a decision waits
+- D<n>: <the decision's title>. Waits for E<n>, same file.
+
+**Say:**
+- A. `compose`: plan.
+- B. `compose delegate`: plan and start.
+- C. `compose delegate with D<n>`: the same, with D<n> in it.     only with the optional block
+```

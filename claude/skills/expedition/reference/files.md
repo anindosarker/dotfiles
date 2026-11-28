@@ -14,7 +14,8 @@
 ```
 .ai/plans/v0.<n>.x/<owner>/
 ├── <release>-plan.md       ← authored: ## Goals, ## Deliverables
-├── decisions.md            ← accepted decisions, a kanban board: D<n> cards in three lanes (To do, In progress, Done), lane by the Done rule
+├── decisions.md            ← the list of the accepted decisions, one linked line per decision file; written by the scripts only (in a release of format 2.1 or lower a kanban board of D<n> cards: old-form/format-2.1.md, Decision board)
+├── decisions/D<n>-<slug>.md ← one decision file per decision: front matter (status, decider, source, epic, replaced_by), # D<n>. title, a free body (formats.md, Decision file)
 ├── queue.md                ← the list of every item filed in the release, one linked line per item file; written by the scripts only (in a release of format 2.0 or 1.0 a kanban board of Q<n> cards: old-form/queue-board.md)
 ├── queue/Q<n>-<slug>.md    ← one item file per item: front matter (status, decision, option, decider, depends_on), # Q<n>. title, ## Notes (scripts), ## Details and ## Options: (the lead, when the item settles); format 2.1 and higher
 ├── process.md              ← this project's facts for the release, about ten P<n> rules, two to five explicit bullets each (branches, milestone branch and worktree, merge, release, checks on the shared machine, agent sandbox, public surface, commits, shared files, plans); copied from the previous release by plan/new_release.py, audited and rewritten rule by rule with the owner before the run (SKILL.md, Process notes)
