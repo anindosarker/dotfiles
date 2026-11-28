@@ -1,11 +1,41 @@
 #!/usr/bin/env python3
 """Move a release from format 2.1 to 2.2: the status words of the queue item and of epics, specs,
-milestones and tasks, the epic file without its decisions and specs lines, and no status/sprints.md.
+milestones and tasks, the epic file without its decisions and specs lines, no status/sprints.md,
+and one file per decision in decisions/ with decisions.md as their list (D9, D16).
 
 Usage: python3 -I migrate/v2.1-v2.2/format.py <release> [--check] [--owner X] [--root PATH]
 
 Its first line, on stderr, tells the session that runs it to read the skill again: the commands
-of a release of format 2.2 store and print other words and read no grid file.
+of a release of format 2.2 store and print other words, keep the decisions in files and read no
+grid file.
+
+A release of format 2.2 whose decisions.md is still the board (a release moved before the
+decision step was part of this migration, and the example release of the skill) gets the
+decision step alone, in its own commit "docs(plan): <release> decisions moved to decision files"
+of decisions.md, decisions/ and status/data/status.json. A release of format 2.2 in the file form
+is refused: nothing to change.
+
+The decision step (lib/decisions.py, the file form), in the run and the commit of the migration:
+- Each card "**D<n>** <title>" of the board becomes decisions/D<n>-<slug>.md (lib/decisions.py
+  new_path), with the title line "# D<n>. <title>"; the mark "(superseded by D<m>)" is not part of
+  the title. Front matter: "status" from the lane (To do to-do, In progress in progress, Done
+  done; Done with a "- Deferred to" bullet backlog; a superseded mark archived), "source" the
+  first Q id of the first "- Source:" bullet, "epic" from the tag #E<n>, "replaced_by" the first
+  superseded mark. No "decider" line: the board does not say who made a call, and
+  decisions/decider.py sets it later.
+- The body is every sub-line of the card without its one leading TAB, nested lines and code
+  blocks with them. A "- Source: Q<n>" bullet that holds only that id, with no nested line, is
+  removed (the "source" line holds it); any other "- Source:" bullet stays.
+- The tag #R<n> is "decisions.D<n>.round" in status/data/status.json; a card with no such tag gets
+  round 1. The tick and the tags #superseded and #deferred are dropped.
+- decisions.md becomes the list (lib/decisions.py write_list).
+- Then the status chain: the status rule on every decision file (lib/decisions.py sync_files, which
+  sets blocked where it holds), the status file and the page data.
+Counted and compared before the chain: cards read and files written; body lines read and body
+lines written plus the Source bullets removed; decisions per lane on the board and by the status
+of their files; rounds read and rounds written. A count that differs stops the run before the
+commit and restores the files. The status chain then prints each decision status it changed and
+the count per status word.
 
 In the release folder, in one run and one commit ("docs(plan): <release> moved to format 2.2"):
 - Each item file queue/Q<n>-<slug>.md: "status: open" becomes to-do, later backlog, dropped
@@ -34,14 +64,18 @@ In the release folder, in one run and one commit ("docs(plan): <release> moved t
   which is part of the one commit. The page and status/src/ are renders, never committed.
 
 Prints one line per file it changes and the counts: queue items per old and new status, decision
-cards, epics, specs, milestones and tasks before and after, statuses changed in the status file,
-epic files changed, whether the grid file was removed. A count that differs, or a decisions.md that
-changed, stops it before the commit and restores the files from git. --check prints the files and
-the counts it can know before the status chain runs, one line for the page, and writes nothing.
+cards before and decision files after, epics, specs, milestones and tasks before and after,
+statuses changed in the status file, epic files changed, whether the grid file was removed, and
+the counts of the decision step. A count that differs stops it before the commit and restores the
+files from git. --check prints the files and the counts it can know before the status chain runs,
+one line for the page, and writes nothing.
 
-Refuses, writing nothing: a release that is not in format 2.1 (for 2.0 it names migrate/v2.0-v2.1,
-for 1.0 migrate/v1.0-v2.0, for 2.2 or higher it says there is nothing to change); an uncommitted
-change in a file it rewrites (the .gitignore among them when it lacks the status/src/ line); an item file with a status that is not a word of format 2.1; an
+Refuses, writing nothing: a release that is not in format 2.1 or a format 2.2 release with the
+board (for 2.0 it names migrate/v2.0-v2.1, for 1.0 migrate/v1.0-v2.0, for 2.2 in the file form or
+higher it says there is nothing to change); an uncommitted change in a file it rewrites
+(decisions.md among them, and the .gitignore when it lacks the status/src/ line); a folder
+decisions/ that exists; a line of decisions.md that is in no card, no lane heading, no front
+matter and no settings block; an item file with a status that is not a word of format 2.1; an
 epic file whose Ownership table cannot be read.
 """
 import argparse
@@ -69,8 +103,14 @@ def _common():
 
 C = _common()
 FROM, TO = (2, 1), "2.2"
-REREAD = ("The expedition skill stores the status words of format 2.2 and reads no status/sprints.md in a "
-          "release of that format: read SKILL.md and scripts/migrate/v2.1-v2.2/README.md again before the next command.")
+REREAD = ("The expedition skill stores the status words of format 2.2, keeps each decision in a file of "
+          "decisions/ and reads no status/sprints.md in a release of that format: read SKILL.md and "
+          "scripts/migrate/v2.1-v2.2/README.md again before the next command.")
+DECISION_STEP = "decisions moved to decision files"  # the commit of the decision step alone
+LANE_WORD = {"To do": "to-do", "In progress": "in progress", "Done": "done"}
+SOURCE_RE = re.compile(r"^- Source:(.*)$")
+Q_ID_RE = re.compile(r"\bQ\d+\b")
+SOURCE_ONLY_RE = re.compile(r"^- Source:[ \t]*Q\d+[ \t]*\.?[ \t]*$")
 GRID = "status/sprints.md"
 EPIC_LINE_RE = re.compile(r"^(decisions|specs):", re.I)
 SPEC_NUM_RE = re.compile(r"\b\d{2}(?:\.\d+)?\b")
@@ -248,6 +288,220 @@ def plan_text(folder, release):
     return (p, "\n".join(new)) if new != lines else None
 
 
+# --- the decisions (D9, D16) ---
+
+def loose_lines(dec, text):
+    """[(line number, line)] of each line of the board that is not blank and in no card, no lane
+    heading, no front matter, no "***" line and no settings block: the decision step would lose it."""
+    b = dec.bd()
+    lines = text.split("\n")
+    stop = b._body_end(lines)
+    p = b.parse(text, "D")
+    taken = {l["line"] for l in p["lanes"]}
+    if lines and lines[0].strip() == "---":
+        end = next((k for k in range(1, stop) if lines[k].strip() == "---"), stop)
+        taken.update(range(end + 1))
+    for c in p["cards"]:
+        taken.update(range(c["line"], c["end"]))
+    return [(k + 1, lines[k]) for k in range(stop)
+            if k not in taken and lines[k].strip() and lines[k].strip() != "***"]
+
+
+def card_file(dec, folder, card):
+    """(path, text, status word, source, Source bullets removed) of the decision file of a card."""
+    if card["sup_by"]:
+        word = "archived"
+    elif card["lane"] == dec.DONE and card["deferred"]:
+        word = "backlog"
+    else:
+        word = LANE_WORD[card["lane"]]
+    body, source, removed = list(card["body"]), "", 0
+    inside = [f for _, f in C.fence_flags("\n".join(body))]
+    inside += [False] * (len(body) - len(inside))
+    for k, line in enumerate(body):
+        m = None if inside[k] else SOURCE_RE.match(line)
+        if not m:
+            continue
+        q = Q_ID_RE.search(m.group(1))
+        source = q.group(0) if q else ""
+        nested = k + 1 < len(body) and body[k + 1][:1] in ("\t", " ")
+        if source and SOURCE_ONLY_RE.match(line) and not nested:
+            del body[k]
+            removed = 1
+        break  # the first "- Source:" bullet only
+    fields = {"status": word, "source": source, "epic": f"E{card['epic']}" if card["epic"] else "",
+              "replaced_by": f"D{card['sup_by'][0]}" if card["sup_by"] else ""}
+    text = dec.front_text(fields) + f"# D{card['num']}. {card['base']}\n" + \
+        ("\n" + "\n".join(body) + "\n" if body else "")
+    return dec.new_path(folder, card["num"], card["base"]), text, word, source, removed
+
+
+def decision_plan(dec, folder):
+    """{cards, files: [(card, path, text, word, source, removed)], rounds} of the decision step.
+    Dies, writing nothing, on a decisions.md that is not the board, a folder decisions/ that
+    exists, or a line of the board that is in no card."""
+    path = dec.path_of(folder)
+    text = C.read(path) if path.is_file() else ""
+    if text and not dec.is_kanban(text):
+        C.die(f"{path} is not the decisions board (lanes To do, In progress, Done): the decision step "
+              "reads the board only; restore the board from git, then run again; nothing written")
+    if dec.dir_of(folder).exists():
+        C.die(f"{dec.dir_of(folder)} exists before the run, and the decision step writes that folder: "
+              "move it out of the release folder, commit, then run again; nothing written")
+    loose = loose_lines(dec, text) if text else []
+    if loose:
+        n, line = loose[0]
+        C.die(f"{path}:{n} is in no card: '{line.strip()}' ({plural(len(loose), 'line')} in all); the "
+              "decision step keeps only the lines of a card: move each line under its card or remove "
+              "it, commit, then run again; nothing written")
+    cards = sorted(dec.parse(text)["cards"] if text else [], key=lambda c: c["num"])
+    files = [(c,) + card_file(dec, folder, c) for c in cards]
+    rounds = {f"D{c['num']}": {"round": c["round"] or 1} for c in cards}
+    return {"cards": cards, "files": files, "rounds": rounds}
+
+
+def decision_lines(dplan, folder, check):
+    """The lines that name what the decision step writes."""
+    pre = "would write " if check else ""
+    out = []
+    for c, p, _, word, source, removed in dplan["files"]:
+        bits = [word] + ([f"epic E{c['epic']}"] if c["epic"] else []) + \
+            ([f"replaced_by D{c['sup_by'][0]}"] if c["sup_by"] else []) + \
+            ([f"source {source}"] if source else []) + [f"round {c['round'] or 1}"] + \
+            (["Source bullet moved to the source line"] if removed else [])
+        out.append(f"{pre}{p.relative_to(folder).as_posix()}: {', '.join(bits)}")
+    n = len(dplan["cards"])
+    out.append(f"{pre}decisions.md: the list of {plural(n, 'decision file')}; {plural(n, 'round')} in the status file")
+    return out
+
+
+def write_decisions(dec, folder, dplan):
+    """The decision files and the list; the caller writes the rounds into the status file."""
+    dec.dir_of(folder).mkdir()
+    for _, p, text, _, _, _ in dplan["files"]:
+        p.write_text(text, encoding="utf-8")
+    dec.write_list(folder)
+
+
+def lane_tally(lanes):
+    return ", ".join(f"{lane} {lanes.count(lane)}" for lane in ("To do", "In progress", "Done"))
+
+
+def decision_counts(dec, st, folder, dplan):
+    """(printable lines, [names of the counts that differ]) of the decision step, read back from
+    the files and the status file it wrote."""
+    cards = dplan["cards"]
+    written = {}  # D number: (status word, body line count), read back from the files
+    for p in sorted(dec.dir_of(folder).glob("D*.md")):
+        m = dec.FILE_RE.match(p.name)
+        if not m:
+            continue
+        text = C.read(p)
+        rest = dec.rest_of(text).split("\n")[1:]
+        while rest and not rest[0].strip():
+            rest.pop(0)
+        while rest and not rest[-1].strip():
+            rest.pop()
+        written[int(m.group(1))] = (dec.front_of(text).get("status", ""), len(rest))
+    body_read = sum(len(c["body"]) for c in cards)
+    removed = sum(f[5] for f in dplan["files"])
+    body_written = sum(n for _, n in written.values())
+    board_lanes = [c["lane"] for c in cards]
+    file_lanes = [dec.LANE_OF.get(w, "?") for w, _ in written.values()]
+    untagged = sum(1 for c in cards if not c["round"])
+    stored = st.decision_entries(folder)
+    rounds_ok = sum(1 for c in cards if (stored.get(f"D{c['num']}") or {}).get("round") == (c["round"] or 1))
+    pairs = [("cards and files", len(cards), len(written)),
+             ("body lines", body_read, body_written + removed),
+             ("decisions per lane", lane_tally(board_lanes), lane_tally(file_lanes)),
+             ("rounds", len(cards), len({k for k, v in stored.items() if v.get("round")})),
+             ("rounds equal to the board", len(cards), rounds_ok)]
+    lines = [f"decision cards read {len(cards)}, decision files written {len(written)}",
+             f"body lines read {body_read}, written {body_written} plus {plural(removed, 'Source bullet')} "
+             "moved to the source line",
+             f"decisions per lane: {lane_tally(board_lanes)} on the board; {lane_tally(file_lanes)} by the "
+             "status of the files",
+             f"rounds read {len(cards)} ({untagged} with no #R tag, round 1), written {len(stored)}, "
+             f"{rounds_ok} equal to the board"]
+    return lines, [name for name, x, y in pairs if x != y]
+
+
+def decision_chain(dec, folder):
+    """The status rule on every decision file and the list (lib/decisions.py sync_files); returns
+    the printable line of the statuses it changed and the count per status word."""
+    moved = dec.sync_files(folder)
+    words = [c["status"] for c in dec.file_cards(folder)]
+    changed = "; ".join(f"D{n} from {old} to {new}" for n, old, new in moved)
+    return (f"decision statuses changed by the status rule: {len(moved)}" + (f" ({changed})" if changed else "")
+            + "; per status word: " + ", ".join(f"{w} {words.count(w)}" for w in dec.STATUS_WORDS))
+
+
+def decisions_only(a, root, folder, st, q, dec):
+    """The decision step alone, on a release of format 2.2 whose decisions.md is still the board."""
+    real = folder.resolve()
+    git = lambda *args: subprocess.run(["git", "-C", str(real), *args], capture_output=True, text=True)
+    rewrites = [dec.DECISIONS_MD, dec.DECISIONS_DIR, st.FILE]
+    r = git("status", "--porcelain", "--", *rewrites)
+    if r.returncode:
+        C.die(f"{folder} is not in a git repository: {(r.stderr or r.stdout).strip()}")
+    if r.stdout.strip():
+        first = r.stdout.splitlines()[0][3:]
+        C.die(f"{first} has uncommitted changes ({plural(len(r.stdout.splitlines()), 'path')} in all): "
+              "commit them first; nothing written")
+    lock = None if a.check else open(C.lock_file(folder), "a")
+    if lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+    dplan = decision_plan(dec, folder)
+    for line in decision_lines(dplan, folder, a.check):
+        print(line)
+    if a.check:
+        cards = dplan["cards"]
+        print(f"decision cards {len(cards)}; body lines {sum(len(c['body']) for c in cards)}, "
+              f"{plural(sum(f[5] for f in dplan['files']), 'Source bullet')} to move to the source line; "
+              f"decisions per lane: {lane_tally([c['lane'] for c in cards])}; rounds {len(cards)}")
+        print("check; nothing written. The run then applies the status rule to the decision files and prints "
+              "each decision status it changes")
+        return
+    others = lambda: set(git("status", "--porcelain", "--", ".",
+                             *[f":(exclude){x}" for x in rewrites]).stdout.splitlines())
+    others_before = others()
+
+    def restore(stop):
+        shutil.rmtree(dec.dir_of(folder), ignore_errors=True)
+        for x in (dec.DECISIONS_MD, st.FILE):
+            git("checkout", "HEAD", "--", x)
+        left = git("status", "--porcelain", "--", *rewrites).stdout.strip()
+        if left:
+            C.die(f"{stop}, and git could not restore every file ({left.splitlines()[0][3:]}): run "
+                  f"`git checkout HEAD -- {dec.DECISIONS_MD} {st.FILE}` in the release folder and remove "
+                  f"{dec.DECISIONS_DIR}/; nothing is committed")
+        with contextlib.redirect_stdout(io.StringIO()):
+            st.write_page_data(folder)  # the board form again in the renders
+        C.die(f"{stop}: the files are restored from git and nothing is committed")
+
+    write_decisions(dec, folder, dplan)
+    data = st.load(folder)
+    data["decisions"] = {**(data.get("decisions") or {}), **dplan["rounds"]}
+    st.write_json(st.path(folder), st.dump(data))
+    lines, differ = decision_counts(dec, st, folder, dplan)
+    for line in lines:
+        print(line)
+    if differ:
+        restore(f"the counts differ: {', '.join(differ)}")
+    with contextlib.redirect_stdout(io.StringIO()):
+        chain = decision_chain(dec, folder)
+        st.save(folder, st.build(folder, a.release))
+    print(chain)
+    extra = others() - others_before
+    if extra:
+        restore(f"the run changed a file outside decisions.md, decisions/ and {st.FILE}: {sorted(extra)[0][3:]}")
+    commit(root, [folder / x for x in rewrites], f"docs(plan): {a.release} {DECISION_STEP}")
+    q.write_data(folder)  # again after the commit: the "changed" time of each row is its commit
+    fcntl.flock(lock, fcntl.LOCK_UN)
+    lock.close()
+    print("committed")
+
+
 # --- the counts ---
 
 def counts(q, st, dec, folder):
@@ -297,11 +551,16 @@ def main():
     if v < FROM:
         C.die(f"{a.release} is in format {fmt}: run migrate/v2.0-v2.1/format.py first (scripts/migrate/v2.0-v2.1/README.md)")
     if v > FROM:
+        if v == st.version(TO) and not dec.file_form(folder):
+            return decisions_only(a, root, folder, st, q, dec)
+        if v == st.version(TO):
+            C.die(f"{a.release} is in format {fmt} and keeps its decisions in {dec.DECISIONS_DIR}/ already; "
+                  "nothing to change")
         C.die(f"{a.release} is in format {fmt}, not 2.1: it has the words of format 2.2 already; nothing to change")
     real = folder.resolve()
     git = lambda *args: subprocess.run(["git", "-C", str(real), *args], capture_output=True, text=True)
     plan_md = f"{a.release}-plan.md"
-    rewrites = [C.QUEUE_MD, q.QUEUE_DIR, "plan", plan_md, GRID, st.FILE]
+    rewrites = [C.QUEUE_MD, q.QUEUE_DIR, "plan", plan_md, GRID, st.FILE, dec.DECISIONS_MD, dec.DECISIONS_DIR]
     r = git("status", "--porcelain", "--", *rewrites)
     if r.returncode:
         C.die(f"{folder} is not in a git repository: {(r.stderr or r.stdout).strip()}")
@@ -325,7 +584,6 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_EX)
     data = st.load(folder)
     before = counts(q, st, dec, folder)
-    decisions_before = C.read(dec.path_of(folder)) if dec.path_of(folder).is_file() else None
 
     items = item_plan(q, folder)
     grid_on = (folder / GRID).is_file()
@@ -354,6 +612,7 @@ def main():
             if new != C.read(p):
                 epics.append((p, new, []))
     plan = plan_text(folder, a.release)
+    dplan = decision_plan(dec, folder)
     renamed = sum(1 for k in st.KINDS for e in data.get(k) or [] if e.get("status") in words)
 
     pre = "would write " if a.check else ""
@@ -375,62 +634,24 @@ def main():
           + (f"{'would add' if a.check else 'add'} {src_line}" if gi_add else f"has {src_line}"))
     print(f"{pre}{st.FILE}: format {TO}, {plural(renamed, 'word')} renamed (not started to to-do, skipped to archived), "
           f"launched true on {plural(len(launched), 'milestone')}")
+    for line in decision_lines(dplan, folder, a.check):
+        print(line)
     if a.check:
+        cards = dplan["cards"]
         print(f"queue items {len(before[0])} ({tally(before[0])}) become ({tally(n for _, _, n, _ in items)}); "
               f"decision cards {before[1]}; " + "; ".join(f"{k} {n}" for k, n in before[2].items()))
+        print(f"decision body lines {sum(len(c['body']) for c in cards)}, "
+              f"{plural(sum(f[5] for f in dplan['files']), 'Source bullet')} to move to the source line; "
+              f"decisions per lane: {lane_tally([c['lane'] for c in cards])}; rounds {len(cards)}")
         print(f"epic files changed {len(epics)}; grid file removed: {'yes' if grid_on else 'none to remove'}")
         print("check; nothing written. The run then rebuilds the status file and prints each status it changes")
         return
 
-    for p, _, _, text in items:
-        q.write_item(p, text)
-    for p, text, _ in epics:
-        p.write_text(text, encoding="utf-8")
-    for p, text in plain:
-        p.write_text(text, encoding="utf-8")
-    if plan:
-        plan[0].write_text(plan[1], encoding="utf-8")
-    if grid_on:
-        (folder / GRID).unlink()
-    old_words = {e["id"]: e["status"] for k in st.KINDS for e in data.get(k) or [] if "id" in e}
-    old_sprint = {m["id"]: m.get("sprint") or "" for m in data["milestones"]}
-    for m in data["milestones"]:
-        m["launched"] = m["id"] in launched
-    data["format"] = TO
-    st.write_json(st.path(folder), st.dump(data))
     sw = C.load("sprints/swimlanes")
-    with contextlib.redirect_stdout(io.StringIO()):
-        new_data = st.sync(folder, a.release)
-        sw.write(folder, a.release, quiet=True)  # format 2.2 now: the dashboard page
-        C.ignore_renders(folder, page_src=True)
-    after = counts(q, st, dec, folder)
-    print(count_line(before, after))
-    changed = [f"{e['id']} from {st.say(folder, old_words[e['id']])} to {st.say(folder, e['status'])}"
-               for k in st.KINDS for e in new_data.get(k) or []
-               if e.get("id") in old_words and old_words[e["id"]] != e.get("status")]
-    moved = [f"{m['id']} from {old_sprint[m['id']] or 'no sprint'} to {m.get('sprint') or 'no sprint'}"
-             for m in new_data["milestones"] if m["id"] in old_sprint and old_sprint[m["id"]] != (m.get("sprint") or "")]
-    print(f"statuses changed in the status file: {len(changed)}" + (f" ({'; '.join(changed)})" if changed else "")
-          + f"; {plural(renamed, 'word')} renamed")
-    if moved:
-        print(f"sprints changed in the status file: {'; '.join(moved)}")
-    print(f"epic files changed {len(epics)}; grid file removed: {'yes' if grid_on else 'none to remove'}")
-    want = sorted(n for _, _, n, _ in items)
-    stop = []
-    if (len(before[0]), before[1], before[2]) != (len(after[0]), after[1], after[2]):
-        stop.append("a count differs")
-    if sorted(after[0]) != want:
-        stop.append(f"the queue statuses are ({tally(after[0])}), not ({tally(want)})")
-    if decisions_before is not None and C.read(dec.path_of(folder)) != decisions_before:
-        stop.append("decisions.md changed")
-    if (folder / GRID).exists():
-        stop.append(f"{GRID} exists again")
-    page = folder / "status" / "index.html"
-    if not page.is_file() or page.read_bytes() != sw.DASHBOARD.read_bytes() or (folder / q.DATA).exists():
-        stop.append("the dashboard page is not installed")
-    if src_line not in C.read(gi).splitlines():
-        stop.append(f"{gi} has no line {src_line}")
-    if stop:
+
+    def restore(stop):
+        """Every file back as git has it, the renders of format 2.1 again; ends the script."""
+        shutil.rmtree(dec.dir_of(folder), ignore_errors=True)  # it did not exist before the run
         for x in rewrites:  # one path at a time: a path HEAD does not have would stop a joint checkout
             git("checkout", "HEAD", "--", x)
         if gi_before is None:
@@ -448,6 +669,65 @@ def main():
         with contextlib.redirect_stdout(io.StringIO()):
             sw.write(folder, a.release, quiet=True)  # format 2.1 again: the task board and queue.data.js
         C.die(f"{'; '.join(stop)}: the files are restored from git and nothing is committed")
+
+    for p, _, _, text in items:
+        q.write_item(p, text)
+    for p, text, _ in epics:
+        p.write_text(text, encoding="utf-8")
+    for p, text in plain:
+        p.write_text(text, encoding="utf-8")
+    if plan:
+        plan[0].write_text(plan[1], encoding="utf-8")
+    if grid_on:
+        (folder / GRID).unlink()
+    old_words = {e["id"]: e["status"] for k in st.KINDS for e in data.get(k) or [] if "id" in e}
+    old_sprint = {m["id"]: m.get("sprint") or "" for m in data["milestones"]}
+    for m in data["milestones"]:
+        m["launched"] = m["id"] in launched
+    data["format"] = TO
+    write_decisions(dec, folder, dplan)
+    data["decisions"] = {**(data.get("decisions") or {}), **dplan["rounds"]}
+    st.write_json(st.path(folder), st.dump(data))
+    dlines, ddiffer = decision_counts(dec, st, folder, dplan)
+    for line in dlines:
+        print(line)
+    if ddiffer:
+        restore([f"the decision counts differ: {', '.join(ddiffer)}"])
+    with contextlib.redirect_stdout(io.StringIO()):
+        dchain = decision_chain(dec, folder)
+        new_data = st.sync(folder, a.release)
+        sw.write(folder, a.release, quiet=True)  # format 2.2 now: the dashboard page
+        C.ignore_renders(folder, page_src=True)
+    after = counts(q, st, dec, folder)
+    print(count_line(before, after))
+    changed = [f"{e['id']} from {st.say(folder, old_words[e['id']])} to {st.say(folder, e['status'])}"
+               for k in st.KINDS for e in new_data.get(k) or []
+               if e.get("id") in old_words and old_words[e["id"]] != e.get("status")]
+    moved = [f"{m['id']} from {old_sprint[m['id']] or 'no sprint'} to {m.get('sprint') or 'no sprint'}"
+             for m in new_data["milestones"] if m["id"] in old_sprint and old_sprint[m["id"]] != (m.get("sprint") or "")]
+    print(dchain)
+    print(f"statuses changed in the status file: {len(changed)}" + (f" ({'; '.join(changed)})" if changed else "")
+          + f"; {plural(renamed, 'word')} renamed")
+    if moved:
+        print(f"sprints changed in the status file: {'; '.join(moved)}")
+    print(f"epic files changed {len(epics)}; grid file removed: {'yes' if grid_on else 'none to remove'}")
+    want = sorted(n for _, _, n, _ in items)
+    stop = []
+    if (len(before[0]), before[1], before[2]) != (len(after[0]), after[1], after[2]):
+        stop.append("a count differs")
+    if sorted(after[0]) != want:
+        stop.append(f"the queue statuses are ({tally(after[0])}), not ({tally(want)})")
+    if not dec.file_form(folder) or not dec.list_in_step(folder):
+        stop.append("decisions.md is not the list of the decision files")
+    if (folder / GRID).exists():
+        stop.append(f"{GRID} exists again")
+    page = folder / "status" / "index.html"
+    if not page.is_file() or page.read_bytes() != sw.DASHBOARD.read_bytes() or (folder / q.DATA).exists():
+        stop.append("the dashboard page is not installed")
+    if src_line not in C.read(gi).splitlines():
+        stop.append(f"{gi} has no line {src_line}")
+    if stop:
+        restore(stop)
     paths = [folder / x for x in rewrites if x != GRID or grid_on] + ([gi] if gi.read_bytes() != gi_before else [])
     commit(root, paths, f"docs(plan): {a.release} moved to format {TO}")
     q.write_data(folder)  # again after the commit: the "changed" time of each item is its commit
