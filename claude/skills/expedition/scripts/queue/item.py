@@ -3,7 +3,7 @@
 on one checkout never pick the same number.
 
 Usage: python3 -I queue/item.py <release> D|Q "<title>" [--source Q<n>] [--option <n>]
-       [--bullet "<text>"] [--new-round] [--owner X] [--root PATH]
+       [--decider you|lead] [--bullet "<text>"] [--new-round] [--owner X] [--root PATH]
        python3 -I queue/item.py <release> --move Q<n> Open|Later|Dropped|Autofix|to-do|backlog|archived|done
        [--decider you|lead|agent]
        python3 -I queue/item.py <release> --fact Q<n> "<text>"

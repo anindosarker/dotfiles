@@ -10,6 +10,15 @@ Item file (templates/queue-item.md), format 2.1:
     decision: D<n>                a decided item only
     option: <n>                   the picked option, when one was given
     ---
+    # Q<n>. <title>
+
+    ## Notes
+
+    - <the owner's remark, a first finding>
+
+    ## Details                    written by the lead, absent until then
+
+    ## Options:                   written by the lead: "1. Recommended: ...", "2. ..."
 
 A release of format 2.2 and higher (status_form()) stores the words of format 2.2 in the same
 line: to-do, blocked, done, backlog or archived (STATUSES_22). The map: open is to-do, decided is
@@ -27,15 +36,6 @@ to-do or blocked "blocked" while an item it names is not done, and "to-do" when 
 is done; an item in another status keeps it. It runs on every write of an item, of queue.md and
 of the page data (write_data(), which lib/status.py runs on every save, so sprints/refresh.py
 also runs it after a hand edit).
-    # Q<n>. <title>
-
-    ## Notes
-
-    - <the owner's remark, a first finding>
-
-    ## Details                    written by the lead, absent until then
-
-    ## Options:                   written by the lead: "1. Recommended: ...", "2. ..."
 
 This library writes the front matter, the title and the Notes bullets only. It reads Details and
 Options and never writes or reorders them: a status change rewrites the front matter block and
@@ -50,7 +50,7 @@ status/data/queue.data.js, "window.QUEUE_DATA = {...};", is the data of the Queu
 task board (board/task-board.html): release, format, updated, root, and items with id, number,
 title, status, decision, option, file, changed, notes, details and options (key, title, body,
 recommended). Format 2.2 adds decider ("" when none) and depends_on (a list of ids, [] when
-none) after option. changed is the time of the last commit that changed the "status:" line of the
+none) after file. changed is the time of the last commit that changed the "status:" line of the
 file, left out while the file is not committed. It is a render, git-ignored with the rest of
 status/data/, written only for a release of format 2.1 and higher.
 
