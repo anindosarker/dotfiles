@@ -17,7 +17,8 @@ reads. roots.plan and roots.status are both the release folder on this machine.
 One row per queue item (by number), per decision (with the board: per card of decisions.md, in
 file order; in the file form: per decision file, in the order of the numbers), then per epic,
 milestone and task (in the order of status/data/status.json). The fields of a row are FIELDS, in
-that order; "decision" is on queue rows only, "progress" on epic rows only. A text field with no
+that order; "decision" is on queue rows only, "progress" on epic rows only, "hold" on the decision
+rows of the file form only. A text field with no
 value is "", ready is true or false. Where the values come from:
 - queue: the item file (lib/queue.py). status and decider are the stored lines (the blocked check
   has stored "blocked" already); reason "Waits for <ids>" on a blocked item, the depends_on ids
@@ -27,7 +28,10 @@ value is "", ready is true or false. Where the values come from:
   and decider are its stored lines (decider "" when the file has none); reason on a blocked
   decision the words of lib/decisions.py blocked_reason ("Waits for E11, same file"), on every
   other its "epic" line ("E<n>", "" when none); file "decisions/D<n>-<slug>.md"; details the body
-  of the file.
+  of the file; hold the "hold" value of decisions.D<n> in the status file ("" when none; spec
+  10, D17), a field of these rows only. ready by the ready rule of lib/decisions.py (is_ready);
+  turn "you" when ready, "" while a hold is not over and the decision is to-do or blocked, else
+  turn() ("lead" for a to-do decision an epic file names).
 - decision, the board (a release of format 2.2 not yet moved by scripts/migrate/v2.1-v2.2): the
   card. status from its lane and tag (DECISION_STATUS; #deferred is backlog and #superseded
   archived in the lane Done); never blocked, decider ""; reason its epic "E<n>"; file
@@ -57,8 +61,9 @@ def _common():
 C = _common()
 SCRIPT = "status/data/dashboard.data.js"
 JSON_FILE = "status/data/dashboard.json"
-FIELDS = ("kind", "id", "label", "title", "status", "turn", "ready", "command", "depends_on", "decider",
+FIELDS = ("kind", "id", "label", "title", "status", "turn", "ready", "command", "hold", "depends_on", "decider",
           "decision", "reason", "progress", "root", "file", "details")
+ONLY_GIVEN = ("hold", "decision", "progress")  # fields a row has only when the builder gives them
 CLOSED = ("done", "archived", "backlog")  # no turn: nothing is left to move
 FINISHED = ("done", "archived")  # the tasks an epic's progress counts as done
 DECISION_STATUS = {"To do": "to-do", "In progress": "in progress", "Done": "done"}
@@ -77,14 +82,14 @@ def applies(folder):
 
 def row(**values):
     """A row with the fields of FIELDS in that order; a field left out is "" (ready False), and
-    "decision" and "progress" are kept only when given."""
+    the fields of ONLY_GIVEN are kept only when given."""
     out = {}
     for k in FIELDS:
         if k in values:
             out[k] = values[k]
         elif k == "ready":
             out[k] = False
-        elif k not in ("decision", "progress"):
+        elif k not in ONLY_GIVEN:
             out[k] = ""
     return out
 
@@ -154,21 +159,27 @@ def decision_rows(folder):
 
 def file_decision_rows(folder):
     """The decision rows of the file form: the stored status and decider of each file; the reason
-    of a blocked decision from lib/decisions.py blocked_reason, else the epic line."""
+    of a blocked decision from lib/decisions.py blocked_reason, else the epic line; the stored
+    hold; ready by the ready rule of lib/decisions.py (is_ready), and turn from it: "you" when
+    ready, "" when a hold is not over, else turn() (spec 10, module 1.6.1)."""
     D = lib("decisions")
     cards = D.file_cards(folder)
     waits = D.status_and_waits(folder, cards)[1] if any(c["status"] == "blocked" for c in cards) else {}
+    scene = D.ready_scene(folder, cards)
     out = []
     for c in cards:
         st = c["status"]
         epic = f"E{c['epic']}" if c["epic"] else ""
         reason = D.blocked_reason(waits[c["num"]])[0] if st == "blocked" and c["num"] in waits else \
             "" if st == "blocked" else epic
-        ready = st == "to-do" and not epic
+        entry = scene["entries"].get(f"D{c['num']}")
+        hold = entry.get("hold") if isinstance(entry, dict) and isinstance(entry.get("hold"), str) else ""
+        ready = D.is_ready(c, st, scene)
+        held = st in D.OPEN_WORDS and D.hold_state(entry, scene["statuses"]) == "held"
         out.append(row(kind="decision", id=f"D{c['num']}", label=f"D{c['num']}", title=c["title"], status=st,
-                       turn=turn("decision", st), ready=ready, command="compose" if ready else "",
-                       decider=c["decider"], reason=reason, root="plan", file=c["file"],
-                       details="\n".join(c["body"])))
+                       turn="you" if ready else "" if held else turn("decision", st), ready=ready,
+                       command="compose" if ready else "", hold=hold, decider=c["decider"], reason=reason,
+                       root="plan", file=c["file"], details="\n".join(c["body"])))
     return out
 
 

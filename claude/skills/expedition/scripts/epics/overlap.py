@@ -17,8 +17,9 @@ a decisions.md board:
   list; "" removes it) in status/data/status.json, runs the status rule, commits, writes the
   dashboard data, and prints "D14: blocked. Waits for E2, same file: <files>" or
   "D14: to-do, no shared file".
-- no id: prints the decisions that are ready and the ones that are blocked, in the lines of the
-  Epic ready message, and writes nothing.
+- no id: prints the decisions that are ready (the ready rule of lib/decisions.py, which leaves a
+  held decision out) and the ones that are blocked, in the lines of the Epic ready message, and
+  writes nothing.
 """
 import argparse
 import fcntl
@@ -101,12 +102,13 @@ def overlap(own, folder, items, dc=None):
 
 def ready_list(dc, folder):
     """The Ready and Blocked blocks of the Epic ready message (spec 09, module 1.6.2): Ready, each
-    decision that is to-do with no "epic" line and no row in an epic file ("Ready: none" when
-    there is none); Blocked, each blocked decision with its reason (no block when none)."""
+    decision the ready rule of lib/decisions.py gives (is_ready: to-do, no "epic" line, no row in
+    an epic file, not held; spec 10, module 1.6.1), "Ready: none" when there is none; Blocked,
+    each blocked decision with its reason (no block when none)."""
     cards = dc.file_cards(folder)
     word, waits = dc.status_and_waits(folder, cards)
-    rows = dc.row_epics(folder)
-    ready = [c for c in cards if word[c["num"]] == TODO and not c["epic"] and c["num"] not in rows]
+    scene = dc.ready_scene(folder, cards)
+    ready = [c for c in cards if dc.is_ready(c, word[c["num"]], scene)]
     blocked = [c for c in cards if word[c["num"]] == "blocked"]
     print("Ready:" if ready else "Ready: none")
     for c in ready:

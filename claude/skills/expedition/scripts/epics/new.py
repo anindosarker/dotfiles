@@ -19,7 +19,9 @@ run (in Done without an epic tag). In a release whose decisions are files (lib/d
 file_form) the title of a row is the title line of the decision file, and the refusals are: an
 id with no decision file, an archived decision, a backlog decision, a decision with the "epic"
 line of another epic, and a decision that is done with nothing to run. A blocked decision is
-accepted: the owner may put it in an epic.
+accepted: the owner may put it in an epic. In the file form the hold of each decision taken
+(spec 10, D17: "hold" and "hold_reason" in decisions.D<n> of status/data/status.json) is
+removed, also on a rerun that adds no row, and the change goes into the same commit.
 
 A release of format 2.2 (lib/status.py new_form): the front matter holds "status" and "starts"
 only, with no "decisions:" and no "specs:" line; the epic's decisions are the D ids of the
@@ -160,8 +162,10 @@ def main():
         note(own, path, a.note)
         C.commit(root, [path], f"docs(plan): {a.release} {a.epic} note")
     elif items:
-        if start(own, folder, path, a.epic, [int(D_RE.match(i).group(1)) for i in items]):
-            commit(root, folder, a.release, path, f"docs(plan): {a.release} {a.epic} epic started")
+        nums = [int(D_RE.match(i).group(1)) for i in items]
+        changed = start(own, folder, path, a.epic, nums)
+        if changed or held(folder, nums):
+            commit(root, folder, a.release, path, f"docs(plan): {a.release} {a.epic} epic started", nums)
     else:
         if path.exists():
             die(f"refusing to overwrite {path}")
@@ -170,15 +174,33 @@ def main():
     print(path)
 
 
-def commit(root, folder, release, path, message):
-    """Commit the epic file. In a release of format 2.2 the status chain runs first (the epic's
-    status is counted from this file) and its writes go into the same commit."""
+def held(folder, nums):
+    """The D numbers of nums whose entry in the status file has a hold (lib/decisions.py
+    HOLD_KEYS); [] for a release whose decisions are not files."""
+    dc = C.load("lib/decisions")
+    if not dc.file_form(folder):
+        return []
+    entries = C.load("lib/status").decision_entries(folder)
+    return [n for n in nums if any(k in (entries.get(f"D{n}") or {}) for k in dc.HOLD_KEYS)]
+
+
+def commit(root, folder, release, path, message, nums=()):
+    """Commit the epic file. In a release of format 2.2 the hold of each decision of nums is
+    removed and the status chain runs first (the epic's status is counted from this file); its
+    writes go into the same commit."""
     st = C.load("lib/status")
     if not st.new_form(folder):
         C.commit(root, [path], message)
         return
     with open(C.lock_file(folder), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
+        drop = held(folder, nums)
+        for n in drop:
+            st.set_decision(folder, f"D{n}", hold=None, hold_reason=None)
+        left = held(folder, drop)  # read back: the holds just removed
+        if left:
+            die(f"the hold of {', '.join(f'D{n}' for n in left)} is still in {st.path(folder)}: "
+                f"remove it with decisions/hold.py {release} D<n> --off")
         with contextlib.redirect_stdout(io.StringIO()):
             st.sync(folder, release)
         st.commit(root, folder, [path], message)

@@ -62,6 +62,15 @@ every milestone of the specs with "- Epic: E<n>", except the specs that cite the
 The reason of a blocked decision is "Waits for E11, same file" (reason_words). The refresh chain
 removes the given files of a decision (kept_entries, called by lib/status.py build) when a spec
 cites it, when it has a row in an epic file, or when it is no longer to-do or blocked.
+The hold (spec 10, module 1.6.1, D17). The owner can hold a decision that is to-do or blocked:
+decisions/hold.py stores "hold" ("yes", or "until <id>" for a queue item, a decision or an
+epic) and, with "yes", an optional "hold_reason" in "decisions.D<n>" of status/data/status.json;
+no line of the decision file changes. A hold "until <id>" is over when the status of <id> is
+done or archived (hold_state). The refresh chain removes both keys (kept_entries) when the
+decision is no longer to-do or blocked; epics/new.py removes them from each decision it takes.
+The ready rule (is_ready), the one rule of the Ready list of epics/overlap.py and of the
+dashboard data (lib/dashboard.py): a decision is ready when it is to-do, has no "epic" line, has
+no row in the Ownership table of an epic file, and has no hold or a hold that is over.
 The readers of the board form (read_cards, rule_lanes, sync_file, highest) answer from the files
 in the file form: a card keeps its keys, each worked out from the file and the status file (the
 lane from the status: to-do and blocked give To do, in progress gives In progress, done, backlog
@@ -112,6 +121,11 @@ FRONT_KEYS = ("status", "decider", "source", "epic", "replaced_by")
 LANE_OF = {"to-do": TODO, "blocked": TODO, "in progress": PROGRESS, "done": DONE, "backlog": DONE,
            "archived": DONE}
 MIGRATE = "scripts/migrate/v2.1-v2.2"
+HOLD_KEYS = ("hold", "hold_reason")  # the two keys of a hold in decisions.D<n> of the status file
+HOLD_YES = "yes"  # a hold that ends only on the owner's word
+HOLD_UNTIL = "until "  # the prefix of a hold that ends when the named id is closed
+CLOSED_WORDS = ("done", "archived")  # the statuses of an id that end a hold "until <id>"
+OPEN_WORDS = ("to-do", "blocked")  # the statuses of a decision that can be held
 FILE_RE = re.compile(r"^D(\d+)-.*\.md$")
 FRONT_RE = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 TITLE_RE = re.compile(r"^#\s+D\d+\.\s*(.*?)\s*$")
@@ -713,25 +727,75 @@ def running_epics(folder):
 
 
 def kept_entries(folder, entries):
-    """The entries of the key "decisions" of the status file without the given files that the
-    refresh chain removes: a decision a spec cites, one with a row in an epic file, one that is
-    no longer to-do or blocked (or has no file). An entry left empty is dropped."""
-    if not any(isinstance(v, dict) and "files" in v for v in entries.values()):
+    """The entries of the key "decisions" of the status file without what the refresh chain
+    removes: the given files of a decision a spec cites, of one with a row in an epic file, of
+    one that is no longer to-do or blocked (or has no file); the hold (HOLD_KEYS) of a decision
+    that is no longer to-do or blocked (or has no file). An entry left empty is dropped."""
+    has_files = any(isinstance(v, dict) and "files" in v for v in entries.values())
+    has_hold = any(isinstance(v, dict) and any(k in v for k in HOLD_KEYS) for v in entries.values())
+    if not has_files and not has_hold:
         return entries
     cards = file_cards(folder)
     word = rule_status(folder, cards)
-    scene = block_scene(folder, cards, word)
+    scene = block_scene(folder, cards, word) if has_files else None
     out = {}
     for k, v in entries.items():
         m = re.fullmatch(r"D(\d+)", k)
         n = int(m.group(1)) if m else None
+        still_open = n is not None and word.get(n) in OPEN_WORDS
         if isinstance(v, dict) and "files" in v and (
-                n is None or word.get(n) not in (STATUS_WORDS[0], "blocked")
-                or citing(scene, n) or n in scene["rows"]):
+                not still_open or citing(scene, n) or n in scene["rows"]):
             v = {x: y for x, y in v.items() if x != "files"}
+        if isinstance(v, dict) and not still_open:
+            v = {x: y for x, y in v.items() if x not in HOLD_KEYS}
         if v:
             out[k] = v
     return out
+
+
+# The hold and the ready rule (module docstring).
+def hold_target(value):
+    """The id of a hold "until <id>", or None for any other value."""
+    return value[len(HOLD_UNTIL):].strip() if isinstance(value, str) and value.startswith(HOLD_UNTIL) else None
+
+
+def id_statuses(folder, cards=None):
+    """{id: status word} of every queue item (Q<n>, its stored status), decision file (D<n>, its
+    stored status) and epic of the status file (E<n>, in the words of format 2.2): the ids a hold
+    "until <id>" can name."""
+    Q = C.load("lib/queue")
+    out = {f"Q{it['file_num']}": Q.status_of(it, True) for it in Q.items(folder)}
+    out.update({f"D{c['num']}": c["status"] for c in (file_cards(folder) if cards is None else cards)})
+    st = status_lib()
+    data = st.load(Path(folder))
+    for e in st.stored(data).get("epics", []) if data else []:
+        out[e["id"]] = e["status"]
+    return out
+
+
+def hold_state(entry, statuses):
+    """"" when the entry of a decision has no hold, "over" when it is "until <id>" and <id> is
+    done or archived in statuses (id_statuses), else "held"."""
+    value = (entry or {}).get("hold") if isinstance(entry, dict) else None
+    if not value:
+        return ""
+    target = hold_target(value)
+    return "over" if target and statuses.get(target) in CLOSED_WORDS else "held"
+
+
+def ready_scene(folder, cards):
+    """The facts of the ready rule: rows (row_epics), entries (the key "decisions" of the status
+    file) and statuses (id_statuses)."""
+    return {"rows": row_epics(folder), "entries": status_lib().decision_entries(folder),
+            "statuses": id_statuses(folder, cards)}
+
+
+def is_ready(card, word, scene):
+    """True when the decision of card, with the status word, is ready (module docstring): to-do,
+    no "epic" line, no row in an epic file, and no hold or a hold that is over."""
+    entry = scene["entries"].get(f"D{card['num']}")
+    return (word == STATUS_WORDS[0] and not card["epic"] and card["num"] not in scene["rows"]
+            and hold_state(entry, scene["statuses"]) != "held")
 
 
 def write_status(card, word):
