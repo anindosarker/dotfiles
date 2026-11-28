@@ -39,7 +39,8 @@ value is "", ready is true or false. Where the values come from:
   archived in the lane Done); never blocked, decider ""; reason its epic "E<n>"; file
   decisions.md; details the lines of the card under its title.
 - epic, milestone, task: status, reason and decider as stored in the status file; nothing is
-  mapped and no decider is worked out again.
+  mapped and no decider is worked out again. An epic with no spec and no row in the Ownership
+  table of its file gives no row (stub_epic): the go writes such a file for the next epic.
 Worked out on every build and stored in no file: label, turn, ready, command, progress, root,
 file (turn()).
 """
@@ -195,11 +196,23 @@ def file_decision_rows(folder):
     return out
 
 
+def stub_epic(o, folder, data, e):
+    """True for an epic that is not work yet: no spec, and no row in the Ownership table of its
+    file (the file the go writes for the next epic). Such an epic gives no row."""
+    if e.get("specs") or any(s.get("epic") == e["id"] for s in data.get("specs", [])):
+        return False
+    path = o.epic_path(folder, int(e["id"][1:]))
+    return not (path.is_file() and o.read_table(C.read(path))[0])
+
+
 def plan_rows(folder, data):
-    """The epic, milestone and task rows from the stored status file, in its words."""
+    """The epic, milestone and task rows from the stored status file, in its words. An epic with
+    no spec and no Ownership row (stub_epic) gives no row."""
     o = lib("ownership")
     out = []
     for e in data.get("epics", []):
+        if stub_epic(o, folder, data, e):
+            continue
         mids = {m["id"] for m in data.get("milestones", []) if m.get("epic") == e["id"]}
         mine = [t for t in data.get("tasks", []) if t.get("milestone") in mids]
         n = int(e["id"][1:])

@@ -50,7 +50,7 @@ Scripts are classic `<script src>` files that share one global scope, loaded in 
 }
 ```
 
-The skill's Python scripts write both files from this section, in the step that writes `status.data.js`. The Queue view reads its rows (`kind: queue`) from the same file, so the page needs no `queue.data.js`. Every item of every kind is one row. The builder maps no status word: it copies the stored one. It never reads `status/sprints.md`. The writer is `scripts/lib/dashboard.py`; `scripts/lib/status.py` writes `status.data.js`. `scripts/sprints/refresh.py` writes both again after a hand edit.
+The skill's Python scripts write both files from this section, in the step that writes `status.data.js`. The Queue view reads its rows (`kind: queue`) from the same file, so the page needs no `queue.data.js`. Every item of every kind is one row. The one exception: an epic with no spec and no row in the Ownership table of its file gives no row, because the go writes such a file for the next epic and it is not work yet. The builder maps no status word: it copies the stored one. It never reads `status/sprints.md`. The writer is `scripts/lib/dashboard.py`; `scripts/lib/status.py` writes `status.data.js`. `scripts/sprints/refresh.py` writes both again after a hand edit.
 
 A decision row copies the `status` line and the `decider` line of its decision file `decisions/D<n>-<slug>.md`; a file with no `decider` line gives `decider: ""` (a decision moved from a board has none until `scripts/decisions/decider.py` sets it). The rows are in the order of the numbers, and `sources` names the folder `decisions/`.
 
