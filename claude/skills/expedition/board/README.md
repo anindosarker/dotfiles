@@ -46,7 +46,7 @@ Scripts are classic `<script src>` files that share one global scope, loaded in 
   updated: "2026-11-28 07:00",                                          local time, YYYY-MM-DD HH:MM
   roots:   { plan: "/abs/plan/folder", status: "/abs/status/root" },   only in dashboard.data.js
   sources: { ... },                                                     for people, not shown
-  rows: [{ kind, id, label, title, status, turn, ready, command, hold, depends_on, decider, decision, reason, progress, root, file, details }]
+  rows: [{ kind, id, label, title, status, turn, ready, command, hold, depends_on, decider, decision, reason, progress, root, file, notes, details, options }]
 }
 ```
 
@@ -56,7 +56,7 @@ A decision row copies the `status` line and the `decider` line of its decision f
 
 Format 2.2 releases with the board: a release whose `decisions.md` is still a board (not yet moved by `scripts/migrate/v2.1-v2.2/`) takes a decision row's `status` from the lane of its card (To do `to-do`, In progress `in progress`, Done `done`; Done with the tag `#deferred` `backlog`, with `#superseded` `archived`). Such a row is never `blocked`, has `decider: ""`, and its file is `decisions.md`. It has no `hold` field (a hold needs decision files); `ready` is `true` for a decision that is `to-do` with no epic tag, and its `turn` is `lead` while it is `to-do`.
 
-Fields of every row. A text field with no value is `""`; `ready` is always `true` or `false`; `progress` is present on epics only, `decision` on queue rows only, `hold` on the decision rows of a release whose decisions are files only.
+Fields of every row. A text field with no value is `""`; `ready` is always `true` or `false`; `progress` is present on epics only, `decision`, `notes` and `options` on queue rows only, `hold` on the decision rows of a release whose decisions are files only.
 
 | Field | Stored or worked out | Meaning |
 |---|---|---|
@@ -75,7 +75,11 @@ Fields of every row. A text field with no value is `""`; `ready` is always `true
 | `reason` | stored or worked out | a `blocked` item's reason, the muted line on the card (Reason, below); on a decision that is not `blocked`, the id of its epic (`E<n>`) |
 | `progress` | worked out | epics only: `{ done, total }`, the epic's tasks; `done` counts `done` and `archived`. Shown as "8/16 done" |
 | `root`, `file` | worked out | key into `roots` (`plan` or `status`) and the path relative to it, for the VS Code / Browser buttons; `file: ""` for no file |
-| `details` | stored | optional Markdown for the side panel |
+| `notes` | stored | queue rows only: the text under `## Notes` of the item file, as it is (D21) |
+| `details` | stored | optional Markdown for the side panel; on a queue row the text under `## Details` of the item file |
+| `options` | stored | queue rows only: the text under `## Options:` of the item file, as it is, numbers and nested bullets kept (D21) |
+
+The side panel of a queue card, in the Queue view and in the Dashboard view, shows `notes`, `details` and `options` in that order, each as Markdown under its own heading (Notes, Details, Options). A text that is `""` (the item file does not have the section) gets no heading. The panel of every other kind shows `details` only.
 
 Status: one list for every kind (D8, D9, D11). The stored word is copied.
 
