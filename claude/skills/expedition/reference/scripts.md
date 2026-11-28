@@ -163,7 +163,7 @@ For any session that is about to run a command of the skill: how to run them, th
 
 - Command: `<skill>/scripts/run/runner.sh start|list|stop|send|fork|resume|adopt v0.<n>.x`
 - Does, by mode:
-  - `start`: reuses the live runner of the release, resumes a dead one, or opens the next `<release> runner<n>` in the current tmux session running the runner (fable, bypass, fixed `--session-id`, `templates/runner-settings.json`, brief).
+  - `start`: reuses the live runner of the release, resumes a dead one, or opens the next `<release> runner<n>` in the current tmux session running the runner (opus unless `--model` or `$EXPEDITION_RUNNER_MODEL`, bypass, fixed `--session-id`, `templates/runner-settings.json`, brief).
     - Numbers are never reused; `--new` opens another beside the live one; `--new --name "<name>"` names it as given; called from a runner window it runs on that runner's model; the window name is also the `claude -n` name; the runner of a release is its newest entry that is not stopped.
     - It records the runner in `~/.claude/expedition-runners.json`.
     - It resumes a dead one with `--resume`.

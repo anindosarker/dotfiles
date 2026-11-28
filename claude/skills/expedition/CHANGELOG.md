@@ -12,6 +12,7 @@ What is new:
 - `templates/queue-item.md` and `templates/queue-list.md` are the shapes; the example release is in format 2.1, with filled items in `example/v1.0.x/owner/queue/`.
 - One command moves a release from format 2.0 to 2.1: `scripts/migrate/v2.0-v2.1/format.py <release>`, guide [scripts/migrate/v2.0-v2.1/README.md](scripts/migrate/v2.0-v2.1/README.md).
 - `plan/new_release.py` makes a new release in format 2.1: a `queue.md` list and an empty `queue/` folder.
+- A runner started with no `--model` and no `$EXPEDITION_RUNNER_MODEL` runs on `opus` (before: `fable`); a live runner keeps its model. `SKILL.md` says near its start that how the owner works in a release is in `process.md`, a change is a `process.md` update, and every agent follows it.
 
 What changes for a release in work:
 

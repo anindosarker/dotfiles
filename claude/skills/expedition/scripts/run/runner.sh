@@ -54,7 +54,7 @@
 # ~/.claude/expedition-runners/<name>.status, written by the hooks in
 # templates/runner-settings.json ("idle" on Stop, "busy" on UserPromptSubmit); the hooks find
 # the name in EXPEDITION_RUNNER, exported here before exec.
-# Model: --model, else (--new from a runner window) the calling runner's model, else $EXPEDITION_RUNNER_MODEL, else fable. Fork model: --model, else
+# Model: --model, else (--new from a runner window) the calling runner's model, else $EXPEDITION_RUNNER_MODEL, else opus. Fork model: --model, else
 # $EXPEDITION_FORK_MODEL, else fable. Forks are registry entries of kind "fork", no status file.
 set -euo pipefail
 
@@ -352,9 +352,9 @@ cmd_start() {
     name="$given"
   elif [ "$new" = 1 ]; then name="$(next_runner_name "$release")"; else name="$(runner_name "$release")"; fi
   # Model: --model; --new from a runner window keeps the calling runner's model;
-  # else $EXPEDITION_RUNNER_MODEL, else fable.
+  # else $EXPEDITION_RUNNER_MODEL, else opus.
   [ -n "$model" ] || [ "$new" != 1 ] || [ -z "${EXPEDITION_RUNNER:-}" ] || model="$(session_model)"
-  [ -n "$model" ] || model="${EXPEDITION_RUNNER_MODEL:-fable}"
+  [ -n "$model" ] || model="${EXPEDITION_RUNNER_MODEL:-opus}"
   local cwd
   cwd="$(new_cwd "$cwd_flag")"
   mkdir -p "$STATE_DIR"
