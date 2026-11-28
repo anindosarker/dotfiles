@@ -200,7 +200,7 @@ The runner then files a queue item and continues with work that does not depend 
   - A fact for an existing item: `queue/item.py <release> --fact Q<n> "<text>"` (it goes under `## Notes`).
   - An item the run fixed itself, with no decision and no fix milestone, is closed by the runner with `queue/item.py <release> --move Q<n> Autofix --decider agent` (`status: done`, `decider: agent`).
   - A run agent records no decision from a queue item: `queue/item.py <release> D --source Q<n>` takes `--decider you` or `--decider lead` and refuses `agent`. A choice is a queue item for the lead.
-  - A deviation from the letter of a decision that keeps its intent, which the run settles itself (SKILL.md, Owner input), is recorded as a decision file with no `--source`: `queue/item.py <release> D "<title>" --decider agent --bullet "<the rule>"`. It is `to-do` and in no epic, like any other new decision, and the lead sees it in the next Epic hint.
+  - A deviation from the letter of a decision that keeps its intent, which the run settles itself (SKILL.md, Owner input), is recorded as a decision file with no `--source`: `queue/item.py <release> D "<title>" --decider agent --bullet "<the rule>"`. Then `decisions/close.py <release> D<n>`: it has nothing to run.
   - Never a hand edit of `queue.md` or of an item file.
 - The run reports; it does not solve. Do not research solutions for a queue item. A deviation is reported as keep or revert with the exact strings, never as an implementation question.
 - An accepted decision that no longer fits: a queue item, never a silent change.

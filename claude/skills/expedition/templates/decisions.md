@@ -6,7 +6,7 @@ kanban-plugin: basic
 Accepted decisions only, as a kanban board. Questions stay in chat.
 The lane is the state of the decision: To do (in no epic), In progress (in an epic, its work not all merged), Done. The box is ticked only in Done.
 A script writes the card line, its lane and its tags. A session writes only the bullets, each indented with one tab.
-Example of a filled file: ../example/v1.0.x/owner/decisions.md.
+Example of a filled file: ../reference/old-form/format-2.1.md, section Decision board.
 -->
 
 ## To do

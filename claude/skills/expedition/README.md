@@ -83,7 +83,7 @@ A release in format 2.0 keeps its queue as a kanban board of cards in `queue.md`
 
 A release in format 2.1 keeps its five status words, the `decisions:` and `specs:` lines of its epic files and its `status/sprints.md`; `scripts/migrate/v2.1-v2.2/README.md` moves it to format 2.2.
 
-## The status board data
+## The dashboard page
 
 A release in format 2.2 has the dashboard page at `status/index.html`: open that file in a browser. It has six views: Dashboard, Queue, Epics, Milestones, Tasks and Sprints. Dashboard shows what waits for whom; Queue shows every queue item with its notes, details and options. Its scripts are in `status/src/`. Its data is in `status/data/`, written from the item files, the decision files and `status/data/status.json` on every change: `status.data.js` for the four plan views, and `dashboard.data.js` for Dashboard and Queue. `dashboard.json` holds the same rows for an agent to read. `reference/formats.md`, section Status, lists what the files hold.
 
