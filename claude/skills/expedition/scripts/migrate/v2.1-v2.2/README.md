@@ -84,7 +84,7 @@ The first line, on stderr, tells the session to read the skill again. `--check` 
 
 An epic file whose `decisions:` or `specs:` line names a decision or a spec that no row of its table has gets a row for it first. The command prints one line for each row it adds.
 
-The command refuses, and writes nothing, when the release is not in format 2.1 or a format 2.2 release with the board, when a file it rewrites has an uncommitted change, when the release has a `decisions/` folder, when a line of `decisions.md` is in no card, when an item file has a status that is not a word of format 2.1, when an epic table cannot be read, or when `status/sprints.md` differs from the status file.
+The command refuses, and writes nothing, when the release is not in format 2.1 or a format 2.2 release with the board, when a file it rewrites has an uncommitted change, when the release has a `decisions/` folder, when a line of `decisions.md` is in no card, when an item file has a status that is not a word of format 2.1, when an epic table cannot be read, when `status/sprints.md` differs from the status file, or when a spec has an error that stops the status chain (a `Depends on` name that no milestone has, for example; the command prints each one). A step that fails after the first write restores the files from git and commits nothing.
 
 ### A release of format 2.2 with the board
 
