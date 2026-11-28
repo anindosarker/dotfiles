@@ -218,6 +218,7 @@ The runner then files a queue item and continues with work that does not depend 
   1. `run/runner.sh adopt <release> --replaces "<the runner's name before the roll over>"`: the cleared session has a new session id and gets its own entry in the runner list, under that same name.
   2. `NOTE runner: rolled over, now <new name>` to the lead.
   3. The wake check ([tick.md](tick.md), step 3). The Workflows the handoff lists are this runner's own, whatever owner `run/check.py` prints for them: one that is `alive` is left to finish.
+- Before the roll over, the session runs `status/sync.py <release>` (Status and tasks, Commits), so the handoff starts from a clean release folder.
 - A runner never stops a Workflow to roll over. After the clear a stopped run cannot be resumed with `resumeFromRunId`, only launched again.
 - Lead, on `roll over <runner name>`: `run/runner.sh send "<runner name>" "roll over"` types the word into that runner's window.
 
@@ -247,4 +248,9 @@ For a release with `status/data/status.json`. Where the sections above name a tr
 - A builder reads what it read before (the spec whole, `process.md`, its tracker) and the task files its milestone lists in `- Tasks:`. Each task file's Goals, Instructions and Verification list are the task.
 - A milestone added to a spec in progress (`plan/milestone.py add`, by the lead after a decision, or by the runner for a fix) is placed in the current sprint. It is launched like any other milestone, at the same time as the others unless a `Depends on` line says otherwise.
 - `status/status.py <release> list --status blocked` shows what waits; `list --kind task` every task.
+- Commits, format 2.2: a status change (`status/status.py set`, `sprints/mark.py launch|wait|resume|stop`) writes the files and makes no commit. Do not expect a commit after it, and do not commit it by hand.
+  - `status/sync.py <release>` commits every change under the release folder in one commit: statuses, ticked boxes, trackers. `sprints/mark.py ... merge` and a change that makes an epic `done` end with it.
+  - Between two syncs the release folder has uncommitted changes; that is normal. `status/report.py` names them in one `Uncommitted:` line.
+  - Never `git checkout -- <path>`, `git restore` or `git stash` on the release folder: that throws statuses away.
+  - A release of format 2.1 or lower commits each status change at once, as before.
 - After a merge that adds routes into a worktree where a dev server runs, the runner tells the owner that the server may need a restart.

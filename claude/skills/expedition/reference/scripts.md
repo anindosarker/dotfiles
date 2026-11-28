@@ -44,6 +44,7 @@ For any session that is about to run a command of the skill: how to run them, th
 - `decisions/supersede.py <release> D<old> D<new>`: supersede a built decision.
 - `decisions/decider.py <release> D<n> you|lead|agent [--change]`: the decider of a decision file that has none; `--change` replaces an existing one.
 - `decisions/hold.py <release> D<n> [--until <id> | --reason "<text>" | --off]`: the owner's hold of a decision, in the status file.
+- `status/sync.py <release> [-m "<message>"]`: one commit of every change under the release folder (the sync). Format 2.2: a status change makes no commit; the sync commits it.
 - `status/report.py <release>`: state and gaps.
 - `status/progress.py <release>`: the progress reply for the owner (formats.md, Progress reply and reports).
 - `status/waits.py <release> [--new] [--skip <id>]`, `--held`: the Waits for you line under each message of the lead, and the held block.
@@ -266,7 +267,7 @@ For any session that is about to run a command of the skill: how to run them, th
 - Does: the only reader and writer of statuses.
 - Ids: task `27-03`, milestone `27-collapse-shortcut` (its tracker name), spec `27`, epic `E11`.
 - Words: `to-do`, `in progress`, `blocked`, `done`, `archived`; it takes `not started` for `to-do` and `skipped` for `archived` too, stores the word of the release's format and prints it. Below format 2.2 the stored words are `not started` and `skipped`.
-- `set` on a task or a milestone: writes `status/data/status.json` (through a temporary file), rolls a task up into its milestone, counts spec, epic and sprint, writes the word into the `status:` line of the task, spec and epic files, writes the page data, commits; below format 2.2 it also draws `status/sprints.md`. A set that changes nothing writes nothing.
+- `set` on a task or a milestone: writes `status/data/status.json` (through a temporary file), rolls a task up into its milestone, counts spec, epic and sprint, writes the word into the `status:` line of the task, spec and epic files, writes the page data; below format 2.2 it also draws `status/sprints.md` and commits. Format 2.2: no commit (the sync commits it, `status/sync.py`), except a set that makes an epic `done`: it ends with the sync, with its own message. The output line is the same in every format. A set that changes nothing writes nothing.
 - `blocked` and `archived` need `--reason`. The status of a spec and an epic is counted, never set.
 - A task set to done with an open `Owner:` box becomes blocked, "waits for the owner's look"; with another open box it is refused.
 - A milestone set to done needs `--commit`, a commit hash, and is refused while one of its tasks is not finished.
@@ -356,6 +357,7 @@ For any session that is about to run a command of the skill: how to run them, th
 
 - Command: `python3 -I <skill>/scripts/status/report.py v0.<n>.x`
 - Does: read-only. It prints:
+  - after the `Release` line, when the release folder has uncommitted changes: `Uncommitted: <n> file(s) in the release folder: run status/sync.py <release>`;
   - missing files;
   - a state table per decision, the item count per status and one row per item file with its status (format 2.0: per queue card, its lane);
   - queue gaps: an unknown or missing lane, a card without a `**Q<n>**` token, a duplicate id, a title tag other than `#D<n>` or `#E<n>`, a leftover `Decision:` fact, a Decided card without `#D<n>` or naming a missing decision, a Decided card whose tick or `#E<n>` disagrees with the lane of its decision, a `(Q<n>)` or `Source: Q<n>` citation of a missing card (a `**Complete**` marker line is ignored); with item files instead: an item file with no `# Q<n>.` title or a number that differs from its file name, a `queue.md` that differs from the item files, a duplicate number, a citation of a missing item, and a `status` outside the five words of a queue item (`to-do`, `blocked`, `done`, `backlog`, `archived`), a `decider` that is not `you`, `lead` or `agent` or one on an item that is not closed, the `decision` of a `done` item not in `decisions.md`, a `depends_on` id with no item file, an item that waits for an `archived` item, an item whose status differs from what the blocked check gives (fix: `sprints/refresh.py`). A closed item with no `decider` is no gap: it was closed before format 2.2. Format 2.1: a `status` outside open, decided, later, dropped and autofix, a decided item with no decision or one not in `decisions.md`;
@@ -403,10 +405,16 @@ For any session that is about to run a command of the skill: how to run them, th
 - From format 2.1 on (item files): prints that there is nothing to sync, writes nothing, exits 0; an item holds its decision id only.
 - When: step 3 of the `sprints/refresh.py` chain alone
 
+### status/sync.py
+
+- Command: `python3 -I <skill>/scripts/status/sync.py v0.<n>.x [-m "<message>"]`
+- Does: under the `.ids.lock` lock, stages every change under the release folder (changed, new and removed files; git-ignored renders stay out) and commits it in one commit, by that path only: a change outside the folder stays uncommitted. Default subject `docs(plan): <release> sync`. Prints `synced: <n> file(s), <sha>`, or `nothing to sync` and exit 0. It works in every format; below format 2.2 the status commands commit on their own, so it commits only what is left.
+- When: by itself at `sprints/mark.py ... merge` and when an epic becomes `done` (format 2.2); a lead before a handoff and a roll over; a runner before a roll over; any time on demand
+
 ### sprints/mark.py
 
 - Command: `python3 -I <skill>/scripts/sprints/mark.py v0.<n>.x <milestone> launch|wait|resume|merge|stop [--reason "<text>"] [--commit <sha>]`
-- Does: the verb sets the milestone's status in the status file ([formats.md](formats.md), Milestone status): `launch` `in progress` (and `launched` true); `wait` and `stop` `blocked`, with `--reason`; `stop --reason "D<n> ..."` `archived`; `merge --commit <sha>` `done`, refused while a task of the milestone is not finished; `resume` only on a blocked milestone, `in progress` when it was launched before and `to-do` when it never was. `<milestone>` is the tracker file name without `-tracker.md` (`47-comparison-page`). Then, under the `.ids.lock` lock, the chain of `sprints/refresh.py`, and one commit of the status file and the files the chain changed (never pushes).
+- Does: the verb sets the milestone's status in the status file ([formats.md](formats.md), Milestone status): `launch` `in progress` (and `launched` true); `wait` and `stop` `blocked`, with `--reason`; `stop --reason "D<n> ..."` `archived`; `merge --commit <sha>` `done`, refused while a task of the milestone is not finished; `resume` only on a blocked milestone, `in progress` when it was launched before and `to-do` when it never was. `<milestone>` is the tracker file name without `-tracker.md` (`47-comparison-page`). Then, under the `.ids.lock` lock, the chain of `sprints/refresh.py`. Format 2.2: `launch`, `wait`, `resume` and `stop` make no commit and print `...; written, not committed (status/sync.py)`; `merge`, and a verb that makes an epic `done`, end with the sync: one commit of every change under the release folder, with the subject `docs(plan): <release> <milestone> <verb>`. Below format 2.2: one commit of the status file and the files the chain changed (never pushes), and the line ends `; committed`.
 - Format 2.1 and 2.0: the same, with `not started` and `skipped` for `to-do` and `archived`; the chain also draws `status/sprints.md` and the commit holds it, and launched before means a commit `docs(plan): <release> <milestone> launch` in its history. Format 1.0: the only writer of grid marks, by the rules of [old-form/format-2.1.md](old-form/format-2.1.md), The grid file; the two flags are accepted and not used.
 - An unknown milestone, or one with no sprint (no grid row below format 2.2), is refused with one line; a repeat call changes nothing and exits 0.
 - When: at every launch, wait, resume, merge and stop: the workflow's merger for `merge`, the runner otherwise

@@ -22,6 +22,7 @@ The loop prompt must be safe to fire at any time. Loop: the loop skill with no i
    - Read the output of `status/report.py` and `sprints/grid.py`, and the trackers only. No `git status`, `diff` or `log` in worktrees; no pull unless a merge is due this tick.
    - A tick with work (a mark, a merge, a launch) reports one line per action.
    - A tick that marks or merges nothing ends with exactly one line: `tick <HH:MM>: <milestone> <stage>, ..., <milestone> waiting on <dep>. Next <HH:MM>.` No table, no per-milestone bullets, no restating what was read.
+   - In a release of format 2.2 a mark other than `merge` makes no commit, and the release folder has uncommitted changes until the next sync: do not expect a commit after a status change; never `git checkout --`, `git restore` or `git stash` on the release folder. Before a roll over: `status/sync.py <release>` ([run.md](run.md), Status and tasks).
    - Messages to the lead are DONE, BLOCKED, NOTE, ACK RULES (with the first words of the RULES line), ACK LEAD, and the reply to a HELLO only. Never a status line.
 
 ## Environment blockers

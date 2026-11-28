@@ -153,7 +153,8 @@ Folded into stage 1: the run's items are queue items and come up through `queue/
 - A release: `plan/new_release.py`. A spec: `plan/new_spec.py`. Work in a spec: `plan/milestone.py add`, `plan/task.py add`.
 - Queue items and decisions: `queue/item.py` (`--decider` on each `D` call and on each call that closes an item, `--depends` for an item that waits for others), `queue/next.py`, `queue/list.py`, `decisions/close.py` (`--backlog` for a decision that moves to another release), `decisions/supersede.py`, `decisions/decider.py` (the decider of a decision file that has none), `decisions/hold.py` (the owner's `hold D<n>`, `--until <id>`, `--reason`, `--off`).
 - Epics: `epics/new.py`, `epics/overlap.py` (with no id: the lines of the Epic ready message; `D<n> --files` for a decision that no spec cites), `epics/table.py`, `run/go.py`, `sprints/check.py`, `sprints/refresh.py`, `sprints/grid.py` (prints the grid).
-- Statuses: `status/status.py` (set, get, list), `sprints/mark.py` (a milestone, by the run's verbs).
+- Statuses: `status/status.py` (set, get, list), `sprints/mark.py` (a milestone, by the run's verbs), `status/sync.py` (the sync).
+- A status change makes no commit. The release folder has uncommitted changes until `status/sync.py <release>` commits it in one commit. The sync runs by itself at a milestone merge and when an epic becomes `done`; a session runs it before a handoff and a roll over. Never `git checkout --`, `git restore` or `git stash` on the release folder: that throws statuses away.
 - State: `status/report.py`, `status/progress.py`, `status/waits.py` (the Waits for you line; `--new` for a turn the owner did not start, `--held` for the held block).
 - The runner and the spec writer: `run/runner.sh start|list|stop|send|fork|resume|adopt`.
 - A release in an older format: [reference/migrate.md](reference/migrate.md). The skill's version is `metadata.version` in this file's front matter; what each version changed: [CHANGELOG.md](CHANGELOG.md).
@@ -165,6 +166,7 @@ A release whose status file says `"format": "2.1"` is read as it is; no release 
 - A queue item has the words `open`, `decided`, `later`, `dropped` and `autofix`: "record it" sets `decided`, "later" `later`, "drop it" `dropped`, and an item the run fixes is `autofix`.
 - An epic, a spec, a milestone and a task have the words `not started`, `in progress`, `blocked`, `done` and `skipped`; a planned epic is `not started`.
 - The epic file has the lines `decisions:` and `specs:` beside `status:` and `starts:`.
+- Each status change (`status/status.py set`, `sprints/mark.py`) is committed at once; `status/sync.py` commits only what is left.
 - The grid is the committed file `status/sprints.md`, written by `sprints/refresh.py` and `sprints/mark.py`; the lead and the runner read that file where this skill says `sprints/grid.py`.
 - No item has a decider or waits for others: `queue/item.py --decider` is accepted and not stored, and `queue/item.py --depends` is refused.
 - `status/index.html` is the task board, with the Queue view reading `status/data/queue.data.js`.
@@ -190,6 +192,7 @@ A release with no status file is in format 1.0 and is read as it is; no release 
 - A milestone's status is its grid mark and the `Status:` line of its tracker ([reference/old-form/format-2.1.md](reference/old-form/format-2.1.md), The grid file); there is no status file and no task status.
 - `plan/new_spec.py` writes the flat file there, from [templates/spec-flat.md](templates/spec-flat.md), and `plan/new_fix.py` adds a fix. How to write such a plan file: [reference/old-form/planning-guidelines.md](reference/old-form/planning-guidelines.md) and [reference/old-form/specs.md](reference/old-form/specs.md); an example plan: [reference/old-form/example-plan.md](reference/old-form/example-plan.md).
 - The status page is the swimlane page.
+- `sprints/mark.py` commits each grid mark at once.
 - The queue is the kanban board of Format 2.0 releases, above.
 - The decisions are the board `decisions.md` of Format 2.1 releases, above: [reference/old-form/format-2.1.md](reference/old-form/format-2.1.md), Decision board.
 - To move the release to format 2.0: [scripts/migrate/v1.0-v2.0/README.md](scripts/migrate/v1.0-v2.0/README.md).
