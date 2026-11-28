@@ -19,7 +19,8 @@ blocked items, Decided the done items with a decision line, Autofix the done ite
 Later the backlog items, Dropped the archived ones; the six words select by status alone. A
 blocked item has " (blocked: waits for Q14, Q15)" after its title: the items of its depends_on
 line that are not done. The status counts by the blocked check (lib/queue.py effective), also
-after a hand edit. Lane "all" counts the items of each lane word.
+after a hand edit. Lane "all" prints one line per status word with its item count, in the order
+to-do, in progress, blocked, done, backlog, archived: each item is counted once.
 
 Usage: python3 -I queue/list.py <release> [lane] [--facts] [--owner X] [--root PATH]
 """
@@ -91,7 +92,8 @@ def print_items(Q, its, lane, facts, new=False):
     """The item form: the items of one lane word, or the count of each lane word (lane None)."""
     status = (lambda it: Q.effective(it, its)) if new else None
     if lane is None:
-        for n in Q.LANES:
+        # format 2.2 counts by the six status words, so a blocked item is not hidden in Open (Q25)
+        for n in (Q.WORDS_22 if new else Q.LANES):
             print(f"{n} {len(Q.select(its, n, new, status))}")
         return
     mine = Q.select(its, lane, new, status)

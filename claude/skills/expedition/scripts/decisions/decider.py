@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Write the decider of a decision file that has none: who made the call (D9).
+"""Write the decider of a decision file that has none: who made the call (D9). With --change,
+replace the decider of a file that has one (Q29).
 
-Usage: python3 -I decisions/decider.py <release> D<n> you|lead|agent [--owner X] [--root PATH]
+Usage: python3 -I decisions/decider.py <release> D<n> you|lead|agent [--change] [--owner X] [--root PATH]
 
 For a decision recorded before its release moved to decision files (a decision recorded in a
 file has its "decider" line from queue/item.py D --decider). Under the .ids.lock lock: the
@@ -11,7 +12,9 @@ decision file and the list, one commit of decisions.md and the decision files, a
 dashboard data written again (lib/dashboard.py). Prints one line.
 
 Refused, before anything is written: a word that is not you, lead or agent; an id with no file;
-a file that has a "decider" line ("D<n> has decider <word>"). A release whose decisions are on
+without --change, a file that has a "decider" line ("D<n> has decider <word>"); with --change, a
+file whose "decider" line already holds the word ("D<n> has decider <word> already"). --change on
+a file with no "decider" line writes it, as without the flag. A release whose decisions are on
 the decisions.md board is refused with one line that names scripts/migrate/v2.1-v2.2.
 """
 import argparse
@@ -38,10 +41,11 @@ die = C.die
 
 
 def main():
-    ap = argparse.ArgumentParser(usage="decisions/decider.py <release> D<n> you|lead|agent [--owner X] [--root PATH]")
+    ap = argparse.ArgumentParser(usage="decisions/decider.py <release> D<n> you|lead|agent [--change] [--owner X] [--root PATH]")
     ap.add_argument("release")
     ap.add_argument("id")
     ap.add_argument("word")
+    ap.add_argument("--change", action="store_true", help="replace the decider line of a file that has one")
     ap.add_argument("--owner")
     ap.add_argument("--root", help="repository root (default: found from the cwd)")
     a = ap.parse_args()
@@ -62,15 +66,19 @@ def main():
         card = next((c for c in dc.file_cards(folder) if c["num"] == num), None)
         if card is None:
             die(f"{a.id} has no file in {folder / dc.DECISIONS_DIR}")
-        if card["decider"]:
+        if card["decider"] and not a.change:
             die(f"{a.id} has decider {card['decider']}: nothing changed")
+        if card["decider"] == a.word:
+            die(f"{a.id} has decider {a.word} already: nothing changed")
+        old = card["decider"]
         path = dc.set_fields(folder, num, decider=a.word)
         if dc.front_of(C.read(path)).get("decider") != a.word:  # read back the line just written
             die(f"{path} has no decider line after the write: restore it from git")
-        C.commit(root, dc.commit_paths(folder), f"docs(plan): {a.release} {a.id} decider {a.word}")
+        msg = f"decider {old} to {a.word}" if old else f"decider {a.word}"
+        C.commit(root, dc.commit_paths(folder), f"docs(plan): {a.release} {a.id} {msg}")
         dc.write_data(folder)  # after the commit: "changed" is read from git
         fcntl.flock(lock, fcntl.LOCK_UN)
-    print(f"{a.id} decider {a.word}; committed")
+    print(f"{a.id} decider {old} to {a.word}; committed" if old else f"{a.id} decider {a.word}; committed")
 
 
 if __name__ == "__main__":

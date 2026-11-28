@@ -42,7 +42,7 @@ For any session that is about to run a command of the skill: how to run them, th
 - `queue/next.py <release>`: the `to-do` item with the lowest number, or `none`. `queue/list.py <release> [word] [--facts]`: the items of a lane word or a status word.
 - `decisions/close.py <release> D<n> [--backlog]`: a decision with nothing to run; with `--backlog`, a decision that moves to another release.
 - `decisions/supersede.py <release> D<old> D<new>`: supersede a built decision.
-- `decisions/decider.py <release> D<n> you|lead|agent`: the decider of a decision file that has none.
+- `decisions/decider.py <release> D<n> you|lead|agent [--change]`: the decider of a decision file that has none; `--change` replaces an existing one.
 - `decisions/hold.py <release> D<n> [--until <id> | --reason "<text>" | --off]`: the owner's hold of a decision, in the status file.
 - `status/report.py <release>`: state and gaps.
 - `status/progress.py <release>`: the progress reply for the owner (formats.md, Progress reply and reports).
@@ -326,10 +326,11 @@ For any session that is about to run a command of the skill: how to run them, th
 
 ### decisions/decider.py
 
-- Command: `python3 -I <skill>/scripts/decisions/decider.py v0.<n>.x D<n> you|lead|agent`
+- Command: `python3 -I <skill>/scripts/decisions/decider.py v0.<n>.x D<n> you|lead|agent [--change]`
 - Does: under the `.ids.lock` lock: writes the `decider` line after the `status` line of a decision file that has none (a decision recorded before its release moved to decision files); nothing else of the file changes. Then the status rule, the list, one commit, and the dashboard data. Prints `D<n> decider <word>; committed`.
-- Refuses, writing nothing: a word that is not `you`, `lead` or `agent`, an id with no file, a file that has a `decider` line (`D<n> has decider <word>: nothing changed`), and a decision board, with one line that names `scripts/migrate/v2.1-v2.2`.
-- When: `status/report.py` counts decision files with no decider, and the lead knows who made the call
+- `--change`: replaces the `decider` line of a file that has one, in the same place; prints `D<n> decider <old> to <word>; committed`. On a file with no `decider` line it writes the line, as without the flag.
+- Refuses, writing nothing: a word that is not `you`, `lead` or `agent`, an id with no file, without `--change`, a file that has a `decider` line (`D<n> has decider <word>: nothing changed`); with `--change`, a file whose `decider` line holds the word already (`D<n> has decider <word> already: nothing changed`); and a decision board, with one line that names `scripts/migrate/v2.1-v2.2`.
+- When: `status/report.py` counts decision files with no decider, and the lead knows who made the call; with `--change`, when a recorded decider is wrong
 
 ### decisions/hold.py
 
@@ -391,8 +392,8 @@ For any session that is about to run a command of the skill: how to run them, th
 
 - Command: `python3 -I <skill>/scripts/queue/list.py v0.<n>.x [word] [--facts]`
 - Does: read-only: one line `Q<n> <title>` per item, in number order; `--facts` adds the lines of each item's `## Notes`, each indented with one tab; default `Open`, words in any case; none found prints `none`; an unknown word exits 1 naming the valid ones.
-- The word is a lane word or a status word. `Open` lists the `to-do` and the `blocked` items, a blocked one with ` (blocked: waits for Q14, Q15)` after its title (the ids of its `depends_on` line that are not done); `Decided` the `done` items with a decision; `Autofix` the `done` items without one; `Later` the `backlog` items; `Dropped` the `archived` ones. The six status words select by `status` alone. `all` counts the items per lane word.
-- Format 2.1: the lane word selects the items whose `status` is that word in lower case, and a status word the status it maps to. Format 2.0: the cards of one lane of the board, with their `#D<n>` and `#E<n>` tags and, in Decided, the tick first.
+- The word is a lane word or a status word. `Open` lists the `to-do` and the `blocked` items, a blocked one with ` (blocked: waits for Q14, Q15)` after its title (the ids of its `depends_on` line that are not done); `Decided` the `done` items with a decision; `Autofix` the `done` items without one; `Later` the `backlog` items; `Dropped` the `archived` ones. The six status words select by `status` alone. `all` prints one line `<word> <count>` per status word, in the order `to-do`, `in progress`, `blocked`, `done`, `backlog`, `archived`; each item is counted once, a blocked item under `blocked` only.
+- Format 2.1: the lane word selects the items whose `status` is that word in lower case, and a status word the status it maps to; `all` counts the items per lane word. Format 2.0: the cards of one lane of the board, with their `#D<n>` and `#E<n>` tags and, in Decided, the tick first.
 - When: when a session needs more than the next item
 
 ### queue/sync.py
