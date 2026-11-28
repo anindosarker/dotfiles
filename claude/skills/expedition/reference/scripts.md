@@ -28,7 +28,7 @@ For any session that is about to run a command of the skill: how to run them, th
 - `plan/new_spec.py <release> NN <slug> "<Title>" "<scope>"`: a new spec folder, with its plan row.
 - `sprints/check.py <release>`: the ownership check, after each spec is written; writes nothing.
 - `epics/table.py <release> E<n> [<spec numbers>]`: the epic table, the pre-go preview; commits nothing.
-- `epics/overlap.py <release> <spec numbers or D ids>`: overlap with running epics; writes nothing.
+- `epics/overlap.py <release> <spec numbers or D ids>`: overlap with running epics; writes nothing. `epics/overlap.py <release>`: the ready and the blocked decisions, in the lines of the Epic ready message. `epics/overlap.py <release> D<n> --files "<files>"`: the files of a decision that no spec cites.
 - `epics/new.py <release> E<n> <D ids>`: starts the epic file; `--note "<text>"` appends a Notes bullet.
 - `run/go.py <release> E<n> --from <lead>`: every go step in order (discuss.md, Epics, On `go`), `epics/tag.py` among them.
 - `sprints/refresh.py <release>`: the refresh chain (sprints, epic tables, decision lanes, the blocked check, the page data); run by `run/go.py` and `sprints/mark.py`, by hand in Changing a decision, after a hand edit of an item file and after a migration.
@@ -38,10 +38,11 @@ For any session that is about to run a command of the skill: how to run them, th
 - `plan/milestone.py add <release> <spec> "<Name>" [--decision D<n>] [--task "<title>"]... [--type feat|bug] [--files a,b]`: a piece of work in a spec: the next module, its task files and its milestone. A mid-run fix and follow-up work go the same way.
 - `plan/task.py add <release> <spec> "<Title>" [--module 1.6.N] [--milestone "<name>"]`: one more task file and its pointer; it joins a milestone only while that milestone is `to-do`.
 - `status/status.py <release> set <id> "<status>" [--reason "<text>"]`, `get <id>`, `list [--status "<status>"] [--kind epic|spec|milestone|task]`: the only reader and writer of statuses (`status/data/status.json`). Ids: task `27-03`, milestone `27-collapse-shortcut`, spec `27`, epic `E11`.
-- `queue/item.py <release> D|Q "<title>" [--source Q<n>] [--option <n>] [--decider you|lead]`, `--move Q<n> <word> [--decider you|lead|agent]`, `--fact Q<n> "<text>"`, `--depends Q<n> "<Q ids>"`: every new decision and item, every status change, fact and dependency of an item. An item is an item file, `queue/Q<n>-<slug>.md`, and `queue.md` is the list of them (a card of the board `queue.md` in format 2.0).
+- `queue/item.py <release> D|Q "<title>" [--source Q<n>] [--option <n>] [--decider you|lead|agent]`, `--move Q<n> <word> [--decider you|lead|agent]`, `--fact Q<n> "<text>"`, `--depends Q<n> "<Q ids>"`: every new decision and item, every status change, fact and dependency of an item. A decision is a decision file, `decisions/D<n>-<slug>.md`. An item is an item file, `queue/Q<n>-<slug>.md`, and `queue.md` is the list of them (a card of the board `queue.md` in format 2.0).
 - `queue/next.py <release>`: the `to-do` item with the lowest number, or `none`. `queue/list.py <release> [word] [--facts]`: the items of a lane word or a status word.
-- `decisions/close.py <release> D<n>`: a decision with nothing to run.
+- `decisions/close.py <release> D<n> [--backlog]`: a decision with nothing to run; with `--backlog`, a decision that moves to another release.
 - `decisions/supersede.py <release> D<old> D<new>`: supersede a built decision.
+- `decisions/decider.py <release> D<n> you|lead|agent`: the decider of a decision file that has none.
 - `status/report.py <release>`: state and gaps.
 - `status/progress.py <release>`: the progress reply for the owner (formats.md, Progress reply and reports).
 - The runner's own: `run/runs.py` (the run id record) and `run/check.py` (the wake check).
@@ -53,7 +54,7 @@ For any session that is about to run a command of the skill: how to run them, th
 - Command: `python3 -I <skill>/scripts/plan/new_release.py v0.<n>.x [--owner X] [--root PATH]`
 - Does: creates the release folder in the format of the skill's version (`metadata.version` of SKILL.md), with:
   - `<release>-plan.md` from `templates/plan.md` (`## Goals`, `## Deliverables`); below 2.2 the script adds the link to `status/sprints.md` in its first lines;
-  - `decisions.md` and `queue.md` (the empty boards of their templates); the queue takes the form of the skill's version: below 2.1 the board stub of `templates/queue.md`, from 2.1 on `queue.md` from `templates/queue-list.md` (an empty list) and an empty `queue/` folder for the item files;
+  - `decisions.md` and `queue.md`; the decisions take the form of the skill's version: from 2.2 on `decisions.md` from `templates/decisions-list.md` (an empty list) and an empty `decisions/` folder for the decision files, below 2.2 the empty board of `templates/decisions.md`; the queue too: below 2.1 the board stub of `templates/queue.md`, from 2.1 on `queue.md` from `templates/queue-list.md` (an empty list) and an empty `queue/` folder for the item files;
   - the subfolders `plan/specs/`, `plan/epics/`, `run/trackers/`, `run/handoffs/`, `status/data/`;
   - the page: in format 2.2 the dashboard page, `status/index.html` from `board/dashboard.html` and `status/src/` from `board/src/`, and it prints their paths; below 2.2 the task board, `status/index.html` from `board/task-board.html`;
   - `status/data/status.json` with the skill's version as its `format`;
@@ -74,7 +75,7 @@ For any session that is about to run a command of the skill: how to run them, th
 - Command: `python3 -I <skill>/scripts/epics/tag.py v0.<n>.x E<n> <spec numbers or D ids>`
 - Does: writes:
   - `- Epic: E<n>` under each spec's title line (a D id names the specs citing it);
-  - the tag `#E<n>` on the card of each decision those specs cite and each named D id (moved to In progress, then the Done rule sync);
+  - the line `epic: E<n>` in the file of each decision those specs cite and each named D id, then the status rule makes it `in progress`; with a decision board, the tag `#E<n>` on its card (moved to In progress, then the Done rule sync);
   - `E<n>` in each spec's Deliverables Epic cell;
   - `starts: S<n>` directly after the `status:` line of `plan/epics/E<n>.md`: the current sprint, read from the status file ([files.md](files.md), Ownership). Below format 2.2: `Starts: S<n>` under the `Specs:` line, the current sprint of `status/sprints.md`.
 - Then, in format 2.2, the status chain runs: with its `starts` value the epic is counted from its specs, no longer `waits for delegate`. Nothing is synced into the item files: a `done` item holds its decision id only. In a format 2.0 release it ticks each Decided card of those decisions in `queue.md` and tags it `#E<n>`.
@@ -85,7 +86,7 @@ For any session that is about to run a command of the skill: how to run them, th
 ### epics/new.py
 
 - Command: `python3 -I <skill>/scripts/epics/new.py v0.<n>.x E<n> [<D ids> | --note "<text>"]`
-- Does: D ids: creates `plan/epics/E<n>.md` when missing and writes one Ownership row per decision, `| D<n> <title from decisions.md> |  |  |  |  |`; a rerun adds only the missing rows; refuses, writing nothing, a decision that is missing, superseded, already tagged with another epic, or done with nothing to run.
+- Does: D ids: creates `plan/epics/E<n>.md` when missing and writes one Ownership row per decision, `| D<n> <title of the decision file> |  |  |  |  |`; a rerun adds only the missing rows; refuses, writing nothing, an id with no decision file, an `archived` or `backlog` decision, a decision with the `epic` line of another epic, and one that is done with nothing to run. A `blocked` decision is accepted: the owner may put it into an epic. With a decision board: the title from `decisions.md`, and it refuses a decision that is missing, superseded, already tagged with another epic, or done with nothing to run.
 - No D ids: the stub (front matter `status` and an empty `starts`, `# E<n>`, the empty Ownership table, no Notes heading); refuses an existing file.
 - After a stub or a start the status chain runs, so the status file and the `status:` lines follow at once, committed with the epic file.
 - Below format 2.2 it writes the lines `Decisions:` (the ids there plus the new ones, in number order), `Specs:` and `Starts:` as well, and runs no status chain.
@@ -125,9 +126,12 @@ For any session that is about to run a command of the skill: how to run them, th
 
 ### epics/overlap.py
 
-- Command: `python3 -I <skill>/scripts/epics/overlap.py v0.<n>.x <spec numbers or D ids>`
-- Does: check mode, writes nothing, reports files shared with milestones of running sprints, exit 1 on a shared file
-- When: before the epic hint
+- Command: `python3 -I <skill>/scripts/epics/overlap.py v0.<n>.x <spec numbers or D ids>`, `... v0.<n>.x D<n> --files "<files>"`, `... v0.<n>.x`
+- Does, with spec numbers or D ids: check mode, writes nothing, reports each file shared with a milestone of a running epic, exit 1 on a shared file. A D id that no spec cites is checked with the files given for it (`D14 given files: ... shared with <milestone> (E<n>)`), or prints `no spec cites it yet, files unknown`.
+- Does, with `D<n> --files "a, b"`: stores the files of a decision that no spec cites yet in the status file (it replaces the list; `""` removes it), runs the status rule, commits, writes the dashboard data, and prints `D14: blocked. Waits for E2, same file: <files>` or `D14: to-do, no shared file`. The files are dropped once a spec cites the decision, it has a row in an epic file, or it is no longer `to-do` or `blocked`.
+- Does, with no id: writes nothing and prints `Ready:` (or `Ready: none`) with a line `- D<n>: <title>` per decision that is `to-do` with no `epic` line and no row in an epic file, then, only when a decision is blocked, `Blocked:` with a line `- D<n>: <title>. Waits for E<n>, same file.` per blocked decision.
+- With a decision board the two new forms are refused (a usage error with no id), and a running epic is the `#E<n>` tag of a card not in Done.
+- When: with no id after each recorded decision (the Epic hint); `--files` when the lead records a decision whose files it knows and that no spec cites
 
 ### sprints/swimlanes.py
 
@@ -150,7 +154,7 @@ For any session that is about to run a command of the skill: how to run them, th
 - Does, under the `.ids.lock` lock, the chain of `lib/grid.py` refresh, in this order:
   1. the placement: the sprint of each milestone of a spec with an `- Epic: E<n>` line, stored in the status file; a milestone that is `in progress`, `done` or `archived`, or `blocked` after its launch, keeps its sprint;
   2. it rewrites the Sprint column of every unfinished epic's table that has a `starts` value, touching only that column;
-  3. it moves the cards of `decisions.md` to the lanes of the Done rule;
+  3. the decisions: the status rule on every decision file and `decisions.md` written again as the list (with a decision board: the cards moved to the lanes of the Done rule);
   4. the queue: the blocked check of every item file, and `queue.md` written again;
   5. the page data (`sprints/swimlanes.py`): the status file, the `status:` lines, `status.data.js` and the dashboard data.
 - Below format 2.2 step 1 writes the grid file `status/sprints.md` (finished, `[ ]` and `[~]` cells stay; in format 2.0 and 2.1 every mark is drawn from the status file), and step 4 syncs the Decided cards of a board `queue.md` (format 2.0) or writes `queue.data.js` (format 2.1). Format 1.0 gets the swimlane data.
@@ -282,36 +286,46 @@ For any session that is about to run a command of the skill: how to run them, th
 ### migrate/v2.1-v2.2/format.py
 
 - Command: `python3 -I <skill>/scripts/migrate/v2.1-v2.2/format.py v0.<n>.x [--check] [--owner X] [--root PATH]`
-- Does: moves a format 2.1 release to format 2.2 in one run and one commit, `docs(plan): <release> moved to format 2.2`: the status words of the item files and of the status file, `decider: agent` on each `autofix` item, `launched` on each milestone that was launched, the `status:` lines of the task, spec and epic files, the epic files without their `decisions:` and `specs:` lines (a row added for each decision or spec they named and the table did not have), `status/sprints.md` removed after a check that it equals the status file, its link removed from `<release>-plan.md`, `"format": "2.2"`, and the dashboard page installed. It prints the counts before and after and stops before the commit, restoring the files, when one differs. `--check` prints the files and the counts and writes nothing. Details in [its README](../scripts/migrate/v2.1-v2.2/README.md).
-- Refuses, writing nothing: a release that is not in format 2.1 (it names the migration to run first), an uncommitted change in a file it rewrites.
-- When: once per format 2.1 release that should use the forms of format 2.2
+- Does: moves a format 2.1 release to format 2.2 in one run and one commit, `docs(plan): <release> moved to format 2.2`: the status words of the item files and of the status file, each decision card to a decision file in `decisions/` and `decisions.md` to the list (the round of each decision to the status file, no `decider` line), `decider: agent` on each `autofix` item, `launched` on each milestone that was launched, the `status:` lines of the task, spec and epic files, the epic files without their `decisions:` and `specs:` lines (a row added for each decision or spec they named and the table did not have), `status/sprints.md` removed after a check that it equals the status file, its link removed from `<release>-plan.md`, `"format": "2.2"`, and the dashboard page installed. It prints the counts before and after and stops before the commit, restoring the files, when one differs. `--check` prints the files and the counts and writes nothing. Details in [its README](../scripts/migrate/v2.1-v2.2/README.md).
+- The decision step alone: a release of format 2.2 whose `decisions.md` is still the board gets only the decision files, the list and the rounds, in one commit `docs(plan): <release> decisions moved to decision files`.
+- Refuses, writing nothing: a release that is not in format 2.1 and not a format 2.2 release with the board (it names the migration to run first), an uncommitted change in a file it rewrites, a `decisions/` folder that exists, a line of `decisions.md` in no card.
+- When: once per format 2.1 release that should use the forms of format 2.2, and once per format 2.2 release that still has the board
 
 ### queue/item.py
 
-- Command: `python3 -I <skill>/scripts/queue/item.py v0.<n>.x D|Q "<title>" [--source Q<n>] [--option <n>] [--decider you|lead] [--bullet "<text>"] [--new-round]`, `--move Q<n> Open|Later|Dropped|Autofix|to-do|backlog|archived|done [--decider you|lead|agent]`, `--fact Q<n> "<text>"`, `--depends Q<n> "<Q ids>"`
+- Command: `python3 -I <skill>/scripts/queue/item.py v0.<n>.x D|Q "<title>" [--source Q<n>] [--option <n>] [--decider you|lead|agent] [--bullet "<text>"] [--new-round]`, `--move Q<n> Open|Later|Dropped|Autofix|to-do|backlog|archived|done [--decider you|lead|agent]`, `--fact Q<n> "<text>"`, `--depends Q<n> "<Q ids>"`
 - Does: every mode runs under a lock on `status/data/.ids.lock` in the release folder and re-reads the files right before the write. Each item is the file `queue/Q<n>-<slug>.md` (`templates/queue-item.md`) and `queue.md` is the list of the files (`templates/queue-list.md`), written again after each change.
-- `D`: takes the highest D id and appends the card `- [ ] **D<n>** <title> #R<n>` at the end of To do in `decisions.md` (the highest round in the file, the next with `--new-round`), the bullet if given, then `- Source: Q<n>` if given, tab-indented. With `--source Q<n>` it closes the item: `status: done`, `decision: D<n>` (an item already done by a decision keeps the highest number), `option: <n>` with `--option`, and `decider: you` or `lead` from `--decider`, which is required there; the card holds no decider. An option number the item's `## Options:` does not have is refused, and `--option` needs `--source`. `D` with no `--source` closes no item and needs no `--decider`.
+- `D`: needs `--decider you`, `lead` or `agent` on every call, and `you` or `lead` with `--source`. It writes the decision file `decisions/D<n>-<slug>.md`, `<n>` one above the highest decision file, with `status: to-do`, `decider`, `source` with `--source`, the title line and the bullet as the first body line; no `- Source:` line. The round goes to the status file (the highest round, the next with `--new-round`). Then the status rule, `decisions.md` written again as the list, and the dashboard data. With a decision board: the card `- [ ] **D<n>** <title> #R<n>` at the end of To do in `decisions.md`, the bullet if given, then `- Source: Q<n>` if given, tab-indented; there `D` with no `--source` needs no `--decider`. With `--source Q<n>` it closes the item: `status: done`, `decision: D<n>` (an item already done by a decision keeps the highest number), `option: <n>` with `--option`, and `decider: you` or `lead` from `--decider`. An option number the item's `## Options:` does not have is refused, and `--option` needs `--source`. `D` with no `--source` closes no item.
 - `Q`: a new item file with `status: to-do`, `# Q<n>. <title>` and the bullet under `## Notes`; `<n>` is one above every item file and every line of `queue.md`.
 - `--move`: the lane words and the status words mean the same: `Open` is `to-do`, `Later` is `backlog`, `Dropped` is `archived`, `Autofix` is `done`. Every move first removes `decision`, `option` and `decider`. `Dropped` needs `--decider you` or `lead`, `Autofix` needs `--decider agent`; `Open` and `Later` take none.
 - `--fact`: one bullet at the end of `## Notes`, no other line changed.
 - `--depends Q<n> "Q14, Q15"`: replaces the `depends_on` line of Q<n>; `""` removes it. Refused: an id that is not a queue item id, an id with no item file, the item itself, a ring of items that wait for each other.
 - After every command the blocked check sets `blocked` or `to-do` on each `to-do` or `blocked` item from its `depends_on` line. A call that is refused writes nothing.
 - `## Details` and `## Options:` are never written or reordered.
-- It writes the item files, `queue.md` and the dashboard data (`status/data/dashboard.data.js` and `dashboard.json`, git-ignored), commits the item files, `queue.md` and `decisions.md`, and prints the id alone; another kind exits non-zero.
+- It writes the item files, `queue.md` and the dashboard data (`status/data/dashboard.data.js` and `dashboard.json`, git-ignored), commits the item files, `queue.md`, `decisions.md`, the decision file and the status file, and prints the id alone; another kind exits non-zero.
 - Format 2.1: the same files, with the words `open`, `decided`, `later`, `dropped`, `autofix` (`--move` stores the lane word in lower case); `--decider` is accepted and not stored, `--depends` is refused with one line naming `scripts/migrate/v2.1-v2.2`, and it writes `status/data/queue.data.js` in place of the dashboard data. Format 2.0: the board `queue.md`, where an item is a card in a lane ([old-form/queue-board.md](old-form/queue-board.md)); `--option` is refused there.
 - When: every new D or Q item and every status change, fact or dependency of an item, by either session
 
 ### decisions/close.py
 
-- Command: `python3 -I <skill>/scripts/decisions/close.py v0.<n>.x D<n>`
-- Does: under the `.ids.lock` lock: moves the decision's card to Done, ticked (the record of "closed, nothing to run"); refuses an unknown id, a decision with an epic tag or with a row in an epic that has gone; one already in Done changes nothing; then the Done rule sync, and the queue sync of a board `queue.md` (format 2.0 only), one commit
-- When: a decision with nothing to run, when recorded
+- Command: `python3 -I <skill>/scripts/decisions/close.py v0.<n>.x D<n> [--backlog]`
+- Does: under the `.ids.lock` lock: writes `status: done` into the decision file (the record of "closed, nothing to run"); refuses an id with no file, a decision with an `epic` line or with a row in an epic that has gone; one already `done` changes nothing. `--backlog` writes `status: backlog`, for a decision that moves to another release; it refuses an id with no file and a decision that is `done` or `archived`. Then the status rule, the list, one commit of `decisions.md` and the decision files, and the dashboard data. Prints `D<n> to Done (nothing to run); committed` or `D<n> to backlog; committed`.
+- With a decision board: moves the decision's card to Done, ticked; refuses an unknown id, a decision with an epic tag or with a row in an epic that has gone; one already in Done changes nothing; then the Done rule sync, and the queue sync of a board `queue.md` (format 2.0 only), one commit. `--backlog` is refused with one line that names `scripts/migrate/v2.1-v2.2`.
+- When: a decision with nothing to run, when recorded; `--backlog` when a decision moves to another release
 
 ### decisions/supersede.py
 
 - Command: `python3 -I <skill>/scripts/decisions/supersede.py v0.<n>.x D<old> D<new>`
-- Does: under the `.ids.lock` lock: `(superseded by D<new>)` at the end of the old title, `#superseded`, the old card to Done; `- Supersedes D<old>.` as the new decision's first bullet; refuses an unknown id and an old decision already superseded; then the Done rule sync, and the queue sync of a board `queue.md` (format 2.0 only), one commit
+- Does: under the `.ids.lock` lock: `status: archived` and `replaced_by: D<new>` in the old file, its title line unchanged; the new file is not changed, and no line goes into its body. Refuses an id with no file, the same id twice, and an old decision with a `replaced_by` line already. Then the status rule, the list, one commit of `decisions.md` and the decision files, and the dashboard data. Prints `D<old> superseded by D<new>, to Done; committed`.
+- With a decision board: the supersede marks of [old-form/format-2.1.md](old-form/format-2.1.md), Decision board, on both cards (the old card to Done, `- Supersedes D<old>.` as the new decision's first bullet); refuses an unknown id and an old decision already superseded; then the Done rule sync, and the queue sync of a board `queue.md` (format 2.0 only), one commit
 - When: Changing a decision, once built
+
+### decisions/decider.py
+
+- Command: `python3 -I <skill>/scripts/decisions/decider.py v0.<n>.x D<n> you|lead|agent`
+- Does: under the `.ids.lock` lock: writes the `decider` line after the `status` line of a decision file that has none (a decision recorded before its release moved to decision files); nothing else of the file changes. Then the status rule, the list, one commit, and the dashboard data. Prints `D<n> decider <word>; committed`.
+- Refuses, writing nothing: a word that is not `you`, `lead` or `agent`, an id with no file, a file that has a `decider` line (`D<n> has decider <word>: nothing changed`), and a decision board, with one line that names `scripts/migrate/v2.1-v2.2`.
+- When: `status/report.py` counts decision files with no decider, and the lead knows who made the call
 
 ### plan/find_rules.py
 
@@ -341,7 +355,7 @@ For any session that is about to run a command of the skill: how to run them, th
   - a left-over `status/sprints.md` (delete it), and a milestone of an epic with no `sprint` in the status file (fix: `sprints/refresh.py`); below format 2.2 instead: `status/sprints.md` missing, without a ` | Milestone` table, with rows that differ from the milestones or with a cell that is no grid mark;
   - each tagged epic's critical path;
   - the release's `process.md`: missing, placeholders left, undefined `(P<n>)` citations;
-  - the decisions board gaps: a missing lane, a card without a `**D<n>**` token, a tag other than `#superseded`, `#deferred`, `#E<n>`, `#R<n>`, a duplicate id, ids out of order in a lane, a lane that disagrees with the Done rule, a tick that disagrees with its lane;
+  - the decisions: `Decisions: <n> in decisions/`, one row per decision file (id, citing specs, status), the count per status word, and one line that counts the files with no `decider` line and names `decisions/decider.py`; gaps: a status that is none of the six words or differs from the status rule (fix: `sprints/refresh.py`), a front matter line that is none of the five, a `decider` that is not `you`, `lead` or `agent`, a `replaced_by`, `epic` or `source` that names nothing, a file with no `# D<n>.` title or a number that differs from its file name, a list that differs from the files, a D id a spec cites and no file has. With a decision board, the board gaps instead: a missing lane, a card without a `**D<n>**` token, a tag that is not one of the four tags of the board ([old-form/format-2.1.md](old-form/format-2.1.md), Decision board), a duplicate id, ids out of order in a lane, a lane that disagrees with the Done rule, a tick that disagrees with its lane, and in format 2.2 one line that names `scripts/migrate/v2.1-v2.2/format.py`;
   - an epic summary: deciding, in E<n>, running, done per D item; an epic runs while a milestone of it is not `to-do` in the status file;
   - the decisions still editable in place (no citing spec has a milestone `in progress`, `blocked` after a launch, or `done`);
   - a supersede marked on one side only;
@@ -390,7 +404,7 @@ For any session that is about to run a command of the skill: how to run them, th
 - Command: `python3 -I <skill>/scripts/status/progress.py v0.<n>.x`
 - Does: read-only. It prints only the owner's progress reply in Markdown:
   - per epic with an unfinished milestone: `**E<n>** · Specs d/t` (a spec is done when every milestone of it is done or archived by a decision), `- **Running**` (specs with a milestone in progress) and `- **Blocked**` (specs with a blocked milestone, with its reason), each spec as its number and its Deliverables title; an unfinished milestone with a task started adds ` · <milestone> d/t` and a blocked task its reason;
-  - with nothing unfinished: the last epic's line, then `Nothing running.` and `Ready for an epic: **Q<n>**, ...`: the `done` items whose decision is in the To do lane of `decisions.md`.
+  - with nothing unfinished: the last epic's line, then `Nothing running.` and `Ready for an epic: **Q<n>**, ...`: the `done` items whose decision file has `status: to-do` (a `blocked` decision is not ready; with a decision board, whose decision card is in To do).
 - Every status comes from the status file; it reads no grid file and no tracker status.
 - Format 2.1 and 2.0: the same block from the status file, with the words of that format; Ready for an epic lists the `decided` items (format 2.0: the unticked Decided cards). Format 1.0: per milestone the grid cell and the most advanced copy of its tracker (planned < running < waiting < done or stopped) among the main checkout and the worktree on the branch its `Branch` line names; each disagreement with the grid goes to stderr as one `warning:` line.
 - The reply rule: [formats.md](formats.md), Progress reply and reports.

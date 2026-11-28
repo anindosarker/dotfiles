@@ -8,6 +8,7 @@
 - Settled list
 - Progress reply and reports
 - decisions.md
+- Decision file
 - Epic file
 - The grid
 - Milestone status
@@ -18,21 +19,21 @@
 
 ## Shared rule
 
-Every item has an ID: the `# Q<n>.` title of an item file, the `**D<n>**` token of a `decisions.md` card, a heading elsewhere. Its first bullet is required and self-explanatory: a reader understands the item from it alone. Everything after it is open-ended, but in bullets. Templates: [../templates/](../templates/).
+Every item has an ID: the `# Q<n>.` title of an item file, the `# D<n>.` title of a decision file, a heading elsewhere. Its first bullet is required and self-explanatory: a reader understands the item from it alone. A decision file is the one exception: its body is free, and no bullet is required (Decision file). Everything after it is open-ended, but in bullets. Templates: [../templates/](../templates/).
 
 ## Shared files
 
-`decisions.md`, the queue (`queue.md` and the item files in `queue/`) and the epic files are written by both sessions, lead and runner.
+The decisions (`decisions.md` and the decision files in `decisions/`), the queue (`queue.md` and the item files in `queue/`) and the epic files are written by both sessions, lead and runner.
 
-- The lane, tick and tags of a `decisions.md` card are written by the scripts only: `queue/item.py` (a new card in To do), `epics/tag.py` through `run/go.py` (`#E<n>`, In progress), the sync in `sprints/refresh.py`, `sprints/mark.py`, `status/status.py`, `plan/milestone.py` and every `queue/item.py` call (the lanes of the Done rule), `decisions/close.py` (Done, nothing to run) and `decisions/supersede.py`. A session writes only a decision's bullets.
+- The front matter of a decision file and the list `decisions.md` are written by the scripts only: `queue/item.py` (a new file), `epics/tag.py` through `run/go.py` (`epic`), the status rule in every status chain (`sprints/refresh.py`, `sprints/mark.py`, `status/status.py`, `plan/milestone.py`) and every call that writes a decision, `decisions/close.py` (`done` or `backlog`), `decisions/supersede.py` (`archived`, `replaced_by`) and `decisions/decider.py` (`decider`). A session writes only the body of a decision file.
 - Re-read the file right before every write, make a targeted edit, commit at once. No held edits.
 - The next D or Q number is read from the file at write time, never from memory.
-- Ids come only from `python3 -I <skill>/scripts/queue/item.py <release> D|Q "<title>"`, never typed. It locks, appends the decision card or writes the item file, commits and prints the id; the session then writes a decision's bullets under its card, each indented with one tab.
+- Ids come only from `python3 -I <skill>/scripts/queue/item.py <release> D|Q "<title>"`, never typed. It locks, writes the decision file or the item file, commits and prints the id; the session then writes the body of the decision file.
 - No id is mentioned in chat or a tracker before it is allocated: refer to the item by its title.
 - An id never changes after allocation.
 - A duplicate filed twice keeps both ids. The later item gets the fact `Same as Q<n>.` and is closed with `queue/item.py <release> --move Q<n> Dropped --decider lead` (`status: archived`).
 - Fallback rule: a session that finds its own id taken renumbers its own item only, never the other's. With `queue/item.py` this no longer happens.
-- Agents on milestone branches never edit `decisions.md`.
+- Agents on milestone branches never edit `decisions.md` or a decision file.
 
 ## queue.md
 
@@ -109,12 +110,12 @@ decider: you
   - `plan/milestone.py add --cites` sets `done` and `decider: agent` on each item it cites and removes its `decision` and `option` lines. The fix is traced through its module heading and its tracker's first line, for example `(Q9)`.
   - `queue/item.py <release> --depends Q<n> "Q14, Q15"` writes the `depends_on` line (`""` removes it). It refuses an id with no item file, the item itself and a ring of items that wait for each other. After every write of an item, of `queue.md` and of the page data the blocked check runs: a `to-do` or `blocked` item becomes `blocked` while a named item is not `done`, and `to-do` when every named item is `done`. After a hand edit of an item file, `sprints/refresh.py <release>` runs the check.
 - A closed item always has a `decider`, with one case that has none: an item that was decided or dropped before its release moved to format 2.2. The migration writes `decider: agent` on an `autofix` item only, because the files of format 2.1 do not say whether the owner or the lead made the other calls. `status/report.py` does not flag that case.
-- `decisions.md` is the record. A `done` item holds its decision id only: the lane and the epic of that decision are read from `decisions.md`, and nothing is synced into the item file. `status/report.py` flags a `done` item whose decision is not in `decisions.md`.
+- The decision file is the record. A `done` item holds its decision id only: the status and the epic of that decision are read from its decision file, and nothing is synced into the item file. `status/report.py` flags a `done` item whose decision has no decision file.
 - `<slug>` is made from the title at filing, as a task file's slug is, and never changes after. A new file has the front matter, the title and `## Notes`.
 - **Bar at filing.** An item's first `## Notes` bullet says what goes wrong for a user of the library or a reader of the docs if the item is ignored. A raiser (the lead, a lookup, the runner, a builder, a verifier) that cannot say it files no item: it writes the point in its tracker's `## Notes`, or leaves it out when it has no tracker. The owner's remarks are exempt: every one is filed.
 - `## Notes` bullets are facts and remarks as found: path:line, measurement, lookup result, what the owner said. A lookup agent adds its facts to the item it was given with `queue/item.py <release> --fact Q<n> "<text>"`.
 - `## Details` and `## Options:` hold the item as the owner reads it in chat, word for word; the lead writes them when the item settles ([discuss.md](discuss.md), Item format, Storing).
-- Citations elsewhere: `(Q3)` in specs and trackers; a decision that came from an item ends with `- Source: Q3`; a fix's tracker cites `(Q3, Q4)` on its first line.
+- Citations elsewhere: `(Q3)` in specs and trackers; a decision file that came from an item has the line `source: Q3`; a fix's tracker cites `(Q3, Q4)` on its first line.
 - The run reports; it does not solve. Do not research solutions for a run item.
 - Not a queue item: a point that fails the bar at filing, spec text that lags shipped code, a tracker gap, a process lesson, a tooling fact with one right answer. Those go to the tracker Notes, a decision or the spec file directly (`process.md` holds project facts only); the owner sees choices only.
 
@@ -151,60 +152,72 @@ Name one to reopen it.
 
 ## decisions.md
 
-One file per release, template [../templates/decisions.md](../templates/decisions.md): a kanban board in the card grammar of the queue board of format 2.0 ([old-form/queue-board.md](old-form/queue-board.md)). Triage decisions continue the numbering.
+The list of the decisions of the release, template [../templates/decisions-list.md](../templates/decisions-list.md): the title `# Decisions, <release>`, then one line per decision file, in the order of the numbers, linked to the file. The scripts write it again after each change of a decision; nobody edits it by hand. It holds no status, decider or epic: those are in the decision files. A filled list: [../example/decisions.md](../example/decisions.md).
+
+```md
+# Decisions, v0.9.x
+
+- [D9](decisions/D9-process-file-audited.md): Process file audited
+- [D96](decisions/D96-a-click-in-a-date-filter-box-starts-typing-at-its-first-part.md): A click in a date filter box starts typing at its first part
+```
+
+A release that keeps its decisions on a board (format 2.1 or lower, or format 2.2 before its decisions moved to files): [old-form/format-2.1.md](old-form/format-2.1.md), Decision board.
+
+## Decision file
+
+`decisions/D<n>-<slug>.md`, one accepted decision, template [../templates/decision.md](../templates/decision.md). Read the approved example before the first decision file is written: [../example/decisions/D8-queue-item-six-status-words-depends-on-and-decider.md](../example/decisions/D8-queue-item-six-status-words-depends-on-and-decider.md). More examples: [../example/decisions.md](../example/decisions.md).
 
 ```md
 ---
-kanban-plugin: basic
+status: to-do
+decider: you
+source: Q80
 ---
+# D96. A click in a date filter box starts typing at its first part
 
-## To do
-
-- [ ] **D96** A click in a date filter box starts typing at its first part #R4
-	- Native date inputs put the caret on the segment under the click, so typed digits fill only the year.
-	- Source: Q80
-
-## In progress
-
-- [ ] **D89** Release 0.9.4 ships E12 #E12 #R4
-	- Spec 48 ships E12 as 0.9.4.
-
-## Done
-
-- [x] **D9** Process file audited #R1
-	- First bullet, required: explains the decision.
-- [x] **D15** Release 0.9.0 after E2 (superseded by D28) #superseded #E3 #R2
-	- ...
-- [x] **D28** The 0.9.0 release waits for the owner's approval #E7 #R3
-	- Supersedes D15.
-	- Then anything: bullets, code blocks, examples, sub-bullets.
-
-%% kanban:settings
-{"kanban-plugin":"basic","lane-width":600,"date-format":"YYYY-MM-DD","time-format":"HH:mm","tag-action":"kanban","set-view":"list","full-list-lane-width":true,"show-add-list":false,"show-archive-all":false,"custom-title":"v0.9.x decisions"}
-%%
+- Native date inputs put the caret on the segment under the click, so typed digits fill only the year.
+- The click puts the caret on the first part.
 ```
 
-- Accepted decisions only. Questions stay in chat.
-- Three lanes, always all present, in this order. The lane is the decision's state, and the checkbox is `[x]` only in Done:
+The front matter, in this order, each line only when it has a value:
 
-  | Lane | Meaning |
-  |---|---|
-  | To do | Decided, in no epic |
-  | In progress | In an epic, its own work not all merged |
-  | Done | Its own work merged, closed with nothing to run, superseded, or deferred to another release |
+| Line | Value | Written by |
+|---|---|---|
+| `status` | one of the six status words, below | the scripts only |
+| `decider` | `you`, `lead` or `agent`: who made the call | `queue/item.py D --decider`; `decisions/decider.py` for a file that has none |
+| `source` | `Q<n>`, the queue item it came from | `queue/item.py D --source` |
+| `epic` | `E<n>`, the epic it runs in | `epics/tag.py`, through `run/go.py` on `delegate` |
+| `replaced_by` | `D<n>`, the decision that replaces it; on an `archived` decision only | `decisions/supersede.py` |
 
-- A card is `- [ ] **D<n>** <title> <tags>`; the decision's bullets follow, each indented with one tab. A bullet's nested lines and a fenced code block keep their own indentation after that tab; a blank line inside a fence is a lone tab, so the card stays one card. Cards are ordered by D number inside each lane. A number is never reused; the next is the highest in the file plus one.
-- Tags, at the end of the title line only, space separated, in this order: `#superseded` or `#deferred` when it applies, `#E<n>` when the decision is in an epic, `#R<n>` the round it was recorded in. No other tag. A new decision takes the highest round in the file; `queue/item.py <release> D "<title>" --new-round` starts the next one.
-- The Done rule, computed by `lib/decisions.py` for every script:
-  1. A `(superseded by D<n>)` mark or a `- Deferred to` bullet: Done.
-  2. Rows with a Spec cell in the Ownership table of an epic that has gone (a `Starts: S<n>` value): its own specs are the row specs that cite it `(D<n>)` in a heading line (the title line, a `### Milestone:` heading or any `#` heading), else every row spec. Done when every milestone tracker of every own spec is `done` or `stopped`, else In progress. In a new-form spec only the milestones count that hold a task of a module citing it: the decision is Done when each of them is `done` or `skipped`, also while other milestones of the spec run; a citing module with no task in a milestone keeps it In progress.
-  3. No such row: Done when it is closed by hand (a ticked card in Done: `decisions/close.py <release> D<n>` for a decision with nothing to run) or when any spec citing it has merged; In progress when it carries `#E<n>`; else To do.
-  A release spec that only names a decision in its text does not keep that decision open.
-- The board may be viewed in the Unified Kanban extension, but a drag or a tick there is not a state change: `status/report.py` flags a card whose lane disagrees with the Done rule or whose tick disagrees with its lane, and the next sync moves it back.
-- Built: a milestone citing the decision has a `[ ]`, `[~]` or `[x]` cell in `status/sprints.md`; a `[~]` row never launched does not count (Milestone status). Before that, a change is an edit of its bullets, same id; from then on, a supersede.
-- Supersede: `decisions/supersede.py <release> D7 D15` marks both sides: D7 gets `(superseded by D15)` at the end of its title and `#superseded`, and moves to Done; D15's first bullet is `- Supersedes D7.` The mark is the only edit an old decision ever gets.
-- Deferred to another release: add the bullet `- Deferred to v0.5.x`; the sync adds `#deferred` and moves the card to Done. That release's specs cite it as `(v0.4.x D9)`.
-- A decision that came from a queue item ends with `- Source: Q<n>`, the last bullet.
+Then the title line `# D<n>. <title>`, one plain sentence, written by `queue/item.py`. `<slug>` is made from the first title, as a queue item file's slug is, and the file is never renamed. A number is never reused; the next is one above the highest decision file.
+
+The rules of the file:
+
+- Fixed: the front matter and the title line. Only the scripts write the front matter.
+- The body is free. Bullets are the default, one rule per bullet.
+- No bullet is required: there is no fixed list of bullets and no fixed section.
+- A table, a code block or other formatting where it reads better. All of that is optional.
+
+How the scripts treat it:
+
+- `queue/item.py <release> D "<title>" --decider you|lead|agent` writes the file with `status: to-do`, the front matter it has and the `--bullet` line as the first body line. No script reads the body, and no script writes into it after that line. The session that recorded the decision writes the body by a targeted edit, then commits ([discuss.md](discuss.md), Item format, Recording). No `- Source:` line: `source` is in the front matter.
+- The round of a decision is not in its file: it is `decisions.D<n>.round` in the status file. A new decision takes the highest round; `queue/item.py <release> D "<title>" --new-round` starts the next one.
+- The six status words of a decision:
+
+  | `status` | Meaning | Set by |
+  |---|---|---|
+  | `to-do` | Decided, in no epic | `queue/item.py D`, then the status rule |
+  | `in progress` | In an epic, its work not all merged | the status rule, from the `epic` line |
+  | `blocked` | In no epic, and it shares a file with a running epic | the status rule |
+  | `done` | Its work merged, or closed with nothing to run | the status rule; `decisions/close.py <release> D<n>` |
+  | `backlog` | Moved to another release | `decisions/close.py <release> D<n> --backlog` |
+  | `archived` | Replaced by a later decision | `decisions/supersede.py <release> D<old> D<new>`, with `replaced_by` |
+
+- Nobody sets a status by hand: `backlog` and `archived` come from a command, the others from the status rule (`lib/decisions.py`), which runs after every command that writes a decision and in every status chain (`sprints/refresh.py`, `sprints/mark.py`, `status/status.py`). A decision with rows in the Ownership table of an epic that has gone is `done` when every milestone that holds a task of a module citing it is `done` or `archived`, else `in progress`.
+- `blocked`: the files of a decision are the files owned by the milestones of the specs that cite it; when no spec cites it, the files the lead gave with `epics/overlap.py <release> D<n> --files "<files>"`. A decision with no `epic` line and no row in the table of any epic file, one of whose files a running epic owns, is `blocked` with the reason `Waits for E11, same file`. It is `to-do` again by itself when that epic has merged. The owner may still put it into an epic (`compose delegate with D<n>`).
+- One case of a file with no `decider` line: a decision recorded before its release moved to decision files. Every reader shows it with no decider, `status/report.py` counts such files in one line, and `decisions/decider.py <release> D<n> you|lead|agent` writes the line once.
+- Built: a milestone citing the decision is `in progress`, `blocked` after its launch, or `done`. Before that, a change is an edit of its body, same id; from then on, a supersede ([discuss.md](discuss.md), Changing a decision). `decisions/supersede.py` writes nothing into the new decision: `replaced_by` of the old file holds the link.
+- A decision that moves to another release is `backlog`; that release's specs cite it as `(v0.4.x D9)`.
 - Specs cite a decision as `(D7)`.
 
 ## Epic file
@@ -316,7 +329,7 @@ Checks:
 - `## Attention` and `## Notes` are optional. Empty is the normal case. Do not spend tokens on notes.
 - Never: review-round narration, check output, commit lists.
 - Writers: `plan/milestone.py add` creates the milestone's tracker, `run/trackers/NN-<name slug>-tracker.md`, for every milestone, the first of a spec included; `plan/new_spec.py` creates no tracker. In a format 1.0 release the tracker starts with `Status: planned`, `plan/new_spec.py` creates the tracker of the spec's first milestone (`NN-<spec slug>-tracker.md`) and the spec writer creates every further one from the template. In the run, the builder fills it, the fixer and the verifier update it. One worktree per milestone, so no conflicts. In a format 1.0 release the merger sets `done (<commit>)` in the main checkout, whose copy stays `planned` until the merge, apart from a hold before launch; `status/progress.py` reads the most advanced copy across the worktrees.
-- The runner writes handoffs. Both sessions write `decisions.md` and the queue (Shared files).
+- The runner writes handoffs. Both sessions write the decisions and the queue (Shared files).
 
 ## Status
 
@@ -336,13 +349,13 @@ For a release with `status/data/status.json`. These are the words of format 2.2;
   `epics/table.py` and `epics/new.py` run the status chain after their write, so the epic shows `blocked` as soon as its table is complete.
 - A task change rolls up into its milestone the same way, with one difference: a milestone becomes `done` only by its merge, `sprints/mark.py <release> <milestone> merge --commit <sha>` (a commit hash, 7 to 40 hex characters). The merge is refused while a task of the milestone is `to-do`, `in progress` or blocked for another reason than the owner's look; a milestone whose tasks are all done stays `in progress` until then.
 - A task whose only open Verification boxes are `Owner:` lines is `blocked` with the reason "waits for the owner's look": `status/status.py <release> set <task> done` stores that by itself, and the page data marks the task `ownerCheck`. Its milestone may merge; its spec then stays `blocked`, not `done`, and still takes new work. The owner reports the look to the lead, who ticks the box and sets the task done. With any other open box, done is refused.
-- `decider`, worked out on every build of the status file, never stored in a plan file: `you` for an epic; for a task, the decider of the decision its module cites; for a spec, the decider of the first decision a module of it cites; for a milestone, the decider of the decision of its first task that has one, `agent` when none has one. The decider of a decision is the `decider` line of the queue item whose `decision` line names it; a decision that no item names, or whose item has no `decider` line, gives `""`, and so does a task or a spec that cites no decision.
+- `decider`, worked out on every build of the status file, never stored in a plan file: `you` for an epic; for a task, the decider of the decision its module cites; for a spec, the decider of the first decision a module of it cites; for a milestone, the decider of the decision of its first task that has one, `agent` when none has one. The decider of a decision is the `decider` line of its decision file; a file with no `decider` line gives `""`, and so does a task or a spec that cites no decision. A release with a decision board takes the `decider` line of the queue item whose `decision` line names the decision.
 - Copies, written on every change and never read back as the truth: the `status:` front matter line of the task, spec and epic file; the page data. `status/report.py` flags a `status:` line that differs from the JSON file. The grid is printed from the store (The grid).
 - Ids: a task is `<spec>-<number>` (`27-03`), a milestone its tracker file name without `-tracker.md` (`27-collapse-shortcut`), a spec its number, an epic `E11`. `status/status.py <release> list --status blocked` lists what waits. A stored status is never thrown away: when a milestone or task with a status is renamed or removed, or a spec loses its Deliverables link, every script stops and names the entries until the spec is restored or each entry is removed with `status/status.py <release> drop <id>`. A set that changes nothing writes nothing.
 - The file is also the data of the dashboard page: `release`, `format` (the skill version whose form the release has, written by `plan/new_release.py` and by a migration; a release with no status file is format `1.0`), `updated`, `statuses` (the six words, in the order above), `sprints`, `epics`, `specs`, `milestones`, `tasks`. An epic entry holds `reason` and `decider`; a milestone entry holds `number` (its position in its spec), `section` (`2.2.<number>`) and `ref` (`<spec>.<number>`, for example `27.1`) after its name, and `sprint`, `launched` and `decider`. A filled file: [../example/v1.0.x/owner/status/data/status.json](../example/v1.0.x/owner/status/data/status.json).
 - The page is the dashboard page, `status/index.html`, a copy of `board/dashboard.html`, with its scripts in `status/src/` (copies of `board/src/`). It has six views: Dashboard, Queue, Epics, Milestones, Tasks and Sprints. Its data, all in `status/data/`, git-ignored and written by the scripts:
   - `status.data.js` (`window.STATUS_DATA`): the status file plus `root`, the release folder on this machine, after `updated`; read by Epics, Milestones, Tasks and Sprints, and reloaded every 30 seconds. A machine path is never committed.
-  - `dashboard.data.js` (`window.DASHBOARD_DATA`): one row for every queue item, decision, epic, milestone and task, with `release`, `updated`, `roots`, `sources` and `rows`; read by Dashboard and Queue. A decision row takes its status from its lane of `decisions.md` and has no decider.
+  - `dashboard.data.js` (`window.DASHBOARD_DATA`): one row for every queue item, decision, epic, milestone and task, with `release`, `updated`, `roots`, `sources` and `rows`; read by Dashboard and Queue. A decision row takes its status and its decider from its decision file; a `blocked` decision has the reason `Waits for E11, same file`. With a decision board the row takes its status from the lane and has no decider.
   - `dashboard.json`: the same rows, indented, without `roots`: the file an agent reads.
 
   The three files are written together, by every command that changes a status or an item (`status/status.py`, `sprints/mark.py`, `queue/item.py`, `sprints/refresh.py` and the other commands of the status chain). A release of format 2.2 has no `queue.data.js`. The page of a release of format 2.1 or 2.0 is the task board: [old-form/format-2.1.md](old-form/format-2.1.md), Status words.

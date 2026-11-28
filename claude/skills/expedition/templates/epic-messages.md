@@ -7,7 +7,7 @@
 - D<n>: <the decision's title, one plain line>
 - D<n>: <the decision's title, one plain line>
 
-**Decided, not in this epic:**                      optional: only when a decision waits
+**Blocked:**                                        optional: only when a decision is blocked
 - D<n>: <the decision's title>. Waits for E<n>, same file.
 
 **Say:**
