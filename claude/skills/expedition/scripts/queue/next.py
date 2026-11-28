@@ -5,6 +5,9 @@ empty. Read-only.
 A release of format 2.1 and higher (lib/queue.py): the open item with the lowest number, as its
 file path on one line and the text of the file below it; "none" when no item is open.
 
+A release of format 2.2 and higher (lib/queue.py status_form): the to-do item with the lowest
+number, or "none"; a blocked item is never printed.
+
 Usage: python3 -I queue/next.py <release> [--owner X] [--root PATH]
 """
 import argparse
@@ -44,7 +47,12 @@ def main():
     folder = C.release_folder(root, C.detect_owner(root, a.owner), a.release)
     Q = C.load("lib/queue")
     if Q.item_form(folder):
-        item = next((it for it in Q.items(folder) if Q.status_of(it) == "open"), None)
+        new = Q.status_form(folder)
+        its = Q.items(folder)
+        if new:  # the blocked check, also after a hand edit: a blocked item is never printed
+            item = next((it for it in its if Q.effective(it, its) == "to-do"), None)
+        else:
+            item = next((it for it in its if Q.status_of(it) == "open"), None)
         print(f"{item['path']}\n{item['text'].rstrip()}" if item else "none")
         return
     queue = folder / C.QUEUE_MD
