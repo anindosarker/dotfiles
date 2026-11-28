@@ -6,7 +6,8 @@ The spec writer runs it before SPECS; the lead's check reads its result.
 Usage: python3 -I epics/table.py <release> E<n> [<spec numbers>] [--owner X] [--root PATH]
 
 The epic's specs: the specs with an "- Epic: E<n>" line, plus the spec numbers given, else (no
-Starts value yet) every untagged spec citing a decision of the epic's "Decisions:" line;
+Starts value yet) every untagged spec citing a decision of the epic's "Decisions:" line (in a
+release of format 2.2, which has no such line, the Decision column of its table);
 untagged ones count as E<n>. One row per decision and spec of the epic citing it, the Files a
 decision row carried split over those rows by the spec that owns each file (a file no citing
 spec owns stays on the lowest spec's row), one row with an empty Decision cell per spec of the

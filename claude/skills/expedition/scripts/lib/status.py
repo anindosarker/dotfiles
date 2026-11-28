@@ -54,6 +54,9 @@ WITH_REASON = ("blocked", "skipped")
 CLOSED = ("done", "skipped")
 MARKS = {"not started": "·", "in progress": "[ ]", "blocked": "[~]", "done": "[x]", "skipped": "[!]"}
 OWNER_REASON = "waits for the owner's look"
+NEW_FORMAT = (2, 2)
+# Format 2.2 (spec 04, D11): the stored and printed words. The code keeps the words of STATUSES.
+WORDS_22 = {"not started": "to-do", "skipped": "archived"}
 PENDING = "status/data/.pending"
 COMMIT_RE = re.compile(r"^[0-9a-f]{7,40}$")
 BOX_RE = re.compile(r"^\s*-\s*\[( |x|X)\]\s*(.*)$")
@@ -98,6 +101,24 @@ def write_json(p, text):
 def release_format(folder):
     """The format a release is in: the "format" key of its status file; "1.0" with no file."""
     return (load(folder) or {}).get("format") or "1.0"
+
+
+def version(text):
+    """A format or version string as a tuple to compare: "2.2" is (2, 2)."""
+    return tuple(int(x) for x in re.findall(r"\d+", text or "")) or (1, 0)
+
+
+def say(folder, word):
+    """The word a release stores and prints for the word of the code (STATUSES): in a release of
+    format 2.2 "to-do" for "not started" and "archived" for "skipped" (WORDS_22)."""
+    return WORDS_22.get(word, word) if new_form(folder) else word
+
+
+def new_form(folder):
+    """True for a release of format 2.2 or higher (spec 04): the words of WORDS_22 and the epic
+    file with its Ownership table as the one copy of its decisions and specs. The skill's own
+    version plays no part."""
+    return version(release_format(folder)) >= NEW_FORMAT
 
 
 def entries(folder):

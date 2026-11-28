@@ -242,15 +242,24 @@ def grid_cells(folder, num):
 def tag_decision(folder, epic, d):
     """Decision D<d> joins epic E<epic> after its go: its id on the epic file's "Decisions:" line,
     the Ownership table rebuilt (lib/ownership.py fill_epic), and the "#E<n>" tag that moves the
-    card to In progress (epics/tag.py). Prints nothing."""
+    card to In progress (epics/tag.py). In a release of format 2.2 (lib/ownership.py table_form)
+    the decision becomes a table row only: the file has no "Decisions:" line. Prints nothing."""
     o = own()
     path = o.epic_path(folder, epic)
     if path.is_file():
         text = o.read(path)
-        if d not in o.epic_decisions(text):
-            m = o.DECISIONS_LINE_RE.search(text)
-            value = m.group(1) if m else ""
-            path.write_text(o.set_field(text, "Decisions", f"{value}, D{d}".lstrip(", ")), encoding="utf-8")
+        if d not in o.epic_decision_ids(folder, text):
+            if o.table_form(folder):
+                rows, err = o.read_table(text)
+                if err:
+                    C.die(f"{path}: {err}")
+                row = {"decision": d, "title": o.decision_titles(folder).get(d, ""), "files": [],
+                       "spec": "", "milestone": "", "sprint": ""}
+                path.write_text(o.put_table(text, (rows or []) + [row]), encoding="utf-8")
+            else:
+                m = o.DECISIONS_LINE_RE.search(text)
+                value = m.group(1) if m else ""
+                path.write_text(o.set_field(text, "Decisions", f"{value}, D{d}".lstrip(", ")), encoding="utf-8")
         with contextlib.redirect_stdout(io.StringIO()):
             o.fill_epic(folder, epic, quiet=True)
             C.load("epics/tag").tag_epic(folder, f"E{epic}", [f"D{d}"])
