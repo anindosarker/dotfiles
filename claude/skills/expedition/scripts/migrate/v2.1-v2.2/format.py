@@ -52,7 +52,9 @@ In the release folder, in one run and one commit ("docs(plan): <release> moved t
 - The "status:" line of each task, spec and epic file: to-do for not started, archived for skipped.
 - plan/epics/E<n>.md: the "decisions:" and "specs:" lines removed. Before that, a decision or a
   spec the lines name and no Ownership table row has gets a row (lib/ownership.py build_table),
-  with one printed line per row added.
+  with one printed line per row added. A part in parentheses on either line (an id the epic
+  cites and does not run, which gets no row) is kept as a bullet at the end of the file's
+  "## Notes" section, made when missing, with one printed line per epic file.
 - status/sprints.md removed, after a check that the sprint and the mark of each of its rows equal
   the status file. A difference stops the run before it writes anything and names the rows.
 - <release>-plan.md: the link to status/sprints.md in the lines above its first "## " heading
@@ -113,6 +115,7 @@ Q_ID_RE = re.compile(r"\bQ\d+\b")
 SOURCE_ONLY_RE = re.compile(r"^- Source:[ \t]*Q\d+[ \t]*\.?[ \t]*$")
 GRID = "status/sprints.md"
 EPIC_LINE_RE = re.compile(r"^(decisions|specs):", re.I)
+PAREN_RE = re.compile(r"\(([^()]*)\)")
 SPEC_NUM_RE = re.compile(r"\b\d{2}(?:\.\d+)?\b")
 GRID_LINK_RE = re.compile(r"[ \t]*Sprints:[ \t]*\[[^\]]*\]\(status/sprints\.md\)\.?|\[[^\]]*\]\(status/sprints\.md\)")
 FRONT_STATUS_RE = re.compile(r"^status:[ \t]*(.*?)[ \t]*$")
@@ -255,10 +258,39 @@ def epic_plan(o, folder):
         lines = new.split("\n")
         stop = head_end(lines)
         lines = [l for i, l in enumerate(lines) if not (i < stop and EPIC_LINE_RE.match(l))]
-        new = "\n".join(lines)
+        new = add_notes(o, "\n".join(lines), [f"Cited, not run by this epic (the {name} line of format 2.1): {part}"
+                                              for name, part in paren_parts(text)])
         if new != text:
             out.append((p, new, [o.row_label(r) for r in added]))
     return out
+
+
+def paren_parts(text):
+    """[(line name, part)] of each part in parentheses on the "decisions:" and "specs:" lines above
+    the first "## " heading: what the epic cites and does not run. No table row holds it, so
+    the migration keeps it as a Notes bullet."""
+    lines = text.split("\n")
+    out = []
+    for l in lines[:head_end(lines)]:
+        m = EPIC_LINE_RE.match(l)
+        out += [(m.group(1).lower(), part.strip()) for part in PAREN_RE.findall(l) if part.strip()] if m else []
+    return out
+
+
+def add_notes(o, text, bullets):
+    """text with each of bullets as "- <bullet>" at the end of its "## Notes" section, the section
+    made at the end of the file when it is missing (as epics/new.py --note writes one)."""
+    if not bullets:
+        return text
+    lines = text.rstrip("\n").split("\n")
+    span = o.section(lines, o.NOTES_HEAD)
+    new = [f"- {b}" for b in bullets]
+    if span is None:
+        return "\n".join(lines + ["", o.NOTES_HEAD, ""] + new) + "\n"
+    end = span[1]
+    while end > span[0] + 1 and not lines[end - 1].strip():
+        end -= 1
+    return "\n".join(lines[:end] + new + lines[end:]) + "\n"
 
 
 def add_rows(o, text, rows):
@@ -599,6 +631,7 @@ def main():
     keys = o.launched_keys(folder) or set()
     launched = [m["id"] for m in data["milestones"] if m["id"] in keys or m["status"] in ("in progress", "done")]
     epics = epic_plan(o, folder)
+    cited = {p: paren_parts(C.read(p)) for p, _, _ in epics}  # read before the first write
     errors = o.compute(folder)["errors"]  # the status chain of the run (lib/status.py build) stops on these
     if errors:
         o.print_errors(errors, f"{plural(len(errors), 'error')} in the specs of {a.release}: correct "
@@ -631,6 +664,9 @@ def main():
         print(f"{pre}{rel(p)}: no decisions and specs lines" + (f", {plural(len(added), 'row')} added" if added else ""))
         for label in added:
             print(f"{pre}{rel(p)}: row added for {label}")
+        if cited.get(p):
+            print(f"{pre}{rel(p)}: {plural(len(cited[p]), 'part')} in parentheses kept as "
+                  f"{plural(len(cited[p]), 'bullet')} under ## Notes: {', '.join(f'({part})' for _, part in cited[p])}")
     for p, _ in plain:
         print(f"{pre}{rel(p)}: status line in the words of format 2.2")
     if plan:
