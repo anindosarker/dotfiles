@@ -34,9 +34,9 @@ scripts/          the commands that do the mechanical steps
   plan/           new release, new spec, new milestone, new task
   epics/          start an epic, tag its specs, show its table
   sprints/        the sprints, the grid and the milestone statuses
-  status/         the status command, the report, the progress reply
+  status/         the status command, the report, the progress reply, the Waits for you line
   queue/          queue items and decisions
-  decisions/      close or replace a decision, or set who made it
+  decisions/      close, replace or hold a decision, or set who made it
   run/            the runner session and the go
   migrate/        one folder per version step, each with a guide
 ```

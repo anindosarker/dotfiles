@@ -20,6 +20,7 @@ For a session that works on a release whose `status/data/status.json` says `"for
 - No `decider` is stored: `queue/item.py --decider` is accepted and not stored. `queue/item.py --depends` is refused with one line that names `scripts/migrate/v2.1-v2.2`, so no item has `depends_on` and no item is `blocked`.
 - The page `status/index.html` is the task board; its Queue view reads `status/data/queue.data.js` (Files and pages).
 - `decisions.md` is a kanban board of cards in three lanes, and there is no `decisions/` folder (Decision board).
+- No Waits for you line and no stored hold: `status/waits.py` prints nothing and `decisions/hold.py` is refused. `hold D<n>`: the decision leaves this epic and waits for the next hint; only the owner holds. The `Epic ready` message is posted once per set, and not again until another decision becomes ready (The Epic ready message on a board). The runner sends no `NOTE <task id>: waits for the owner's look`.
 
 ## Status words
 

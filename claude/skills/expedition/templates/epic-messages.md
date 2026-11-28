@@ -1,5 +1,7 @@
 # Epic messages
 
+In a release of format 2.2 the Waits for you line follows the `Say:` block as the last line of the message ([../reference/formats.md](../reference/formats.md), Waits for you line).
+
 ## Epic ready
 
 ```Markdown
