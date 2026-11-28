@@ -4,7 +4,7 @@
     "query": "/expedition discuss v0.3.x  (an item Q14 is open in chat with its options; the owner then writes: \"hm, option one looks right. would that also change the export button?\")",
     "expected_behavior": [
       "Answers the question about the export button in chat",
-      "Writes nothing to a plan file in that turn: no queue/item.py call with D, --move or --fact, no edit of decisions.md, queue.md or a spec",
+      "Writes nothing to a plan file in that turn: no queue/item.py call with D, --move or --fact, no edit of decisions.md, the item file in queue/, the list queue.md or a spec",
       "Does not treat the picked option as a recorded decision, because the message holds a question mark",
       "Posts the item again with the new point folded in and waits for the owner's explicit word (\"record it\" or \"accepted\")",
       "Does not post the next item of the queue"
@@ -14,7 +14,7 @@
     "skills": ["expedition"],
     "query": "/expedition discuss v0.3.x  (spec 27 Sidebar is in progress in a running epic; the owner writes two remarks: \"the sidebar menu loses its blur when it scrolls\" and \"we also need a billing area with its own pages\"; after discussion the owner says \"record it\" for each)",
     "expected_behavior": [
-      "Files each remark as a queue card with queue/item.py before it is posted, one item per message",
+      "Files each remark as a queue item with queue/item.py before it is posted: one item file in queue/ each, listed in queue.md; one item per message",
       "Says in one line where each goes: the blur remark belongs to spec 27, the billing area is a decision for a new spec",
       "Records each decision only after the owner's explicit word",
       "For the blur remark runs plan/milestone.py add <release> 27 \"<Name>\" --decision D<n>, which adds the next module, a task file and a milestone to spec 27, and tells the runner with one NOTE line",

@@ -26,7 +26,7 @@ The loop prompt must be safe to fire at any time. Loop: the loop skill with no i
 
 ## Environment blockers
 
-Environment blockers are the runner's to fix, never to wait on: a stopped Docker daemon (`open -a Docker`, then poll `docker info`), a busy port, a missing image or dependency. The run nudges the owner only when the fix fails after one attempt. An environment or tooling problem (a build that runs out of memory, a timeout, a flaky check, a tool setting) is fixed by the run at its cause, through `plan/milestone.py add` against the spec it blocks, like any other fix, not worked around per command and not filed as a card for the owner; a card is filed only for a real choice.
+Environment blockers are the runner's to fix, never to wait on: a stopped Docker daemon (`open -a Docker`, then poll `docker info`), a busy port, a missing image or dependency. The run nudges the owner only when the fix fails after one attempt. An environment or tooling problem (a build that runs out of memory, a timeout, a flaky check, a tool setting) is fixed by the run at its cause, through `plan/milestone.py add` against the spec it blocks, like any other fix, not worked around per command and not filed as a queue item for the owner; an item is filed only for a real choice.
 
 ## Waiting on CI
 

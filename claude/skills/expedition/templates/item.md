@@ -1,3 +1,5 @@
+The chat form of an item in a release of format 2.0 or lower; in format 2.1 the item is its file, [queue-item.md](queue-item.md).
+
 # Item template
 
 ## Default

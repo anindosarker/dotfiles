@@ -2,6 +2,30 @@
 
 One section per version of the skill, newest first. The version is `metadata.version` in the front matter of `SKILL.md`. A release folder states the format it has in `status/data/status.json` (`format`); a release with no status file is format 1.0.
 
+## 2.1
+
+What is new:
+
+- Each queue item is its own file, `queue/Q<n>-<slug>.md`: front matter (`status`, `decision`, `option`), the title `# Q<n>. <title>`, `## Notes`, `## Details` and `## Options:`. `queue.md` is a plain list of the item files, written by the scripts. The commands stay `queue/item.py`, `queue/next.py` and `queue/list.py`; what each does on item files: `reference/scripts.md`.
+- The task board has a Queue view: every item with its status, notes, details and options. It reads `status/data/queue.data.js`, written for a release of format 2.1.
+- The item in chat is the title, `Details` and `Options:` as they are in its file, then the `Say:` block; `## Notes` is not shown. During the back and forth nothing is written to the file. The lead writes `## Details` and `## Options:` to the file when the item settles: the owner reaches a final state on it, or the talk moves to another item, or another item comes in. An item is recorded with `queue/item.py <release> D "<title>" --source Q<n> --option <n>`.
+- `templates/queue-item.md` and `templates/queue-list.md` are the shapes; the example release is in format 2.1, with filled items in `example/v1.0.x/owner/queue/`.
+- One command moves a release from format 2.0 to 2.1: `scripts/migrate/v2.0-v2.1/format.py <release>`, guide [scripts/migrate/v2.0-v2.1/README.md](scripts/migrate/v2.0-v2.1/README.md).
+- `plan/new_release.py` makes a new release in format 2.1: a `queue.md` list and an empty `queue/` folder.
+
+What changes for a release in work:
+
+- Nothing has to change at once. A release in format 2.0 keeps its queue as a kanban board, and every script reads and writes it as before. Its rules: `reference/old-form/queue-board.md`; its item chat form: `templates/item.md`.
+- To use item files and the Queue view, migrate the release. The migration is one commit, keeps every line of every card, and can be undone with `git revert`.
+- A session that read the skill before this version re-reads it before it creates a release or migrates one.
+
+What stops working:
+
+- Nothing that a 2.0 release used is removed.
+- In a release of format 2.1, `queue.md` is not dragged in a kanban extension and not edited by hand, and `queue/sync.py` has nothing to sync.
+
+Migration: [scripts/migrate/v2.0-v2.1/README.md](scripts/migrate/v2.0-v2.1/README.md).
+
 ## 2.0
 
 What is new:
