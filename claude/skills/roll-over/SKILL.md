@@ -14,7 +14,7 @@ Three steps, in this order, nothing else:
 What the script does once this turn has ended, in this session's own tmux window:
 
 - Types `/clear`. Workflows and background tasks keep running, and their results still arrive in this window.
-- Types `/rename <next name>`: the name the user gave, else the handoff's `## Session name` line, else this session's name with its version bumped (`v0.9.x lead` to `v0.9.x lead v2`, `Parallel workflow V3` to `Parallel workflow V4`).
+- Types `/rename <next name>`: the name the user gave, else the handoff's `## Session name` line, else this session's name with its version bumped (`v0.9.x lead` to `v0.9.x lead v2`, `Parallel workflow V3` to `Parallel workflow V4`). A default expedition name keeps its form: `Exp-2.1-L` to `Exp-2.1-L2`, `Exp-2.1-L2` to `Exp-2.1-L3`, `Exp-2.1-R` to `Exp-2.1-R2`.
 - Types the starter prompt: each line under `## Starter prompt` in the handoff as its own message, in order, each after the input box shows; else `Read <handoff path> and continue.`
 
 Script exits 3 (not inside tmux): tell the user to type `/clear` and paste each line of the starter prompt the script printed, one at a time.

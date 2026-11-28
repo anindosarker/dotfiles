@@ -12,8 +12,10 @@
 #   <starter prompt>      (each line as its own message, after the input box shows)
 # Next name: --name as given, else the first line under "## Session name" in the handoff, else
 # the session's own name (the last "custom-title" record of its
-# transcript, set by /rename or claude -n) with its version bumped: a trailing V3 or v3 goes up by
-# one, so does a trailing " 3"; no version: " v2" is appended. No name found: exit 4.
+# transcript, set by /rename or claude -n) with its version bumped: a default expedition name
+# "<code>-<release>-L<n>" or "-R<n>" keeps its form ("Exp-2.1-L" to "Exp-2.1-L2", "Exp-2.1-L2" to
+# "Exp-2.1-L3"); else a trailing V3 or v3 goes up by one, so does a trailing " 3"; no version:
+# " v2" is appended. No name found: exit 4.
 # Starter prompt: every non-empty line under "## Starter prompt" in the handoff, in order (for
 # example a slash command such as /caveman:ultracave, then the line that starts the work), else
 # "Read <handoff> and continue." When no starter line names the handoff, the last line gets that
@@ -95,8 +97,14 @@ for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
         title = t.strip()
 print(title)
 if title:
+    # A default expedition name "<code>-<release>-L" or "-R" (D28): the number after the role
+    # letter goes up, no number counts as 1 ("Exp-2.1-L" to "Exp-2.1-L2", "wt-0.2-R12" to "-R13").
+    d = re.fullmatch(r"(\S+-\d+(?:\.\d+)*-[LR])(\d*)", title)
     m = re.search(r"([vV])(\d+)$", title) or re.search(r"(?<=\S)( )(\d+)$", title)
-    print(title[: m.start(2)] + str(int(m.group(2)) + 1) if m else title + " v2")
+    if d:
+        print(d.group(1) + str(int(d.group(2) or 1) + 1))
+    else:
+        print(title[: m.start(2)] + str(int(m.group(2)) + 1) if m else title + " v2")
 PY
 )"
   current="$(sed -n 1p <<<"$titles")"

@@ -34,6 +34,7 @@ For any session that is about to run a command of the skill: how to run them, th
 - `sprints/refresh.py <release>`: the refresh chain (sprints, epic tables, decision lanes, the blocked check, the page data); run by `run/go.py` and `sprints/mark.py`, by hand in Changing a decision, after a hand edit of an item file and after a migration.
 - `sprints/grid.py <release>`: prints the grid from the status file; writes nothing.
 - `run/runner.sh start|list|stop|send|fork|resume|adopt <release>`: the runner and spec writer windows; `list <release>` shows the entries of that release only.
+- `run/name.py <release> lead --apply`: the lead gives itself its default name, once, at the end of its first turn of a session.
 - `sprints/mark.py <release> <milestone> launch|wait|resume|merge|stop [--reason "<text>"] [--commit <sha>]`: the milestone's status, by the run's verbs.
 - `plan/milestone.py add <release> <spec> "<Name>" [--decision D<n>] [--task "<title>"]... [--type feat|bug] [--files a,b]`: a piece of work in a spec: the next module, its task files and its milestone. A mid-run fix and follow-up work go the same way.
 - `plan/task.py add <release> <spec> "<Title>" [--module 1.6.N] [--milestone "<name>"]`: one more task file and its pointer; it joins a milestone only while that milestone is `to-do`.
@@ -177,7 +178,7 @@ For any session that is about to run a command of the skill: how to run them, th
 
 - Command: `<skill>/scripts/run/runner.sh start|list|stop|send|fork|resume|adopt v0.<n>.x`
 - Does, by mode:
-  - `start`: reuses the live runner of the release, resumes a dead one, or opens the next `<release> runner<n>` in the current tmux session running the runner (opus unless `--model` or `$EXPEDITION_RUNNER_MODEL`, bypass, fixed `--session-id`, `templates/runner-settings.json`, brief).
+  - `start`: reuses the live runner of the release, resumes a dead one, or opens the next runner name (Names, below) in the current tmux session running the runner (opus unless `--model` or `$EXPEDITION_RUNNER_MODEL`, bypass, fixed `--session-id`, `templates/runner-settings.json`, brief).
     - Numbers are never reused; `--new` opens another beside the live one; `--new --name "<name>"` names it as given; called from a runner window it runs on that runner's model; the window name is also the `claude -n` name; the runner of a release is its newest entry that is not stopped.
     - It records the runner in `~/.claude/expedition-runners.json`.
     - It resumes a dead one with `--resume`.
@@ -185,19 +186,36 @@ For any session that is about to run a command of the skill: how to run them, th
     - In a new or resumed window it types the voice line first, when the window takes input (the wait of `send --confirm`), then the start prompt, and checks that the prompt is in the transcript (typed once more when it is not; still not there: exit 1 with one line). The voice line is `EXPEDITION_VOICE`, default `/caveman:ultracave`; set empty, nothing is typed and the prompt goes on the claude command line. A session without the caveman plugin answers the voice line with an unknown-command reply and goes on. A live runner gets no voice line.
   - `list [<release>]`: entries with busy or idle, release and kind; with a release, the entries of that release only.
   - `stop`: closes the window, marks the entry stopped.
-  - `send <release> "<line>"`: types `ultracode <line>` into the runner window and submits it (the RUN line `RUN E<n> <release folder> epic <epic file> from <lead>`; a runner by full window name, for example `send "v0.9.x runner2" "LEAD <name>"`).
+  - `send <release> "<line>"`: types `ultracode <line>` into the runner window and submits it (the RUN line `RUN E<n> <release folder> epic <epic file> from <lead>`; a runner by full window name, for example `send "Exp-2.1-R2" "LEAD <name>"`, or an old name such as `send "v0.9.x runner2" "LEAD <name>"`).
   - `send --confirm [--from <lead>] <release> "<line>"` (the two flags in either order): waits until the runner's window takes input (its pane runs claude and shows the input box), types the line, and exits 0 only when the line is in the runner's transcript, written after the call started: a user message of an idle runner, or a queued entry of a busy one. A line that is not there is typed once more; still not there, or no input box: exit 1 with one line that ends `Look at its window, then send again`. The waits are `EXPEDITION_SEND_READY` (default 40 s) for the input box and `EXPEDITION_SEND_WAIT` (default 20 s) for the transcript after each typing. `send` with no flag is unchanged: it types and submits, and does not wait.
-  - `fork <release> E<n> "<D ids>" --from <lead>`: opens window `<release> specs E<n>` running the spec writer, a forked session of the lead (`--resume $CLAUDE_CODE_SESSION_ID --fork-session`, model fable unless `--model`), that fills the epic table's Files column, writes the epic's specs, completes the table with `epics/table.py` and replies `SPECS E<n> <spec numbers>`, with its own `--session-id` in the registry.
+  - `fork <release> E<n> "<D ids>" --from <lead>`: opens window `<code>-<release>-E<n>` (`Exp-2.1-E7`) running the spec writer, a forked session of the lead (`--resume $CLAUDE_CODE_SESSION_ID --fork-session`, model fable unless `--model`), that fills the epic table's Files column, writes the epic's specs, completes the table with `epics/table.py` and replies `SPECS E<n> <spec numbers>`, with its own `--session-id` in the registry.
     - A spec writer whose window died is resumed by the same `fork` call, never forked again.
     - A new or resumed spec writer gets the voice line (`EXPEDITION_VOICE`) first, then its prompt, as with `start`; a live one gets none.
-    - `stop "<release> specs E<n>"` closes it.
+    - `stop "<spec writer name>"` closes it. A spec writer of the old name form `<release> specs E<n>` keeps that name, and that form still finds a spec writer of the new form.
   - `resume <release or window name>`: types `resume` into a live window (the runner with the ultracode prefix), starts a dead runner, reopens a dead spec writer whose session transcript exists in a new window with its name (`claude --resume <uuid>`), else prints that line with the reason. A session it starts gets the voice line (`EXPEDITION_VOICE`) first, as with `start`; a live window gets none.
-  - `adopt <release> [--uuid UUID] [--pane PANE] [--replaces <name>]`: registers a claude session that already runs (default the calling one) as the next `<release> runner<n>` with its own uuid, renames its window, marks `--replaces` stopped.
+  - `adopt <release> [--uuid UUID] [--pane PANE] [--replaces <name>]`: registers a claude session that already runs (default the calling one) under the next runner name (`Exp-2.1-R3` after a roll over of `Exp-2.1-R2`, `Exp-2.1-R4` after `v2.1.x runner3`) with its own uuid, renames its window, marks `--replaces` stopped.
+- Names: a new runner window is `<code>-<release>-R`, then `-R2`, `-R3`: the number after the highest of every runner entry of the release, stopped ones and old names included. A new spec writer window is `<code>-<release>-E<n>`. `<code>` and `<release>`: run/name.py. `--new --name` wins. Old names (`v2.1.x runner3`, `v2.1.x specs E3`, `runner-<release>`) stay valid: such an entry is found, listed, sent to, resumed and stopped under its own name. Every mode finds a session by its registry entry and pane, so a window renamed by hand in tmux keeps working.
 - A registry write that gives one session uuid to a second entry that is not stopped is refused, and `list` warns on a shared uuid.
 - The runner and every spec writer run in the lead's working directory, never in a subfolder: `start` and `fork` open the new window in the folder they are called from, or in `--cwd PATH`.
 - The registry is never edited by hand.
 - Env overrides for tests: `EXPEDITION_REGISTRY`, `EXPEDITION_STATE_DIR`, `EXPEDITION_PROJECTS`, `EXPEDITION_CLAUDE`, `EXPEDITION_TMUX_SOCKET`
 - When: once per release, to revive a runner, and on every go (through run/go.py)
+
+### run/name.py
+
+- Command: `python3 -I <skill>/scripts/run/name.py v0.<n>.x lead|runner|E<n> [--cwd PATH] [--apply] [--current NAME]`
+- Prints the default name `<code>-<release>-<role>` of a session of the release:
+  - `<code>`: from the name of the folder (`--cwd`, else the current folder). One word: its first 3 letters as written (`Expedition`: `Exp`; a shorter word whole). Several words, split at `-`, `_`, `.` or a space: the first letter of each, lower case (`web-template`: `wt`, `React-table`: `rt`, `my_app.v2`: `mav`).
+  - `<release>`: the release without `v` and `.x` (`v2.1.x`: `2.1`).
+  - Role `lead`: `L`. Role `E<n>`: `E<n>`. Role `runner`: the next unused runner name in the registry (`R`, then `R2`, `R3`), as `run/runner.sh start --new` names it.
+- `--apply` (role `lead` only): gives the calling lead its default name once.
+  - Inside tmux: types `/rename <name>` into the calling pane, records the name as registry key `lead`, and sends `LEAD <name>` to a live runner of the release (`run/runner.sh send`).
+  - Not inside tmux: prints the line `/rename <name>` for the owner to type, exit 0.
+  - Does nothing, with one line that says why, when the session's name already starts with `<code>-<release>-L` (a rolled-over lead keeps its number), or when it renamed this lead session of the release before (the owner may have chosen another name since). The session's name: `--current`, else the last `/rename` or `claude -n` name in its transcript, else the registry's lead name. What it renamed: `~/.claude/expedition-runners/lead-names.json`.
+  - Called from a runner window (`EXPEDITION_RUNNER` set): exit 1, nothing typed.
+- The names are a default: the owner can rename any session at any time. Old names stay valid.
+- Env overrides for tests: `EXPEDITION_REGISTRY`, `EXPEDITION_STATE_DIR`, `EXPEDITION_PROJECTS`, `EXPEDITION_TMUX_SOCKET`
+- When: the lead, at the end of its first turn of a session, once it knows the release (SKILL.md, Names)
 
 ### run/runner.sh watch, run/nudge-watch.sh
 
