@@ -37,6 +37,7 @@ Changed after the tag `expedition-v2.0`, same format:
 - Owner words: `compose`, `delegate` and `compose delegate` replace `epic`, `go` and `epic go`, which stay accepted as old names.
 - Messages to the owner end with a `Say:` block of lettered commands; a letter alone is the command. `Epic ready: E<n>` and `Epic planned: E<n>` have a template (`templates/epic-messages.md`) and filled examples. The `Held:` line and the `Changed:` report are gone: a waiting decision is listed under `Decided, not in this epic:`, and the lead reports nothing it fixed in its check.
 - Every session of a release starts in the `caveman:ultracave` voice when that skill is installed.
+- Repost rules: a reply that changes an item gets the whole item posted again, every line word for word except the lines the owner asked to change, with no rephrasing and no "unchanged" line. A reply that changes nothing in the item gets no repost: the lead answers and names the open item in one line. When a decision is recorded, lines taken from the picked option stay word for word.
 - Item format: a template (`templates/item.md`) and filled items (`example/item-examples.md`). Fixed are the title and the numbered options, recommended first; the rest is free. Wording: ASD-STE100 words, caveman shortness, key details kept.
 - New owner word `iterate`: the open item is decided, planned by the regular steps and sent to the runner at once, as the next module of its spec or as a new spec with its own epic. The runner chooses the moment it starts.
 
