@@ -221,8 +221,7 @@ def items(a, root, folder, Q, dc, target, card_op, title, fact):
                 die(f"{ident} is not in {folder / Q.QUEUE_DIR}")
             if a.move:
                 word = Q.lane_status(a.move[1])
-                gone = {"decision": None, "option": None} if word != "decided" else {}
-                new = Q.set_front(item["text"], status=word, **gone)
+                new = Q.set_front(item["text"], status=word, decision=None, option=None)
                 subject = f"{ident} to {a.move[1]}"
             else:
                 new = Q.add_note(item["text"], fact)
