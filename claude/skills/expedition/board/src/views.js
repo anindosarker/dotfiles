@@ -88,8 +88,7 @@ let QD = null, qIdx = new Map(), qHay = new Map(), qShown = [];
 function loadQueue(data) {
   QD = data && Array.isArray(data.items) ? data : null;
   qIdx = new Map((QD ? QD.items : []).map((x) => [x.id, x]));
-  qHay = new Map((QD ? QD.items : []).map((x) => [x, [x.id, x.title, x.status, x.decision, x.reason, x.depends_on, dBy(x), x.notes, x.details,
-    ...(x.options || []).flatMap((o) => [o.title, o.body])].join("\n").toLowerCase()]));
+  qHay = new Map((QD ? QD.items : []).map((x) => [x, [x.id, x.title, x.status, x.decision, x.reason, x.depends_on, dBy(x), x.notes, x.details, x.options].join("\n").toLowerCase()]));
   if (state.sel?.startsWith("q:") && !get(state.sel)) state.sel = null;
 }
 const Q_KEYS = {
@@ -132,10 +131,13 @@ function qCard(x) {
     ${qSub(x) ? `<span class="d-sub" style="margin-top:3px">${esc(qSub(x))}</span>` : ""}
     ${x.changed ? `<span class="frac q-ch" title="${esc("Status changed " + x.changed)}">${esc(relTime(x.changed))}</span>` : ""}</div>`;
 }
+// The three texts of a queue item (D21): Notes, Details, Options, each Markdown under its own heading; an empty text has no heading.
+const qTexts = (x, sec) => [["Notes", x.notes], ["Details", x.details], ["Options", x.options]]
+  .filter(([, t]) => typeof t === "string" && t).map(([h, t]) => sec(h, `<div class="md">${md(t)}</div>`)).join("");
 function queuePanel(x) {
   const abs = QD.root && x.file ? QD.root.replace(/\/+$/, "") + "/" + x.file : "";
   const qsec = (h, body, none) => `<div class="p-sec"><h3>${h}</h3>${body || `<p class="none">${none}</p>`}</div>`;
-  const pos = qShown.findIndex((y) => y.id === x.id), picked = x.option ? String(x.option) : "", opts = x.options || [];
+  const pos = qShown.findIndex((y) => y.id === x.id), picked = x.option ? String(x.option) : "";
   let h = `<div class="p-top"><div class="crumbs"><span class="cur">${esc(QD.release || "")} queue${pos >= 0 ? ` · ${pos + 1} of ${qShown.length}` : ""}</span></div>
     <button class="ibtn sm" data-close aria-label="Close" data-tip="Close (Esc)" data-tip-end>${icon("x")}</button></div>
     <div class="p-kind">${KIND_LABEL.q} ${kc("queue", x.id)}</div><h2>${esc(x.title)}</h2>
@@ -145,14 +147,7 @@ function queuePanel(x) {
       ${x.decider ? `<dt>Decider</dt><dd>${esc(DECIDER[x.decider] || x.decider)}</dd>` : ""}${x.turn ? `<dt>Turn</dt><dd>${esc(x.turn)}</dd>` : ""}
       ${x.changed ? `<dt>Changed</dt><dd>${esc(x.changed)}</dd>` : ""}</dl></div>`;
   h += qsec("Item file", x.file ? `<div class="lnk"><code class="path">${esc(x.file)}</code>${abs ? `<a class="fbtn" href="${esc(vscodeUrl(abs))}" title="${esc(abs)}">VS Code</a><a class="fbtn" href="${esc(fileUrl(abs))}" target="_blank" title="${esc(abs)}">Browser</a>` : ""}</div>` : "", "No file.");
-  if (x.notes) h += qsec("Notes", `<div class="md">${md(x.notes)}</div>`);
-  h += qsec("Details", x.details ? `<div class="md">${md(x.details)}</div>` : "", "No details.");
-  if (opts.length) h += qsec(`Options (${opts.length})`, `<div class="opts">${opts.map((o) => {
-    const isPick = picked && String(o.key) === picked;
-    return `<div class="opt${isPick ? " picked" : picked ? " faded" : ""}"><div class="opt-h"><span class="opt-k">${esc(o.key)}.</span><span class="opt-t">${mdInline(o.title || "")}</span>
-      <span class="opt-tags">${o.recommended ? `<span class="tag rec">recommended</span>` : ""}${isPick ? `<span class="tag pick">${icon("check")}picked</span>` : ""}</span></div>
-      ${o.body ? `<div class="md">${md(o.body)}</div>` : ""}</div>`;
-  }).join("")}</div>`);
+  h += qTexts(x, qsec);
   h += `<p class="pnote">Paths are relative to the plan folder${QD.root ? `: <code>${esc(QD.root)}</code>` : ""}.</p>`;
   return h;
 }
@@ -219,7 +214,7 @@ function dashPanel(r) {
       ${r.decider ? `<dt>Decider</dt><dd>${esc(DECIDER[r.decider] || r.decider)}</dd>` : ""}${r.turn ? `<dt>Turn</dt><dd>${esc(r.turn)}</dd>` : ""}
       <dt>Id</dt><dd><code>${esc(r.id)}</code></dd></dl></div>`;
   h += dsec("File", r.file ? `<div class="lnk"><code class="path">${esc(r.file)}</code>${abs ? `<a class="fbtn" href="${esc(vscodeUrl(abs))}" title="${esc(abs)}">VS Code</a><a class="fbtn" href="${esc(fileUrl(abs))}" target="_blank" title="${esc(abs)}">Browser</a>` : ""}</div>` : "", "No file for this row.");
-  h += dsec("Details", r.details ? `<div class="md">${md(r.details)}</div>` : "", "No details.");
+  h += r.kind === "queue" ? qTexts(r, dsec) : dsec("Details", r.details ? `<div class="md">${md(r.details)}</div>` : "", "No details.");
   return h;
 }
 

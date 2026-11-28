@@ -17,13 +17,14 @@ reads. roots.plan and roots.status are both the release folder on this machine.
 One row per queue item (by number), per decision (with the board: per card of decisions.md, in
 file order; in the file form: per decision file, in the order of the numbers), then per epic,
 milestone and task (in the order of status/data/status.json). The fields of a row are FIELDS, in
-that order; "decision" is on queue rows only, "progress" on epic rows only, "hold" on the decision
-rows of the file form only. A text field with no
+that order; "decision", "notes" and "options" are on queue rows only, "progress" on epic rows only,
+"hold" on the decision rows of the file form only. A text field with no
 value is "", ready is true or false. Where the values come from:
 - queue: the item file (lib/queue.py). status and decider are the stored lines (the blocked check
   has stored "blocked" already); reason "Waits for <ids>" on a blocked item, the depends_on ids
-  that are not done; depends_on and decision the lines as written; details the text under
-  "## Details".
+  that are not done; depends_on and decision the lines as written; notes, details and options
+  the text under "## Notes", "## Details" and "## Options:" ("" for a section the file does not
+  have; D21).
 - decision, the file form (lib/decisions.py file_form, D9 and D16): the decision file. status
   and decider are its stored lines (decider "" when the file has none); reason on a blocked
   decision the words of lib/decisions.py blocked_reason ("Waits for E11, same file"), on every
@@ -62,8 +63,8 @@ C = _common()
 SCRIPT = "status/data/dashboard.data.js"
 JSON_FILE = "status/data/dashboard.json"
 FIELDS = ("kind", "id", "label", "title", "status", "turn", "ready", "command", "hold", "depends_on", "decider",
-          "decision", "reason", "progress", "root", "file", "details")
-ONLY_GIVEN = ("hold", "decision", "progress")  # fields a row has only when the builder gives them
+          "decision", "reason", "progress", "root", "file", "notes", "details", "options")
+ONLY_GIVEN = ("hold", "decision", "progress", "notes", "options")  # fields a row has only when the builder gives them
 CLOSED = ("done", "archived", "backlog")  # no turn: nothing is left to move
 FINISHED = ("done", "archived")  # the tasks an epic's progress counts as done
 DECISION_STATUS = {"To do": "to-do", "In progress": "in progress", "Done": "done"}
@@ -132,7 +133,8 @@ def queue_rows(folder):
                        status=st, turn=who, depends_on=Q.front(it["text"]).get("depends_on", ""),
                        decider=it["decider"], decision=it["decision"],
                        reason=f"Waits for {', '.join(waits)}" if waits else "",
-                       root="plan", file=it["path"].relative_to(folder).as_posix(), details=s.get("details", "")))
+                       root="plan", file=it["path"].relative_to(folder).as_posix(), notes=s.get("notes", ""),
+                       details=s.get("details", ""), options=s.get("options", "")))
     return out
 
 
