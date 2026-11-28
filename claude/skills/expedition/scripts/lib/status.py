@@ -613,9 +613,9 @@ def set_status(folder, release, ident, status, reason="", commit="", locked=Fals
     if kind == "task":
         e["ownerCheck"] = status == "blocked" and reason == OWNER_REASON
         m = find(data, e["milestone"])[1] if e["milestone"] else None
-        words = [t["status"] for t in mine]
-        if m and m["status"] not in CLOSED and any(w not in (STATUSES[0], "skipped") for w in words):
-            word = rollup(words)
+        mine_words = [t["status"] for t in mine]
+        if m and m["status"] not in CLOSED and any(w not in (STATUSES[0], "skipped") for w in mine_words):
+            word = rollup(mine_words)
             word = "in progress" if word in CLOSED else word
             why = next((t["reason"] for t in mine if t["status"] == "blocked"), "") if word == "blocked" else ""
             if (m["status"], m["reason"]) != (word, why):

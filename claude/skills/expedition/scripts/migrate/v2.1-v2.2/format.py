@@ -52,7 +52,9 @@ In the release folder, in one run and one commit ("docs(plan): <release> moved t
 - The "status:" line of each task, spec and epic file: to-do for not started, archived for skipped.
 - plan/epics/E<n>.md: the "decisions:" and "specs:" lines removed. Before that, a decision or a
   spec the lines name and no Ownership table row has gets a row (lib/ownership.py build_table),
-  with one printed line per row added.
+  with one printed line per row added. A part in parentheses on either line (an id the epic
+  cites and does not run, which gets no row) is kept as a bullet at the end of the file's
+  "## Notes" section, made when missing, with one printed line per epic file.
 - status/sprints.md removed, after a check that the sprint and the mark of each of its rows equal
   the status file. A difference stops the run before it writes anything and names the rows.
 - <release>-plan.md: the link to status/sprints.md in the lines above its first "## " heading
@@ -113,6 +115,7 @@ Q_ID_RE = re.compile(r"\bQ\d+\b")
 SOURCE_ONLY_RE = re.compile(r"^- Source:[ \t]*Q\d+[ \t]*\.?[ \t]*$")
 GRID = "status/sprints.md"
 EPIC_LINE_RE = re.compile(r"^(decisions|specs):", re.I)
+PAREN_RE = re.compile(r"\(([^()]*)\)")
 SPEC_NUM_RE = re.compile(r"\b\d{2}(?:\.\d+)?\b")
 GRID_LINK_RE = re.compile(r"[ \t]*Sprints:[ \t]*\[[^\]]*\]\(status/sprints\.md\)\.?|\[[^\]]*\]\(status/sprints\.md\)")
 FRONT_STATUS_RE = re.compile(r"^status:[ \t]*(.*?)[ \t]*$")
@@ -255,10 +258,39 @@ def epic_plan(o, folder):
         lines = new.split("\n")
         stop = head_end(lines)
         lines = [l for i, l in enumerate(lines) if not (i < stop and EPIC_LINE_RE.match(l))]
-        new = "\n".join(lines)
+        new = add_notes(o, "\n".join(lines), [f"Cited, not run by this epic (the {name} line of format 2.1): {part}"
+                                              for name, part in paren_parts(text)])
         if new != text:
             out.append((p, new, [o.row_label(r) for r in added]))
     return out
+
+
+def paren_parts(text):
+    """[(line name, part)] of each part in parentheses on the "decisions:" and "specs:" lines above
+    the first "## " heading: what the epic cites and does not run. No table row holds it, so
+    the migration keeps it as a Notes bullet."""
+    lines = text.split("\n")
+    out = []
+    for l in lines[:head_end(lines)]:
+        m = EPIC_LINE_RE.match(l)
+        out += [(m.group(1).lower(), part.strip()) for part in PAREN_RE.findall(l) if part.strip()] if m else []
+    return out
+
+
+def add_notes(o, text, bullets):
+    """text with each of bullets as "- <bullet>" at the end of its "## Notes" section, the section
+    made at the end of the file when it is missing (as epics/new.py --note writes one)."""
+    if not bullets:
+        return text
+    lines = text.rstrip("\n").split("\n")
+    span = o.section(lines, o.NOTES_HEAD)
+    new = [f"- {b}" for b in bullets]
+    if span is None:
+        return "\n".join(lines + ["", o.NOTES_HEAD, ""] + new) + "\n"
+    end = span[1]
+    while end > span[0] + 1 and not lines[end - 1].strip():
+        end -= 1
+    return "\n".join(lines[:end] + new + lines[end:]) + "\n"
 
 
 def add_rows(o, text, rows):
@@ -520,9 +552,12 @@ def count_line(before, after):
 
 def commit(root, paths, message):
     """One commit of paths, a removed file among them (lib/common.py commit names only files that
-    exist, so it cannot commit the removal of status/sprints.md); pushed as lib/common.py pushes."""
+    exist, so it cannot commit the removal of status/sprints.md); pushed as lib/common.py pushes.
+    A path git has no file under, tracked or not, is not named: git has no such pathspec and
+    would refuse the commit (the empty queue/, plan/ and decisions/ of a release with no item)."""
     repo, paths = C.plan_repo(root, paths)
     git = lambda *args: subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+    paths = [p for p in paths if git("ls-files", "-co", "--exclude-standard", "--", p).stdout.strip()]
     r = git("add", "-A", "--", *paths)
     if r.returncode:
         C.die(f"git add failed: {(r.stderr or r.stdout).strip()}")
@@ -596,6 +631,11 @@ def main():
     keys = o.launched_keys(folder) or set()
     launched = [m["id"] for m in data["milestones"] if m["id"] in keys or m["status"] in ("in progress", "done")]
     epics = epic_plan(o, folder)
+    cited = {p: paren_parts(C.read(p)) for p, _, _ in epics}  # read before the first write
+    errors = o.compute(folder)["errors"]  # the status chain of the run (lib/status.py build) stops on these
+    if errors:
+        o.print_errors(errors, f"{plural(len(errors), 'error')} in the specs of {a.release}: correct "
+                               f"{'it' if len(errors) == 1 else 'them'}, commit, then run again; nothing written")
     words = st.WORDS_22
     plain = []  # the task and spec files whose status line changes
     for p in sorted((folder / "plan" / "specs").rglob("*.md")) if (folder / "plan" / "specs").is_dir() else []:
@@ -624,6 +664,9 @@ def main():
         print(f"{pre}{rel(p)}: no decisions and specs lines" + (f", {plural(len(added), 'row')} added" if added else ""))
         for label in added:
             print(f"{pre}{rel(p)}: row added for {label}")
+        if cited.get(p):
+            print(f"{pre}{rel(p)}: {plural(len(cited[p]), 'part')} in parentheses kept as "
+                  f"{plural(len(cited[p]), 'bullet')} under ## Notes: {', '.join(f'({part})' for _, part in cited[p])}")
     for p, _ in plain:
         print(f"{pre}{rel(p)}: status line in the words of format 2.2")
     if plan:
@@ -649,8 +692,15 @@ def main():
 
     sw = C.load("sprints/swimlanes")
 
+    head = git("rev-parse", "HEAD").stdout.strip()
+    restoring = []
+
     def restore(stop):
-        """Every file back as git has it, the renders of format 2.1 again; ends the script."""
+        """Every file back as git has it, the renders of format 2.1 again; ends the script. With
+        no stop (a step died after the first write and has printed its own error) it says so and
+        returns."""
+        restoring.append(True)
+        git("reset", "-q", "HEAD", "--", *rewrites, str(gi))  # a commit that failed leaves its paths staged
         shutil.rmtree(dec.dir_of(folder), ignore_errors=True)  # it did not exist before the run
         for x in rewrites:  # one path at a time: a path HEAD does not have would stop a joint checkout
             git("checkout", "HEAD", "--", x)
@@ -660,7 +710,7 @@ def main():
             gi.write_bytes(gi_before)
         left = git("status", "--porcelain", "--", *rewrites).stdout.strip()
         if left:
-            C.die(f"{'; '.join(stop)}, and git could not restore every file ({left.splitlines()[0][3:]}): "
+            C.die(f"{'; '.join(stop or ['the run stopped'])}, and git could not restore every file ({left.splitlines()[0][3:]}): "
                   f"run `git checkout HEAD -- {' '.join(rewrites)}` in the release folder; nothing is committed")
         if not src_before:
             shutil.rmtree(page_src, ignore_errors=True)
@@ -668,68 +718,79 @@ def main():
             (folder / "status" / "data" / name).unlink(missing_ok=True)
         with contextlib.redirect_stdout(io.StringIO()):
             sw.write(folder, a.release, quiet=True)  # format 2.1 again: the task board and queue.data.js
+        if not stop:
+            print("error: the run stopped after its first write: the files are restored from git and "
+                  "nothing is committed", file=sys.stderr)
+            return
         C.die(f"{'; '.join(stop)}: the files are restored from git and nothing is committed")
 
-    for p, _, _, text in items:
-        q.write_item(p, text)
-    for p, text, _ in epics:
-        p.write_text(text, encoding="utf-8")
-    for p, text in plain:
-        p.write_text(text, encoding="utf-8")
-    if plan:
-        plan[0].write_text(plan[1], encoding="utf-8")
-    if grid_on:
-        (folder / GRID).unlink()
-    old_words = {e["id"]: e["status"] for k in st.KINDS for e in data.get(k) or [] if "id" in e}
-    old_sprint = {m["id"]: m.get("sprint") or "" for m in data["milestones"]}
-    for m in data["milestones"]:
-        m["launched"] = m["id"] in launched
-    data["format"] = TO
-    write_decisions(dec, folder, dplan)
-    data["decisions"] = {**(data.get("decisions") or {}), **dplan["rounds"]}
-    st.write_json(st.path(folder), st.dump(data))
-    dlines, ddiffer = decision_counts(dec, st, folder, dplan)
-    for line in dlines:
-        print(line)
-    if ddiffer:
-        restore([f"the decision counts differ: {', '.join(ddiffer)}"])
-    with contextlib.redirect_stdout(io.StringIO()):
-        dchain = decision_chain(dec, folder)
-        new_data = st.sync(folder, a.release)
-        sw.write(folder, a.release, quiet=True)  # format 2.2 now: the dashboard page
-        C.ignore_renders(folder, page_src=True)
-    after = counts(q, st, dec, folder)
-    print(count_line(before, after))
-    changed = [f"{e['id']} from {st.say(folder, old_words[e['id']])} to {st.say(folder, e['status'])}"
-               for k in st.KINDS for e in new_data.get(k) or []
-               if e.get("id") in old_words and old_words[e["id"]] != e.get("status")]
-    moved = [f"{m['id']} from {old_sprint[m['id']] or 'no sprint'} to {m.get('sprint') or 'no sprint'}"
-             for m in new_data["milestones"] if m["id"] in old_sprint and old_sprint[m["id"]] != (m.get("sprint") or "")]
-    print(dchain)
-    print(f"statuses changed in the status file: {len(changed)}" + (f" ({'; '.join(changed)})" if changed else "")
-          + f"; {plural(renamed, 'word')} renamed")
-    if moved:
-        print(f"sprints changed in the status file: {'; '.join(moved)}")
-    print(f"epic files changed {len(epics)}; grid file removed: {'yes' if grid_on else 'none to remove'}")
-    want = sorted(n for _, _, n, _ in items)
-    stop = []
-    if (len(before[0]), before[1], before[2]) != (len(after[0]), after[1], after[2]):
-        stop.append("a count differs")
-    if sorted(after[0]) != want:
-        stop.append(f"the queue statuses are ({tally(after[0])}), not ({tally(want)})")
-    if not dec.file_form(folder) or not dec.list_in_step(folder):
-        stop.append("decisions.md is not the list of the decision files")
-    if (folder / GRID).exists():
-        stop.append(f"{GRID} exists again")
-    page = folder / "status" / "index.html"
-    if not page.is_file() or page.read_bytes() != sw.DASHBOARD.read_bytes() or (folder / q.DATA).exists():
-        stop.append("the dashboard page is not installed")
-    if src_line not in C.read(gi).splitlines():
-        stop.append(f"{gi} has no line {src_line}")
-    if stop:
-        restore(stop)
-    paths = [folder / x for x in rewrites if x != GRID or grid_on] + ([gi] if gi.read_bytes() != gi_before else [])
-    commit(root, paths, f"docs(plan): {a.release} moved to format {TO}")
+    try:
+        for p, _, _, text in items:
+            q.write_item(p, text)
+        for p, text, _ in epics:
+            p.write_text(text, encoding="utf-8")
+        for p, text in plain:
+            p.write_text(text, encoding="utf-8")
+        if plan:
+            plan[0].write_text(plan[1], encoding="utf-8")
+        if grid_on:
+            (folder / GRID).unlink()
+        old_words = {e["id"]: e["status"] for k in st.KINDS for e in data.get(k) or [] if "id" in e}
+        old_sprint = {m["id"]: m.get("sprint") or "" for m in data["milestones"]}
+        for m in data["milestones"]:
+            m["launched"] = m["id"] in launched
+        data["format"] = TO
+        write_decisions(dec, folder, dplan)
+        data["decisions"] = {**(data.get("decisions") or {}), **dplan["rounds"]}
+        st.write_json(st.path(folder), st.dump(data))
+        dlines, ddiffer = decision_counts(dec, st, folder, dplan)
+        for line in dlines:
+            print(line)
+        if ddiffer:
+            restore([f"the decision counts differ: {', '.join(ddiffer)}"])
+        with contextlib.redirect_stdout(io.StringIO()):
+            dchain = decision_chain(dec, folder)
+            new_data = st.sync(folder, a.release)
+            sw.write(folder, a.release, quiet=True)  # format 2.2 now: the dashboard page
+            C.ignore_renders(folder, page_src=True)
+        after = counts(q, st, dec, folder)
+        print(count_line(before, after))
+        changed = [f"{e['id']} from {st.say(folder, old_words[e['id']])} to {st.say(folder, e['status'])}"
+                   for k in st.KINDS for e in new_data.get(k) or []
+                   if e.get("id") in old_words and old_words[e["id"]] != e.get("status")]
+        moved = [f"{m['id']} from {old_sprint[m['id']] or 'no sprint'} to {m.get('sprint') or 'no sprint'}"
+                 for m in new_data["milestones"] if m["id"] in old_sprint and old_sprint[m["id"]] != (m.get("sprint") or "")]
+        print(dchain)
+        print(f"statuses changed in the status file: {len(changed)}" + (f" ({'; '.join(changed)})" if changed else "")
+              + f"; {plural(renamed, 'word')} renamed")
+        if moved:
+            print(f"sprints changed in the status file: {'; '.join(moved)}")
+        print(f"epic files changed {len(epics)}; grid file removed: {'yes' if grid_on else 'none to remove'}")
+        want = sorted(n for _, _, n, _ in items)
+        stop = []
+        if (len(before[0]), before[1], before[2]) != (len(after[0]), after[1], after[2]):
+            stop.append("a count differs")
+        if sorted(after[0]) != want:
+            stop.append(f"the queue statuses are ({tally(after[0])}), not ({tally(want)})")
+        if not dec.file_form(folder) or not dec.list_in_step(folder):
+            stop.append("decisions.md is not the list of the decision files")
+        if (folder / GRID).exists():
+            stop.append(f"{GRID} exists again")
+        page = folder / "status" / "index.html"
+        if not page.is_file() or page.read_bytes() != sw.DASHBOARD.read_bytes() or (folder / q.DATA).exists():
+            stop.append("the dashboard page is not installed")
+        if src_line not in C.read(gi).splitlines():
+            stop.append(f"{gi} has no line {src_line}")
+        if stop:
+            restore(stop)
+        paths = [folder / x for x in rewrites if x != GRID or grid_on] + ([gi] if gi.read_bytes() != gi_before else [])
+        commit(root, paths, f"docs(plan): {a.release} moved to format {TO}")
+    except BaseException:
+        # a step died after the first write (a git failure, an error of the status chain, an
+        # interrupt): the files go back, unless restore ran already or the commit is made
+        if not restoring and git("rev-parse", "HEAD").stdout.strip() == head:
+            restore([])
+        raise
     q.write_data(folder)  # again after the commit: the "changed" time of each item is its commit
     fcntl.flock(lock, fcntl.LOCK_UN)
     lock.close()

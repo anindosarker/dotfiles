@@ -431,8 +431,9 @@ def main():
                 for t in b["tasks"]:
                     stored_t.append({"id": f"{num}-{t['id']}", "status": word if word in st.CLOSED else st.STATUSES[0],
                                      "reason": m.get("reason", "") if word == "skipped" else "", "changed": ""})
-        # the status file last: with it the release is in the new form
-        st.write_json(st.path(folder), json.dumps({"release": a.release, "format": C.skill_version(),
+        # the status file last: with it the release is in the new form. The format is 2.0, what this
+        # step makes, not the skill's version: migrate/v2.0-v2.1/format.py takes a 2.0 release only.
+        st.write_json(st.path(folder), json.dumps({"release": a.release, "format": "2.0",
                                                    "milestones": plan["milestones"], "tasks": stored_t}, indent=2) + "\n")
         with contextlib.redirect_stdout(io.StringIO()):
             C.load("lib/grid").refresh(folder, a.release, quiet=True, locked=True)
