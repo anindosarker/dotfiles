@@ -15,8 +15,9 @@ its first ## Attention bullet, else the detail of its tracker's Status line, fro
 tracker copies status/progress.py reads (the milestone's own worktree included); empty when none
 is found.
 In a release with status/data/status.json none of that is written: the page is
-board/task-board.html, which reads status/data/status.data.js (lib/status.py), and this
-script only keeps the page and that file current (refresh_board).
+board/task-board.html, which reads status/data/status.data.js (lib/status.py) and, in a release
+of format 2.1, status/data/queue.data.js for its Queue view (lib/queue.py), and this script only
+keeps the page and those files current (refresh_board).
 Refreshes status/index.html from board/swimlanes.html when the template is newer or the
 page is missing. Both are renders, ignored by git (plan/new_release.py and migrate/pre-v1.0/layout.py add
 the .gitignore lines), never committed. Writes nothing else. sprints/refresh.py runs it last, after
