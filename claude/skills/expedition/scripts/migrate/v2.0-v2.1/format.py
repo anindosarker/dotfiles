@@ -103,10 +103,10 @@ def read_board(bd, q, folder):
     if not path.is_file():
         return []
     text = C.read(path)
+    # C.find_folder refuses a queue.md that is no board, or has old-form cards, before the lock;
+    # this re-check under the lock catches a second migration that ran while this one waited
     if not bd.is_board(text):
         C.die(f"{path} is no kanban board: nothing to move")
-    if bd.is_old(text):
-        C.die(f"{path} has cards in the old form: run migrate/pre-v1.0/queue.py first")
     board = bd.parse(text)
     if board["stray"]:
         i, line = board["stray"][0]
