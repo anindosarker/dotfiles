@@ -17,7 +17,7 @@
 
 1. Run `python3 -I <skill>/scripts/status/report.py <release>` and fix every gap it reports.
 2. Confirm the stage 2 readiness check passed.
-3. The runner session runs every epic: started by `scripts/run/runner.sh start <release>` (its flags and the folder the window opens in: [scripts.md](scripts.md)) as a window named `<release> runner<n>` by default (also its session name; `start` reuses the live runner, `--new` opens another beside it, a stopped number is never reused) in the lead's own tmux session (outside tmux the script prints the command), brief from `templates/runner-brief.md`.
+3. The runner session runs every epic: started by `scripts/run/runner.sh start <release>` (its flags and the folder the window opens in: [scripts.md](scripts.md)) as a window named `<code>-<release>-R<n>` by default (`Exp-2.1-R`, then `Exp-2.1-R2`; also its session name; `start` reuses the live runner, `--new` opens another beside it, a stopped number is never reused; a runner of the old name form `<release> runner<n>` keeps its name) in the lead's own tmux session (outside tmux the script prints the command), brief from `templates/runner-brief.md`.
    - Its first prompt starts with `ultracode`, so the Workflow tool is opted in from the first turn.
    - Each go sends one RUN line; the turn it arrives in starts the epic: autopilot start script, loop scheduled, worktrees assigned, the epic's ready milestones launched.
    - The loop and its wake signal: [tick.md](tick.md).
@@ -211,10 +211,10 @@ The runner then files a queue item and continues with work that does not depend 
 
 - `roll over` in any session of the run: use the `roll-over` skill. It clears the session in its own window, renames it and starts it again from the handoff. Workflows the session launched keep running and report to the same window. The skill knows nothing about leads or runners: everything below goes into the handoff.
 - A lead's handoff.
-  - `## Starter prompt`, two lines: `/caveman:ultracave`, then `/expedition <stage> <release> Read <handoff path> and continue.` No `## Session name`: the lead's name gets its version bumped.
+  - `## Starter prompt`, two lines: `/caveman:ultracave`, then `/expedition <stage> <release> Read <handoff path> and continue.` No `## Session name`: the lead's name gets its version bumped (`Exp-2.1-L` to `Exp-2.1-L2`).
   - Next steps start with: send `LEAD <your session name>` to every live runner, with `run/runner.sh send "<runner name>" "LEAD <name>"` for each runner `run/runner.sh list` shows live, because the lead's name changed and the runners address the lead by name.
   - Each send also records the lead's window as the registry `lead` entry, which the nudge watcher follows.
-- A runner's handoff is the run's handoff, rewritten (Handoff and end of run). `## Starter prompt`, two lines: `/caveman:ultracave`, then `/expedition run <release> ultracode Read <handoff path> and continue.` `## Session name`: `<release> runner<n>`, `<n>` the next unused number in `run/runner.sh list`. It lists every Workflow still running: milestone, run id, task id. Next steps start with, in this order:
+- A runner's handoff is the run's handoff, rewritten (Handoff and end of run). `## Starter prompt`, two lines: `/caveman:ultracave`, then `/expedition run <release> ultracode Read <handoff path> and continue.` `## Session name`: the name `python3 -I <skill>/scripts/run/name.py <release> runner` prints (`Exp-2.1-R3` after `Exp-2.1-R2`, `Exp-2.1-R4` after the old name `v2.1.x runner3`), the name `adopt` gives the new entry. It lists every Workflow still running: milestone, run id, task id. Next steps start with, in this order:
   1. `run/runner.sh adopt <release> --replaces "<the runner's name before the roll over>"`: the cleared session has a new session id and gets its own entry in the runner list, under that same name.
   2. `NOTE runner: rolled over, now <new name>` to the lead.
   3. The wake check ([tick.md](tick.md), step 3). The Workflows the handoff lists are this runner's own, whatever owner `run/check.py` prints for them: one that is `alive` is left to finish.
