@@ -439,3 +439,11 @@ Written with the `write-handoff` skill.
   ```
 
 - No release line: the folder gives the release.
+- A handoff that a new lead session starts from ends with `## Starter prompt`: two lines, each typed as its own prompt, the voice line and then the stage command:
+
+  ```
+  /caveman:ultracave
+  /expedition discuss <release> Read <handoff path> and continue.
+  ```
+
+  The `roll-over` skill types each line as its own message; a person pastes them one at a time. The handoff of a roll over: [run.md](run.md), Roll over.
