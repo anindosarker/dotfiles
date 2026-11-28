@@ -25,8 +25,11 @@ Steps, each skipped when already done, so a rerun after a failure picks up where
 5. close writer: runner.sh stop "<release> specs E<n>". Skipped when runner.sh list shows that
    window stopped; a window runner.sh does not list at all leaves nothing to close.
 6. run: runner.sh start <release> --from <lead> when runner.sh list shows no live runner of the
-   release, then runner.sh send <release> "RUN E<n> <release folder> epic <release
-   folder>/plan/epics/E<n>.md from <lead>" (<release folder> relative to the repository).
+   release, then runner.sh send --confirm <release> "RUN E<n> <release folder> epic <release
+   folder>/plan/epics/E<n>.md from <lead>" (<release folder> relative to the repository). The
+   send waits until the runner's window takes input and exits 0 only when the line is in the
+   runner's transcript (it types the line a second time when needed, D19); only then is the
+   step recorded. A send that fails stops the go at step 6, and the next call does it again.
 7. next epic: epics/new.py <release> E<n+1>, when that file does not exist.
 
 Steps 5 and 6 (and step 3 in format 2.2) have no trace in the plan files: each is recorded in status/data/go.log (a
@@ -256,7 +259,9 @@ class Go:
             self.runner_sh("start", self.release, "--from", self.lead)
         rel = self.folder.relative_to(self.root).as_posix()
         line = f"RUN E{self.n} {rel} epic {rel}/{self.own.EPICS_DIR}/E{self.n}.md from {self.lead}"
-        self.runner_sh("send", self.release, line)
+        # --confirm: the call exits 0 only when the line is in the runner's transcript, so the
+        # step is recorded only for a runner that has the line.
+        self.runner_sh("send", "--confirm", self.release, line)
         self.log("run")
         return True
 
