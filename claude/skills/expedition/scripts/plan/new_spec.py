@@ -2,8 +2,10 @@
 """Create a spec in a release: its folder plan/specs/NN-<slug>/ with the file NN-<slug>.md and
 the empty folder tasks/, and the row "| NN | [Title](plan/specs/NN-<slug>/NN-<slug>.md) |  |
 scope |" (Epic cell empty) in the Deliverables table of <release>-plan.md. In a release made
-before status/data/status.json it writes what it wrote then (old_spec): the flat file
-plan/specs/NN-<slug>.md and the tracker of its first milestone.
+before status/data/status.json (format 1.0) it writes what it wrote then (old_spec): the flat file
+plan/specs/NN-<slug>.md and the tracker of its first milestone. From templates/spec-flat.md the
+first milestone block is named after the spec, with "Depends on: none", so sprints/check.py
+schedules the new spec before its blocks are filled.
 
 Usage: python3 -I plan/new_spec.py <release> <num> <slug> "<Title>" "<scope>"
        [--owner X] [--template PATH] [--root PATH]
@@ -106,7 +108,7 @@ def old_spec(a, root, own, folder, plan):
     elif rules:
         template = OLD_STUB.format(heading="[title]", paths=", ".join(rules))
     else:
-        template = (C.TEMPLATES / "spec-flat.md").read_text(encoding="utf-8")
+        template = first_milestone((C.TEMPLATES / "spec-flat.md").read_text(encoding="utf-8"), a.title)
     cited = set()
     for text in (a.title, a.scope, template):
         for m in re.finditer(r"\((D\d+[^)]*)\)", text):
@@ -121,6 +123,22 @@ def old_spec(a, root, own, folder, plan):
           "(this release is format 1.0: reference/old-form/planning-guidelines.md and reference/old-form/specs.md)")
     for r in rules:
         print(f"Project planning rules: {r}")
+
+
+FLAT_NAME = "### Milestone: [Name]"
+FLAT_DEPENDS = "- Depends on: [milestone names or spec numbers, or none]"
+
+
+def first_milestone(text, title):
+    """templates/spec-flat.md with its milestone block named after the spec and "Depends on:
+    none": sprints/check.py reads the placeholder words as milestone names and stops every plan
+    and run command of the release (Q28). The block is the spec's first milestone: its tracker is
+    the NN-<slug>-tracker.md old_spec writes (lib/ownership.py milestone_tracker)."""
+    out = text.replace(FLAT_NAME, f"### Milestone: {title}", 1).replace(FLAT_DEPENDS, "- Depends on: none", 1)
+    if FLAT_NAME in out or FLAT_DEPENDS in out or "[milestone names" in out:
+        die(f"{C.TEMPLATES / 'spec-flat.md'} has more than one milestone placeholder: keep one "
+            "block with the lines '### Milestone: [Name]' and '- Depends on: [...]'; nothing written")
+    return out
 
 
 def load_template(root, flag, rules):
