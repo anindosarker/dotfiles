@@ -189,7 +189,7 @@ class Go:
         for s in specs:
             paths += sorted((self.folder / self.own.SPECS_DIR).glob(f"{s}-*"))
             paths += sorted((self.folder / self.own.TRACKERS_DIR).glob(f"{s}-*-tracker.md"))
-        paths += [self.folder / "decisions.md", *C.load("lib/queue").commit_paths(self.folder),
+        paths += [*C.load("lib/decisions").commit_paths(self.folder), *C.load("lib/queue").commit_paths(self.folder),
                   self.folder / f"{self.release}-plan.md", self.path]
         return self.commit(paths, f"docs(plan): {self.release} E{self.n} go: specs, tags, plan rows, queue")
 
@@ -228,7 +228,7 @@ class Go:
         mirrored = [p for s in specs for p in sorted((self.folder / own.SPECS_DIR).glob(f"{s}-*"))]
         return self.commit([*epics, *mirrored, self.folder / C.load("lib/status").FILE,
                             *C.load("lib/grid").grid_files(self.folder),
-                            self.folder / "decisions.md", *C.load("lib/queue").commit_paths(self.folder)],
+                            *C.load("lib/decisions").commit_paths(self.folder), *C.load("lib/queue").commit_paths(self.folder)],
                            f"docs(plan): {self.release} E{self.n} go: grid and epic file")
 
     def step_close(self):

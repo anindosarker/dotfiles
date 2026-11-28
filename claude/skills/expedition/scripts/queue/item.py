@@ -73,6 +73,21 @@ the item itself, a ring of items that wait for each other. After every command t
 for, and the files it changed are committed with the rest.
 
 Below format 2.2 --decider is accepted and not stored, and --depends is refused.
+
+A release whose decisions are files (lib/decisions.py file_form: format 2.2 and decisions.md
+not a board) records a decision in a file of its own:
+
+- D needs --decider you, lead or agent on every call, also one with no --source, and is refused
+  without it before anything is written (D --source still takes you or lead only). It writes
+  decisions/D<n>-<slug>.md with "status: to-do", "decider" and, with --source, "source"; the
+  title line; the --bullet line as the body. No "- Source:" line. <n> is one above the highest
+  decision file; the slug is the rule of a queue item file. The round goes to
+  status/data/status.json, "decisions.D<n>.round", by the rule above (lib/status.py
+  set_decision). Then the status rule on every decision file and decisions.md as a list
+  (lib/decisions.py sync_files), one commit of the decision file, decisions.md, status.json and,
+  with --source, the item file, and the page and dashboard data written again.
+- The statement above that D with no --source needs no --decider, and that nothing about the
+  decider goes into decisions.md, holds for the board form only.
 """
 import argparse
 import fcntl
@@ -118,7 +133,8 @@ def main():
     ap.add_argument("--root", help="repository root (default: found from the cwd)")
     ap.add_argument("--source")
     ap.add_argument("--option", help="2.1: the number of the option the owner picked (D --source)")
-    ap.add_argument("--decider", help="2.2: you, lead or agent, who closed the item (--move Dropped|Autofix, D --source)")
+    ap.add_argument("--decider", help="2.2: you, lead or agent, who closed the item (--move Dropped|Autofix, D --source); "
+                    "with decision files, who made the call (every D)")
     ap.add_argument("--bullet", action=_Once)
     ap.add_argument("--move", nargs=2, metavar=("Q<n>", "LANE"))
     ap.add_argument("--fact", nargs=2, metavar=("Q<n>", "TEXT"))
@@ -167,7 +183,7 @@ def main():
     folder = own.release_folder(root, own.detect_owner(root, a.owner), a.release)
     queue = folder / own.QUEUE_MD
     dc = C.load("lib/decisions")
-    target = folder / "decisions.md"
+    target = dc.path_of(folder)
     Q = C.load("lib/queue")
     if a.depends and not Q.status_form(folder):
         die(f"--depends needs a release of format 2.2: move {a.release} first with scripts/migrate/v2.1-v2.2")
@@ -211,7 +227,7 @@ def main():
             d_text = target.read_text(encoding="utf-8")
             cards = dc.parse(d_text)["cards"]
             ident = f"D{dc.highest(cards) + 1}"
-            rnd = max(dc.highest_round(cards), 1) + (1 if a.new_round and dc.highest_round(cards) else 0)
+            rnd = dc.next_round(cards, a.new_round)
             bullets = ([a.bullet] if a.bullet else []) + ([f"Source: {a.source}"] if a.source else [])
             block = dc.new_card(int(ident[1:]), title, rnd, bullets)
             bd.write(target, bd.insert_card(d_text, dc.TODO, block, int(ident[1:]), "D"))
@@ -256,6 +272,9 @@ def items(a, root, folder, Q, dc, target, card_op, title, fact):
         if closes and a.decider not in want:
             die(f"--decider {a.decider} cannot close {a.move[0]} as {closes}: "
                 f"{'an archived item is closed by you or lead' if closes == 'archived' else 'a done item with no decision is closed by agent'}")
+    files = a.kind == "D" and dc.file_form(folder)  # the decision goes into a file of its own
+    if files and a.decider is None:
+        die("D needs --decider you, lead or agent: who made the call (nothing was written)")
     if new22 and a.source and a.decider is None:
         die(f"D --source {a.source} needs --decider you or lead in a release of format 2.2")
     if new22 and a.source and a.decider not in Q.DECISION_DECIDERS:
@@ -295,7 +314,7 @@ def items(a, root, folder, Q, dc, target, card_op, title, fact):
             written.append(path)
             subject = f"{ident} {title}"
         else:
-            if not target.is_file():
+            if not files and not target.is_file():
                 die(f"missing: {target}")
             item = Q.find(folder, int(a.source[1:])) if a.source else None
             if a.source and item is None:
@@ -305,14 +324,25 @@ def items(a, root, folder, Q, dc, target, card_op, title, fact):
                 if a.option not in keys:
                     die(f"{a.source} has no option {a.option}: its options are "
                         f"{', '.join(keys) if keys else 'not written yet (no ## Options: section)'}")
-            d_text = target.read_text(encoding="utf-8")
-            cards = dc.parse(d_text)["cards"]
-            ident = f"D{dc.highest(cards) + 1}"
-            rnd = max(dc.highest_round(cards), 1) + (1 if a.new_round and dc.highest_round(cards) else 0)
-            bullets = ([a.bullet] if a.bullet else []) + ([f"Source: {a.source}"] if a.source else [])
-            block = dc.new_card(int(ident[1:]), title, rnd, bullets)
-            bd.write(target, bd.insert_card(d_text, dc.TODO, block, int(ident[1:]), "D"))
-            written.append(target)
+            if files:
+                cards = dc.file_cards(folder)
+                ident = f"D{dc.highest(cards) + 1}"
+                path = dc.new_path(folder, int(ident[1:]), title)
+                if path.exists():
+                    die(f"refusing to overwrite {path}")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(dc.new_text(int(ident[1:]), title, a.decider, a.source, a.bullet), encoding="utf-8")
+                written += [path, C.load("lib/status").set_decision(
+                    folder, ident, round=dc.next_round(cards, a.new_round))]
+            else:
+                d_text = target.read_text(encoding="utf-8")
+                cards = dc.parse(d_text)["cards"]
+                ident = f"D{dc.highest(cards) + 1}"
+                rnd = dc.next_round(cards, a.new_round)
+                bullets = ([a.bullet] if a.bullet else []) + ([f"Source: {a.source}"] if a.source else [])
+                block = dc.new_card(int(ident[1:]), title, rnd, bullets)
+                bd.write(target, bd.insert_card(d_text, dc.TODO, block, int(ident[1:]), "D"))
+                written.append(target)
             if item is not None:
                 closed = "done" if new22 else "decided"
                 m = re.match(r"^D(\d+)$", item["decision"]) if item["status"] == closed else None
@@ -338,11 +368,14 @@ def items(a, root, folder, Q, dc, target, card_op, title, fact):
             Q.write_list(folder)
             written.append(queue)
         paths = [str(p) for p in written]
-        for p in (target, queue):
-            if p not in written and p.is_file():
+        for p in (*dc.commit_paths(folder), queue):
+            if p not in written and p.exists():
                 paths.append(str(p))
         C.commit(root, paths, f"docs(plan): {a.release} {subject}")
-        Q.write_data(folder)  # after the commit: "changed" is read from git
+        if files:  # after the commit: "changed" is read from git; status.data.js has the round
+            C.load("lib/status").write_page_data(folder)
+        else:
+            Q.write_data(folder)  # after the commit: "changed" is read from git
         fcntl.flock(lock, fcntl.LOCK_UN)
     print(ident)
 

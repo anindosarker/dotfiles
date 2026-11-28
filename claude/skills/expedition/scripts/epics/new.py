@@ -15,7 +15,11 @@ the "Decisions:" line (the ids already there plus the new ones, in number order)
 row per decision, "| D<n> <title from decisions.md> |  |  |  |  |"; on a rerun only the missing
 rows are added, every other row kept as it is. Refuses, writing nothing, a decision that is
 missing from decisions.md, superseded, already tagged with another epic, or done with nothing to
-run (in Done without an epic tag).
+run (in Done without an epic tag). In a release whose decisions are files (lib/decisions.py
+file_form) the title of a row is the title line of the decision file, and the refusals are: an
+id with no decision file, an archived decision, a backlog decision, a decision with the "epic"
+line of another epic, and a decision that is done with nothing to run. A blocked decision is
+accepted: the owner may put it in an epic.
 
 A release of format 2.2 (lib/status.py new_form): the front matter holds "status" and "starts"
 only, with no "decisions:" and no "specs:" line; the epic's decisions are the D ids of the
@@ -72,12 +76,15 @@ def start(own, folder, path, epic, nums):
     heads, bullets = own.supersedes(folder)
     gone = {**bullets, **heads}
     bad = []
+    files = C.load("lib/decisions").file_form(folder)
     for d in nums:
         t = tags.get(d)
         if t is None:
-            bad.append(f"D{d} is not in decisions.md")
+            bad.append(f"D{d} has no decision file" if files else f"D{d} is not in decisions.md")
         elif d in gone:
             bad.append(f"D{d} is superseded by D{gone[d]}")
+        elif files and t["status"] == "backlog":
+            bad.append(f"D{d} is backlog: it moved to another release")
         elif t["epic"] and t["epic"] != n:
             bad.append(f"D{d} is already in E{t['epic']}")
         elif t["done"] and not t["epic"]:

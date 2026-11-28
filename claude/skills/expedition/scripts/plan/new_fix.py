@@ -302,7 +302,8 @@ def run(a, own, bd, root, folder, ids, files, want_epic, lock):
         load("lib/grid").refresh(folder, a.release, quiet=True)
         load("sprints/swimlanes").write(folder, a.release, quiet=True)
     fcntl.flock(lock, fcntl.LOCK_EX)
-    paths = [str(p) for p in writes] + [str(folder / own.SPRINTS_MD), str(folder / "decisions.md")]
+    paths = [str(p) for p in writes] + [str(folder / own.SPRINTS_MD)]
+    paths += [str(p) for p in C.load("lib/decisions").commit_paths(folder)]
     paths += [str(queue)] if ids else []
     paths += [str(p) for p in sorted((folder / own.EPICS_DIR).glob("E*.md"))]
     C.commit(root, paths, f"docs(plan): {a.release} fix {num} {a.title}")

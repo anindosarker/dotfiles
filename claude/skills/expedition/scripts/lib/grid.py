@@ -216,11 +216,17 @@ def sync_epics(folder, comp):
 
 
 def sync_decisions(folder, locked=False):
-    """The cards of decisions.md, to the lanes of the Done rule; prints the cards moved. Takes
-    the .ids.lock lock unless the caller holds it (locked=True)."""
+    """The cards of decisions.md, to the lanes of the Done rule; prints the cards moved. In the
+    file form of the decisions the status rule on every decision file and the list
+    (lib/decisions.py sync_files): prints "decisions: D9 to in progress" and writes the dashboard
+    data again when a file changed. Takes the .ids.lock lock unless the caller holds it
+    (locked=True)."""
     dc = C.load("lib/decisions")
     moved = dc.sync_file(folder, None if locked else C.lock_file(folder))
-    if moved:
+    if moved and dc.file_form(folder):
+        print(f"decisions: {dc.moved_text(moved)}")
+        dc.write_data(folder)  # the status chain wrote the dashboard data before this step
+    elif moved:
         print(f"{folder / 'decisions.md'}: lanes synced: {dc.moved_text(moved)}")
 
 

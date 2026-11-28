@@ -621,15 +621,23 @@ def decisions():
     return C.load("lib/decisions")
 
 
+BOARD_STATUS = {"To do": "to-do", "In progress": "in progress", "Done": "done"}
+
+
 def read_tags(folder):
     """Decision states from the decisions.md board (lib/decisions.py): {D number: {"epic": the
     #E<n> number or None, "lane": "To do", "In progress" or "Done", "done" and "closed": True in
-    Done, "line": the card's line index}}."""
+    Done, "line": the card's line index, "status": one of the six status words (on a board from
+    the lane, archived for #superseded, backlog for #deferred)}}. In the file form of the
+    decisions every value is worked out from the decision file (lib/decisions.py file_cards):
+    status is its status line, the lane follows from it, line is 0."""
     tags = {}
     for c in decisions().read_cards(folder)["cards"]:
         done = c["lane"] == "Done"
+        word = c.get("status") or ("archived" if c["sup_by"] else "backlog" if c["deferred"] and done
+                                   else BOARD_STATUS.get(c["lane"], ""))
         tags[c["num"]] = {"epic": c["epic"], "lane": c["lane"], "done": done, "closed": done,
-                          "line": c["line"]}
+                          "line": c["line"], "status": word}
     return tags
 
 
@@ -654,7 +662,8 @@ def spec_epic(path):
 def supersedes(folder):
     """(heads, bullets): {old D: new D} from "(superseded by D15)" title marks (the first mark of
     a card) and from "- Supersedes D7." bullets of a later decision. A superseded decision is a
-    key of either."""
+    key of either. In the file form of the decisions heads comes from the "replaced_by" line of
+    each file and bullets is empty: no script reads the body of a decision file."""
     heads, bullets = {}, {}
     for c in decisions().read_cards(folder)["cards"]:
         if c["sup_by"]:
@@ -848,8 +857,9 @@ def set_field(text, key, value):
 
 
 def decision_titles(folder):
-    """{D number: card title} from decisions.md, without a "(superseded by ...)" mark or tags;
-    "|" becomes "/" so the title fits a table cell."""
+    """{D number: card title} from decisions.md, without a "(superseded by ...)" mark or tags (in
+    the file form the title line of each decision file); "|" becomes "/" so the title fits a
+    table cell."""
     return {c["num"]: c["base"].lstrip(":.-").strip().replace("|", "/")
             for c in decisions().read_cards(folder)["cards"]}
 

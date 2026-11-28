@@ -226,7 +226,8 @@ def check_decision(folder, d, epic):
     o = own()
     tag = o.read_tags(folder).get(d)
     if tag is None:
-        C.die(f"D{d} is not in decisions.md")
+        dc = C.load("lib/decisions")
+        C.die(f"D{d} has no file in {dc.DECISIONS_DIR}/" if dc.file_form(folder) else f"D{d} is not in decisions.md")
     o.refuse_superseded(folder, {d}, "--decision")
     if tag["epic"] and tag["epic"] != epic:
         C.die(f"D{d} is in E{tag['epic']} already")
@@ -247,7 +248,9 @@ def tag_decision(folder, epic, d):
     """Decision D<d> joins epic E<epic> after its go: its id on the epic file's "Decisions:" line,
     the Ownership table rebuilt (lib/ownership.py fill_epic), and the "#E<n>" tag that moves the
     card to In progress (epics/tag.py). In a release of format 2.2 (lib/ownership.py table_form)
-    the decision becomes a table row only: the file has no "Decisions:" line. Prints nothing."""
+    the decision becomes a table row only: the file has no "Decisions:" line. In the file form of
+    the decisions epics/tag.py writes "epic: E<n>" in the decision file in place of the tag.
+    Prints nothing."""
     o = own()
     path = o.epic_path(folder, epic)
     if path.is_file():

@@ -10,6 +10,13 @@ old decision that is superseded already. Then the Done rule sync of decisions.md
 Decided-card sync of queue.md, and one commit, never pushed. Sending "NOTE D<old>: superseded by
 D<new>" to the other session stays a session step. Prints one line. A release of format 2.1
 keeps its queue in item files (lib/queue.py): no queue sync there.
+
+A release whose decisions are files (lib/decisions.py file_form): the old file gets
+"status: archived" and "replaced_by: D<new>"; its title line is not changed. The new file is not
+changed: its body is free, and "replaced_by" of the old file holds the link. The same refusals
+(an id with no file, the same id twice, an old decision with a "replaced_by" line already). Then
+the status rule on every decision file and the list, one commit of decisions.md and the decision
+files, and the dashboard data written again (lib/dashboard.py). The last line is the same.
 """
 import argparse
 import fcntl
@@ -52,7 +59,9 @@ def main():
         die(f"{a.old} cannot supersede itself")
     root, folder = C.find_folder(a.release, a.owner, a.root)
     dc, bd, own = C.load("lib/decisions"), C.load("lib/board"), C.load("lib/ownership")
-    path = folder / "decisions.md"
+    if dc.file_form(folder):
+        return supersede_file(a, root, folder, old, new, dc)
+    path = dc.path_of(folder)
     with open(C.lock_file(folder), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         text = path.read_text(encoding="utf-8")
@@ -77,6 +86,26 @@ def main():
         if not Q.item_form(folder):  # format 2.1: a decided item holds its decision id only
             bd.sync_file(folder / own.QUEUE_MD, bd.decision_tags(own, folder))
         C.commit(root, [path, *Q.commit_paths(folder)], f"docs(plan): {a.release} {a.old} superseded by {a.new}")
+        fcntl.flock(lock, fcntl.LOCK_UN)
+    print(f"{a.old} superseded by {a.new}, to Done; committed")
+
+
+def supersede_file(a, root, folder, old, new, dc):
+    """supersede.py on decision files: the old file archived, with replaced_by."""
+    with open(C.lock_file(folder), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        cards = {c["num"]: c for c in dc.file_cards(folder)}
+        missing = [x for x, n in ((a.old, old), (a.new, new)) if n not in cards]
+        if missing:
+            die(f"no file in {folder / dc.DECISIONS_DIR}: {', '.join(missing)}")
+        if cards[old]["sup_by"]:
+            die(f"{a.old} is superseded already by D{cards[old]['sup_by'][0]}")
+        dc.set_fields(folder, old, status="archived", replaced_by=f"D{new}")
+        got = next(c for c in dc.file_cards(folder) if c["num"] == old)["status"]
+        if got != "archived":  # the status rule must keep what this command stored
+            die(f"{a.old} is {got} after the status rule, not archived: restore {cards[old]['path']} from git")
+        C.commit(root, dc.commit_paths(folder), f"docs(plan): {a.release} {a.old} superseded by {a.new}")
+        dc.write_data(folder)  # after the commit: "changed" is read from git
         fcntl.flock(lock, fcntl.LOCK_UN)
     print(f"{a.old} superseded by {a.new}, to Done; committed")
 
