@@ -97,13 +97,13 @@
       "After \"in option 2, make it every 30 seconds\", confirms the change in chat and does not post the item",
       "After \"good, nothing more on this one\", posts the whole item Q70 one time: the title, every bullet, the Now group, both options with their bullets and the Say: block",
       "In that post, option 2 says every 30 seconds, and every other line is the same as before, word for word, with no part left out",
-      "Records nothing for Q70: no queue/item.py call with D, no edit of decisions.md or of a plan file, because \"good\" is no explicit word",
+      "Records nothing for Q70, because \"good\" is no explicit word: no queue/item.py call with D, no decision is recorded and no status changes; writing the item's Details and Options to its item file when the talk on it ends is allowed (Storing)",
       "After \"makes sense\" on Q73, does not post the item and records nothing"
     ]
   },
   {
     "skills": ["expedition"],
-    "query": "/expedition discuss v0.3.x  (the release is in format 2.2. Epic E12 is planned and waits for the owner's `delegate`; the lead posted the `Epic planned: E12` message earlier in the session. Decision D65 is held until Q80, which is open. Item Q70 is open in chat with its options. The owner writes: \"does option 1 also cover the mobile layout?\")",
+    "query": "/expedition discuss v0.3.x  (the release is in format 2.2. Epic E12 is planned and waits for the owner's `delegate`; the lead posted the `Epic planned: E12` message earlier in the session. Decision D65 is held until Q80, which is open. Item Q70 is open in chat with its options. The item file of Q70 holds notes only: it has no `## Details` and no `## Options:`. The owner writes: \"does option 1 also cover the mobile layout?\")",
     "expected_behavior": [
       "Answers the question about the mobile layout in chat",
       "Runs `status/waits.py <release> --skip Q70` (or `status/waits.py <release>`) one time, with no `--new`, after its last plan write of the turn",
