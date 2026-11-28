@@ -27,6 +27,14 @@ the items per status and lists each with its status; its gaps: an item file with
 title or a number that differs from its file name, a "status" outside open, decided, later,
 dropped and autofix, a decided item with no decision or one not in decisions.md, a queue.md
 that differs from the list the files give, a duplicate number, a citation of a missing item.
+A release of format 2.2 (lib/queue.py status_form) counts its items per status word (to-do,
+blocked, done, backlog, archived); its gaps, besides the title, queue.md, duplicate and citation
+gaps above: a "status" outside those five words; a "decider" that is not you, lead or agent, or a
+"decider" on an item that is not done or archived (a closed item with no "decider" is no gap: it
+was closed before format 2.2); a "decision" of a done item that is not in decisions.md; a
+"depends_on" id that is not like Q14 or has no item file; an item that is not closed and waits for
+an archived item; an item whose status differs from what the blocked check gives (fix:
+sprints/refresh.py).
 process.md (## P<n>) must
 exist with no placeholder left; (P<n>) citations must be defined.
 
@@ -44,19 +52,29 @@ the next epic file missing. The epic files' "## Ownership" tables (lib/ownership
 with grid rows whose file has no table, an unreadable table, a decision of the Decisions line
 with no row, a spec of the epic with no row, a row file no milestone of its spec owns, a Sprint
 cell that disagrees with the grid. Epics without an epic file are not flagged.
+In a release of format 2.2 the grid rows come from status/data/status.json (lib/ownership.py
+grid), never from status/sprints.md: an epic runs while a milestone of it there is not to-do, and
+a spec counts as built while a milestone of it is in progress, blocked after a launch, or done.
+The epic file is its Ownership table alone (no Decisions line).
 
 Gaps reported for the layout: a plan section other than Goals and Deliverables; a
 Deliverables Scope cell over 120 characters; a spec with no "### Milestone:" block, a block without Files owned, a Task line without
 Checks, no Acceptance line; milestones sprints/check.py would refuse (collision, cycle);
 status/sprints.md missing, without a "| Milestone" grid, with text under the grid, with a cell
 not one of [x], [ ], [~], ·, [!] or blank, or with rows that differ from the milestones of the specs
-with an Epic line. Ownership also prints each tagged epic's critical path,
+with an Epic line. In a release of format 2.2 status/sprints.md is not read and not required: the
+gaps are the file itself when it is left over, and a milestone of an epic with no "sprint" in the
+status file (fix: sprints/refresh.py). Ownership also prints each tagged epic's critical path,
 computed on the fly. A folder without plan/ is refused (migrate/pre-v1.0/layout.py), a folder still on
 the old queue files too (migrate/pre-v1.0/queue.py), a decisions.md in the heading format too
 (migrate/pre-v1.0/decisions.py), a folder that still has status/ownership.md too
 (migrate/pre-v1.0/epics.py), a folder that still has run/trackers/fix-*-tracker.md too (migrate/pre-v1.0/fixes.py).
 A tracker Status of done (or the old merged) counts as done. A tracker no milestone owns counts as citing the
 queue cards named on its first line.
+The last line, for a release in a lower format than the skill: the README.md of the migration
+folder (skill below 2.2), or the chain of folders under scripts/migrate/ from the release's format
+up, in the order to run them (skill 2.2 and higher, migration_chain); it names only folders that
+exist.
 """
 import argparse
 import collections
@@ -311,6 +329,101 @@ def items_report(folder, Q, docs, extra, dec_nums):
     return [it["file_num"] for it in its if it["status"] == "open"]
 
 
+ITEM_WORDS = ("to-do", "blocked", "done", "backlog", "archived")  # the status words of a queue item, format 2.2
+
+
+def status_items_report(folder, Q, docs, extra, dec_nums):
+    """The Queue section of a release of format 2.2: the count per status word, one row per item
+    with its citing specs and status, then gaps. Returns the numbers of the items still open
+    (to-do or blocked)."""
+    its = Q.items(folder)
+    counts = collections.Counter(it["status"] for it in its)
+    print(f"Queue: {len(its)} items in {Q.QUEUE_DIR}/: "
+          + ", ".join(f"{s} {counts.get(s, 0)}" for s in ITEM_WORDS))
+    texts = {num: read(p) for num, p in docs}
+    texts.update({key: first for key, _, first in extra})
+    cited = {num: q_cites(t) for num, t in texts.items()}
+    rows = []
+    for it in its:
+        n = it["file_num"]
+        citing = sorted((num for num, ci in cited.items() if n in ci), key=num_key)
+        rows.append((f"Q{n}", ", ".join(citing) or "-", it["status"] or "-"))
+    if rows:
+        w1 = max(len(r[0]) for r in rows) + 2
+        w2 = max(len(r[1]) for r in rows) + 2
+        for a, b, c in rows:
+            print(f"  {a.ljust(w1)}{b.ljust(w2)}{c}")
+    status_of = {f"Q{it['file_num']}": it["status"] for it in its}
+    for it in its:
+        n, rel, st = it["file_num"], it["path"].relative_to(folder).as_posix(), it["status"]
+        if it["num"] is None:
+            print(f"  {rel}: no '# Q<n>. <title>' line")
+        elif it["num"] != n:
+            print(f"  {rel}: the title says Q{it['num']}, the file name Q{n}")
+        if st not in ITEM_WORDS:
+            print(f"  {rel}: status '{st}': only {', '.join(ITEM_WORDS)}")
+        if it["decider"] and it["decider"] not in Q.DECIDERS:
+            print(f"  Q{n}: decider '{it['decider']}': only {', '.join(Q.DECIDERS)}")
+        elif it["decider"] and st not in ("done", "archived"):
+            print(f"  Q{n}: decider '{it['decider']}' on a {st or 'to-do'} item: only a done or archived item "
+                  "has a decider; remove the line")
+        if st == "done" and it["decision"]:
+            m = re.match(r"^D(\d+)$", it["decision"])
+            if not m:
+                print(f"  Q{n}: decision '{it['decision']}' is not like D<n>")
+            elif int(m.group(1)) not in dec_nums:
+                print(f"  Q{n}: decision {it['decision']} is not in decisions.md")
+        dep_gap = False
+        for i in it["depends_on"]:
+            if not Q.ID_RE.match(i):
+                print(f"  Q{n}: depends_on names {i}: only queue item ids like Q14")
+                dep_gap = True
+            elif i not in status_of:
+                print(f"  Q{n}: depends_on names {i}, which has no item file")
+                dep_gap = True
+        gone = [i for i in it["depends_on"] if status_of.get(i) == "archived"]
+        if gone and st not in ("done", "archived"):
+            print(f"  Q{n}: waits for {', '.join(gone)}, archived, which never gets done: "
+                  f"change its depends_on with queue/item.py --depends")
+            dep_gap = True
+        want = Q.effective(it, its)
+        if st in ("to-do", "blocked") and want != st and not dep_gap:
+            print(f"  Q{n}: status '{st}', the blocked check gives '{want}': run sprints/refresh.py")
+    if not Q.list_in_step(folder):
+        print(f"  {QUEUE_MD} differs from the item files: the next queue/item.py run writes it again")
+    have = {it["file_num"] for it in its}
+    sources = [folder / "decisions.md", folder / f"{folder.parent.name}-plan.md"]
+    sources += sorted((folder / TRACKERS_DIR).glob("*.md")) + sorted((folder / EPICS_DIR).glob("*.md"))
+    sources += [p for _, p in docs]
+    missing = collections.defaultdict(set)
+    for p in sources:
+        if p.is_file():
+            for n in q_cites(read(p)) - have:
+                missing[n].add(p.relative_to(folder).as_posix())
+    for n in sorted(missing):
+        print(f"  Q{n} cited but undefined: {', '.join(sorted(missing[n]))}")
+    dups = sorted(n for n in have if len(list((folder / Q.QUEUE_DIR).glob(f"Q{n}-*.md"))) > 1)
+    if dups:
+        print(f"  duplicate numbers: {', '.join(f'Q{n}' for n in dups)}")
+    return [it["file_num"] for it in its if it["status"] in ("to-do", "blocked", "")]
+
+
+def stored_sprints(folder, own, owned):
+    """The Sprints section of a release of format 2.2: the grid rows come from the status file
+    (lib/ownership.py grid); status/sprints.md is not read."""
+    if (folder / SPRINTS_MD).is_file():
+        print(f"  {SPRINTS_MD} left over from format 2.1: delete it; the status file holds the sprint of each milestone")
+    n, rows = own.grid(folder)
+    if rows:
+        print(f"  {len(rows)} rows, {n} columns, {sum(1 for _, c in rows if '[x]' in c)} done")
+    if owned is not None:
+        in_epic = C.load("lib/grid").epic_rows(folder, own, owned)
+        sprint = {m["name"]: m.get("sprint") for m in (C.load("lib/status").load(folder) or {}).get("milestones", [])}
+        for m in owned:
+            if m["name"] in in_epic and not sprint.get(m["name"]):
+                print(f"  milestone with no sprint in the status file: {m['name']} (run sprints/refresh.py)")
+
+
 def new_print(folder, plan, d, own):
     rows, docs, statuses = d["rows"], d["docs"], d["statuses"]
     print("Specs:")
@@ -373,7 +486,9 @@ def new_print(folder, plan, d, own):
     sprints = folder / SPRINTS_MD
     if owned is None:
         print("  no milestones to compare with" if docs else "  no specs yet")
-    if not sprints.is_file():
+    if C.load("lib/status").new_form(folder):
+        stored_sprints(folder, own, owned)
+    elif not sprints.is_file():
         if docs:
             print("  status/sprints.md missing: run sprints/refresh.py")
     else:
@@ -443,13 +558,22 @@ def new_print(folder, plan, d, own):
         print("  ok")
 
 
-def epic_marks(path):
-    """{epic number: True when a status/sprints.md row of that epic ("E<n> NN name") holds a run mark}."""
+def grid_table(folder):
+    """The grid rows as [label, cell, ...]: in a release of format 2.2 from the status file
+    (lib/ownership.py grid), below 2.2 from status/sprints.md; [] when there is no grid."""
+    if C.load("lib/status").new_form(folder):
+        return [[label, *cells] for label, cells in C.load("lib/ownership").grid(folder)[1]]
+    path = folder / SPRINTS_MD
     if not path.is_file():
-        return {}
+        return []
     head, data = C.table_rows(read(path), "Milestone")
+    return data if head else []
+
+
+def epic_marks(data):
+    """{epic number: True when a grid row of that epic ("E<n> NN name") holds a run mark}."""
     out = {}
-    for r in data if head else []:
+    for r in data:
         m = re.match(r"^E(\d+)\s", r[0]) if r else None
         if m:
             out[int(m.group(1))] = out.get(int(m.group(1)), False) or any(
@@ -457,14 +581,11 @@ def epic_marks(path):
     return out
 
 
-def built_specs(path, held=()):
-    """Spec numbers with a status/sprints.md row ("E<n> NN name") holding "[ ]", "[~]" or "[x]";
-    a "[~]" row of a milestone in held (lib/ownership.py held_unlaunched) does not count."""
-    if not path.is_file():
-        return set()
-    head, data = C.table_rows(read(path), "Milestone")
+def built_specs(data, held=()):
+    """Spec numbers with a grid row ("E<n> NN name") holding "[ ]", "[~]" or "[x]"; a "[~]" row
+    of a milestone in held (lib/ownership.py held_unlaunched) does not count."""
     out = set()
-    for r in data if head else []:
+    for r in data:
         m = re.match(r"^E\d+\s+(\d{2}(?:\.\d+)?)\s+(.*)$", r[0]) if r else None
         if m and m.group(2) not in held and any(c in ("[ ]", "[~]", "[x]") for c in r[1:]):
             out.add(m.group(1))
@@ -483,6 +604,45 @@ def unacked_notes(path):
         elif notes and line.startswith("- ") and not ACK_RE.search(line):
             out.append(line[2:].strip())
     return out
+
+
+CHAIN_FROM = (2, 2)  # the first skill version whose last line names the whole chain of migrations
+MIGRATE_DIR = Path(__file__).resolve().parent.parent / "migrate"
+STEP_RE = re.compile(r"^v(\d+\.\d+)-v(\d+\.\d+)$")
+
+
+def migration_chain(have, skill):
+    """The migration folders under scripts/migrate/ that move a release from format have to the
+    skill's format skill, in the order to run them: each step a folder v<a>-v<b> with a
+    README.md, a starting where the step before ended. Stops where no folder goes on; the list
+    names only folders that exist."""
+    key = lambda v: tuple(map(int, v.split(".")))
+    steps = {}
+    for p in sorted(MIGRATE_DIR.iterdir()) if MIGRATE_DIR.is_dir() else []:
+        m = STEP_RE.match(p.name)
+        if m and (p / "README.md").is_file() and key(m.group(1)) < key(m.group(2)) <= key(skill):
+            steps.setdefault(m.group(1), []).append(m.group(2))
+    out, at = [], have
+    while key(at) < key(skill) and at in steps:
+        nxt = max(steps[at], key=key)  # the longest step, so the chain has the fewest runs
+        out.append(f"scripts/migrate/v{at}-v{nxt}")
+        at = nxt
+    return out, at
+
+
+def chain_line(have, skill):
+    """The last line of the report for a release below the skill's format, skill 2.2 and higher."""
+    chain, at = migration_chain(have, skill)
+    head = f"this release is in format v{have}, the skill is v{skill}: "
+    if not chain:
+        return head + f"no folder under scripts/migrate/ moves format v{have} yet"
+    if len(chain) == 1:
+        text = f"see {chain[0]}/README.md"
+    else:
+        text = f"run, in this order, {', then '.join(chain)}; each folder has a README.md"
+    if at != skill:
+        text += f"; no folder under scripts/migrate/ moves format v{at} further yet"
+    return head + text
 
 
 def main():
@@ -508,8 +668,10 @@ def main():
     plan = folder / f"{a.release}-plan.md"
     index = plan
     decisions = folder / "decisions.md"
+    new = C.load("lib/status").new_form(folder)
     print("Files:")
-    for p in (plan, folder / SPRINTS_MD, folder / INDEX_HTML, decisions, queue):
+    # format 2.2 has no status/sprints.md: the Sprints section reports one that is left over
+    for p in (plan, *([] if new else [folder / SPRINTS_MD]), folder / INDEX_HTML, decisions, queue):
         # git-ignored: a fresh clone has none. An earlier release keeps its line, "missing".
         render = p.name == "index.html" and not p.is_file() and C.load("lib/status").active(folder)
         print(f"  {p.relative_to(folder)}: "
@@ -521,7 +683,9 @@ def main():
 
     dec_cards, _ = decision_table(folder, decisions, docs)
     Q = C.load("lib/queue")
-    if Q.item_form(folder):
+    if Q.status_form(folder):
+        open_q = status_items_report(folder, Q, docs, d["extra"], {c["num"] for c in dec_cards})
+    elif Q.item_form(folder):
         open_q = items_report(folder, Q, docs, d["extra"], {c["num"] for c in dec_cards})
     else:
         open_q = queue_report(folder, bd, q_text, docs, d["extra"], {c["num"] for c in dec_cards},
@@ -558,7 +722,8 @@ def main():
     print("Epics:")
     nums = sorted(c["num"] for c in dec_cards)
     card = {c["num"]: c for c in dec_cards}
-    marks = epic_marks(folder / SPRINTS_MD)
+    grid_rows = grid_table(folder)
+    marks = epic_marks(grid_rows)
     deciding = [n for n in nums if card[n]["lane"] == "To do"]
     done_alone = [n for n in nums if card[n]["lane"] == "Done" and not card[n]["epic"]
                   and not card[n]["sup_by"] and not card[n]["deferred"]]
@@ -586,7 +751,7 @@ def main():
         if bullets.get(old) != new:
             print(f"  D{old} title says superseded by D{new}, but D{new} lacks '- Supersedes D{old}.'")
     cited = {num: own.spec_cites(p) for num, p in docs}
-    built = built_specs(folder / SPRINTS_MD, own.held_unlaunched(folder))
+    built = built_specs(grid_rows, own.held_unlaunched(folder))
     for num, c in cited.items():
         bad = sorted(c & set(gone)) if num not in built else []
         if bad:
@@ -605,7 +770,10 @@ def main():
     starts = own.epic_starts(folder)
     for e in sorted(set(marks) | {n for n, v in starts.items() if v}):
         v = starts.get(e)
-        if e in marks and e in starts and not v:
+        if e in marks and e in starts and not v and new:
+            print(f"  E{e} has milestones with a sprint in the status file and no Starts value: write "
+                  f"\"Starts: S<n>\" in plan/epics/E{e}.md, the sprint of its first milestone")
+        elif e in marks and e in starts and not v:
             print(f"  E{e} has rows in status/sprints.md and no Starts value: migrate/pre-v1.0/backfill_starts.py {a.release}")
         elif v and not own.SPRINT_VALUE_RE.match(v):
             print(f"  plan/epics/E{e}.md: Starts '{v}' is not S<number>")
@@ -623,8 +791,11 @@ def main():
     print(f"Stage: {', '.join(parts) or 'discuss'}")
     have, skill = C.load("lib/status").release_format(folder), C.skill_version()
     if tuple(map(int, have.split("."))) < tuple(map(int, skill.split("."))):
-        print(f"this release is in format v{have}, the skill is v{skill}: "
-              f"see scripts/migrate/v{have}-v{skill}/README.md")
+        if tuple(map(int, skill.split("."))) < CHAIN_FROM:
+            print(f"this release is in format v{have}, the skill is v{skill}: "
+                  f"see scripts/migrate/v{have}-v{skill}/README.md")
+        else:
+            print(chain_line(have, skill))
 
 
 if __name__ == "__main__":
