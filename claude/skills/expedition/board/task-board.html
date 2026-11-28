@@ -413,6 +413,7 @@ try { const th = localStorage.getItem("taskboard-theme"); if (th) document.docum
   .qr .q-t { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.4; }
   .qr.qx .q-t { text-decoration: line-through; color: var(--ctp-subtext0); }
   .qr.ql .q-t { color: var(--ctp-subtext1); }
+  .qr .q-who { flex: none; display: flex; gap: 4px; }
   .qr .q-dec { width: 36px; flex: none; text-align: right; }
   .qr .q-st { width: 84px; flex: none; display: flex; justify-content: flex-end; }
   .qr .q-ch { width: 64px; flex: none; text-align: right; }
@@ -547,11 +548,11 @@ try { const th = localStorage.getItem("taskboard-theme"); if (th) document.docum
         <div id="legend" class="pop" hidden>
           <h4>Legend</h4>
           <ul>
-            <li><i class="sw st-ns"></i>not started</li>
+            <li><i class="sw st-ns"></i><span id="lg-ns">not started</span></li>
             <li><i class="sw st-prog"></i>in progress</li>
             <li><i class="sw st-block"></i>blocked</li>
             <li><i class="sw st-done"></i>done</li>
-            <li><i class="sw st-skip"></i>skipped</li>
+            <li><i class="sw st-skip"></i><span id="lg-skip">skipped</span></li>
             <li><i class="ln"></i>dependency in the epic</li>
             <li><i class="ln dash"></i>dependency across epics</li>
             <li><i class="ln red"></i>critical path</li>
@@ -573,13 +574,45 @@ try { const th = localStorage.getItem("taskboard-theme"); if (th) document.docum
 </main>
 
 <script>
-const STATUSES = ["not started", "in progress", "blocked", "done", "skipped"];
-// Queue statuses share these maps; their words do not overlap the task statuses.
-const QSTATUSES = ["open", "autofix", "later", "decided", "dropped"];
+// The status words come from the data: format 2.1 and lower below, format 2.2 in WORDS_22 (setWords).
+// NS and SKIP are the words of "not started" and "skipped" in the data's format.
+let STATUSES = ["not started", "in progress", "blocked", "done", "skipped"], NS = "not started", SKIP = "skipped";
+// Queue statuses of format 2.1 share these maps; their words do not overlap the task statuses.
+let QSTATUSES = ["open", "autofix", "later", "decided", "dropped"], QOPEN = ["open"];
 const SK = { "not started": "ns", "in progress": "prog", "blocked": "block", "done": "done", "skipped": "skip",
-  open: "qo", autofix: "qa", later: "ql", decided: "qd", dropped: "qx" };
+  open: "qo", autofix: "qa", later: "ql", decided: "qd", dropped: "qx", "to-do": "ns", archived: "skip", backlog: "ql" };
 const SICON = { "not started": "circle", "in progress": "clock", "blocked": "stop", "done": "check-circle", "skipped": "ban",
-  open: "circle-dot", autofix: "wrench", later: "clock", decided: "check-circle", dropped: "ban" };
+  open: "circle-dot", autofix: "wrench", later: "clock", decided: "check-circle", dropped: "ban", "to-do": "circle", archived: "ban", backlog: "clock" };
+// Format 2.2: the queue words overlap the task words, so a queue item takes its look from QSK and QSICON first.
+let QSK = {}, QSICON = {};
+const WORDS_22 = {
+  plan: ["to-do", "in progress", "blocked", "done", "archived"],
+  queue: ["to-do", "blocked", "done", "backlog", "archived"],
+  qsk: { "to-do": "qo", done: "qd", backlog: "ql", archived: "qx" },
+  qicon: { "to-do": "circle-dot", done: "check-circle", backlog: "clock", archived: "ban" },
+};
+const newFormat = (data) => { const v = String(data?.format || "").split(".").map(Number); return v[0] > 2 || (v[0] === 2 && v[1] >= 2); };
+function setWords(data) {
+  const n = newFormat(data);
+  STATUSES = n ? WORDS_22.plan : ["not started", "in progress", "blocked", "done", "skipped"];
+  NS = STATUSES[0]; SKIP = STATUSES[4];
+  $("#lg-ns").textContent = NS; $("#lg-skip").textContent = SKIP;
+  state.status = state.status.filter((s) => STATUSES.includes(s));
+}
+function setQueueWords(data) {
+  const n = newFormat(data);
+  QSTATUSES = n ? WORDS_22.queue : ["open", "autofix", "later", "decided", "dropped"];
+  QOPEN = n ? ["to-do", "blocked"] : ["open"];
+  QSK = n ? WORDS_22.qsk : {}; QSICON = n ? WORDS_22.qicon : {};
+  state.qstatus = state.qstatus.filter((s) => QSTATUSES.includes(s));
+}
+const qcls = (st) => QSK[st] || SK[st];
+const qsicon = (st) => icon(QSICON[st] || SICON[st] || "circle", "c-" + (qcls(st) || "ns"));
+const qpill = (st) => `<span class="pill s-${qcls(st) || "ns"}">${icon(QSICON[st] || SICON[st] || "circle")}${esc(st)}</span>`;
+// Format 2.2: the ids of depends_on that are not done (an id with no item counts as not done).
+const waitsFor = (x) => (x.depends_on || []).filter((d) => qIdx.get(d)?.status !== "done");
+const qWho = (x) => (x.decider ? `<span class="tag" title="Closed by ${esc(x.decider)}">${esc(x.decider)}</span>` : "")
+  + (x.status === "blocked" && waitsFor(x).length ? `<span class="tag" title="Blocked until these are done">waits for ${esc(waitsFor(x).join(", "))}</span>` : "");
 const VIEWS = ["epics", "tasks", "sprints", "milestones", "queue"];
 const KIND_LABEL = { epic: "Epic", spec: "Spec", ms: "Milestone", task: "Task", sprint: "Sprint", q: "Queue item" };
 // Folder of status.data.js and queue.data.js, relative to this page.
@@ -662,6 +695,7 @@ function showUpdated() {
 let D, idx, kids, cnt, hay, dependents, sprintPos, epicMs, lastChange, dataPos;
 function load(data) {
   D = data;
+  setWords(D);
   idx = { epic: new Map(), spec: new Map(), ms: new Map(), task: new Map(), sprint: new Map() };
   D.epics.forEach((o) => idx.epic.set(o.id, o));
   D.specs.forEach((o) => idx.spec.set(o.id, o));
@@ -710,7 +744,7 @@ function load(data) {
   if (foldRelease !== D.release) loadFold();
   $("#rel").textContent = D.release;
   document.title = `${D.release} Task Board`;
-  const all = { d: D.tasks.filter((x) => x.status === "done" || x.status === "skipped").length, n: D.tasks.length };
+  const all = { d: D.tasks.filter((x) => x.status === "done" || x.status === SKIP).length, n: D.tasks.length };
   const td = $("#tdone");
   td.innerHTML = `${icon("check-circle")}${all.d}/${all.n}`;
   td.title = `${all.d} of ${all.n} tasks done`;
@@ -721,7 +755,7 @@ const get = (pick) => { const i = pick.indexOf(":"), k = pick.slice(0, i); retur
 // A milestone shows its ref, "<spec>.<number>"; older data without it falls back to the spec id.
 const label = (kind, o) => kind === "task" ? `${o.spec}-${o.number}` : kind === "ms" ? (o.ref || o.spec) : o.id;
 const title = (kind, o) => o.name || o.title || o.id;
-const doneOf = (c) => `${c.done + c.skipped}/${c.total}`;
+const doneOf = (c) => `${c.done + c[SKIP]}/${c.total}`;
 
 // ---- Filter: status buttons and search, applied the same way in every view ----
 let terms = [], stSet = null, passMemo = new Map();
@@ -747,8 +781,8 @@ const shownKids = (o, kind) => kids.get(o).filter((c) => pass(c, CHILD[kind]));
 
 function progress(c, frac = true) {
   const pct = (n) => c.total ? (n / c.total * 100).toFixed(2) + "%" : "0";
-  const bar = `<span class="pbar" title="${c.done} done, ${c.skipped} skipped, ${c["in progress"]} in progress, ${c.blocked} blocked, ${c["not started"]} not started">`
-    + `<i class="b-done" style="width:${pct(c.done)}"></i><i class="b-skip" style="width:${pct(c.skipped)}"></i>`
+  const bar = `<span class="pbar" title="${c.done} done, ${c[SKIP]} ${SKIP}, ${c["in progress"]} in progress, ${c.blocked} blocked, ${c[NS]} ${NS}">`
+    + `<i class="b-done" style="width:${pct(c.done)}"></i><i class="b-skip" style="width:${pct(c[SKIP])}"></i>`
     + `<i class="b-prog" style="width:${pct(c["in progress"])}"></i><i class="b-block" style="width:${pct(c.blocked)}"></i></span>`;
   return `<span class="pgw">${bar}${frac ? `<span class="frac">${doneOf(c)}</span>` : ""}</span>`;
 }
@@ -772,7 +806,7 @@ function saveFold() { try {
   all[D.release] = { mode: foldSt.mode, empty: foldSt.empty, toggled: [...foldSt.toggled] };
   localStorage.setItem("taskboard-fold", JSON.stringify(all));
 } catch (e) {} }
-const spFinished = (s) => s.status === "done" || s.status === "skipped";
+const spFinished = (s) => s.status === "done" || s.status === SKIP;
 // Empty: no milestone in this sprint passes the current filter.
 const spEmpty = (s) => !kids.get(s).some((m) => pass(m, "ms"));
 function foldRule(s) {
@@ -809,7 +843,7 @@ function sorted(list, key, dir) {
     return (cmp(p[0], q[0]) || dataPos.get(p[1]) - dataPos.get(q[1])) * dir;
   }).map((p) => p[1]);
 }
-const pct = (c) => c.total ? (c.done + c.skipped) / c.total : null;
+const pct = (c) => c.total ? (c.done + c[SKIP]) / c.total : null;
 const stIdx = (o) => STATUSES.indexOf(o.status);
 const MS_KEYS = {
   plan: (m) => dataPos.get(m), ref: (m) => segs(m.ref || m.spec), status: stIdx, progress: (m) => pct(cnt.get(m)), changed: (m) => m.changed || null,
@@ -858,7 +892,7 @@ function shownSprints(lanes) {
   const ids = new Set(lanes.map((e) => e.id));
   return D.sprints.map((_, i) => i).filter((i) => !active() || D.milestones.some((m) => sprintOf(m) === i && ids.has(m.epic) && visible(m)));
 }
-const finished = (m) => m.status === "done" || m.status === "skipped";
+const finished = (m) => m.status === "done" || m.status === SKIP;
 function nowSprint() {
   const open = D.milestones.filter((m) => !finished(m)).map(sprintOf).filter((i) => i >= 0);
   return open.length ? Math.min(...open) : -1;
@@ -927,7 +961,7 @@ function laneLabel(e) {
 // Collapsed lane: one chip per sprint standing for its milestones; follows the filter like the cards.
 const CHIP_ORDER = ["blocked", "in progress"];
 const chipStatus = (shown) => CHIP_ORDER.find((s) => shown.some((m) => m.status === s))
-  || (shown.every(finished) ? (shown.some((m) => m.status === "done") ? "done" : "skipped") : "not started");
+  || (shown.every(finished) ? (shown.some((m) => m.status === "done") ? "done" : SKIP) : NS);
 // A folded column's cell: a count pill tinted like the collapsed-lane chips; a click unfolds the sprint.
 function foldPill(cards, sid) {
   const shown = cards.filter(visible);
@@ -939,7 +973,7 @@ function laneChip(e, cards) {
   const status = chipStatus(shown);
   return `<div data-lane="${esc(e.id)}" class="card chip st-${SK[status]}">${shown.length} milestone${shown.length > 1 ? "s" : ""}</div>`;
 }
-const cnt1 = (m) => `<span class="cnt" title="tasks done or skipped / all tasks">${doneOf(cnt.get(m))}</span>`;
+const cnt1 = (m) => `<span class="cnt" title="tasks done or ${SKIP} / all tasks">${doneOf(cnt.get(m))}</span>`;
 function renderEpic(lanes, sprints, now, focus) {
   const nowCls = (i, k) => (i === now ? " now" : "") + (k === sprints.length - 1 ? " lastcol" : "") + (fx.sprint === D.sprints[i].id ? " reveal" : "");
   let html = headerRow(sprints, now, "Epic");
@@ -1052,7 +1086,7 @@ function renderTasks() {
   const so = sortOf();
   for (const [st, list] of by) by.set(st, sorted(list, TASK_KEYS[so.key], so.dir));
   return `<div class="kb">${cols.map((st) => {
-    const list = by.get(st), compact = st === "done" || st === "skipped";
+    const list = by.get(st), compact = st === "done" || st === SKIP;
     const lim = compact && !state.more.includes(st) ? COMPACT_LIMIT : Infinity;
     const items = list.slice(0, lim).map(compact ? taskLine : taskCard).join("");
     const more = list.length > lim ? `<button class="more" data-more="${esc(st)}">Show all ${list.length} (${list.length - lim} more)</button>` : "";
@@ -1079,6 +1113,7 @@ function taskLine(t) {
 let QD = null, qIdx = new Map(), qHay = new Map(), qShown = [];
 function loadQueue(data) {
   QD = data && Array.isArray(data.items) ? data : null;
+  setQueueWords(QD);
   qIdx = new Map((QD ? QD.items : []).map((x) => [x.id, x]));
   qHay = new Map((QD ? QD.items : []).map((x) => [x, [x.id, x.title, x.status, x.decision, x.notes, x.details,
     ...(x.options || []).flatMap((o) => [o.title, o.body])].join("\n").toLowerCase()]));
@@ -1104,23 +1139,23 @@ function qVisible() {
   }).map((p) => p[1]);
 }
 function qRow(x) {
-  return `<div class="qr ${SK[x.status] || "qo"}${isSel("q:" + x.id)}${state.qcur === x.id ? " cur" : ""}" data-pick="q:${esc(x.id)}" title="${esc(x.id + ". " + x.title)}">
-    <span class="num q-id">${esc(x.id)}</span><span class="q-t">${esc(x.title)}</span>
+  return `<div class="qr ${qcls(x.status) || "qo"}${isSel("q:" + x.id)}${state.qcur === x.id ? " cur" : ""}" data-pick="q:${esc(x.id)}" title="${esc(x.id + ". " + x.title)}">
+    <span class="num q-id">${esc(x.id)}</span><span class="q-t">${esc(x.title)}</span>${qWho(x) ? `<span class="q-who">${qWho(x)}</span>` : ""}
     <span class="q-dec">${x.decision ? `<span class="tag dec">${esc(x.decision)}</span>` : ""}</span>
-    <span class="q-st">${pill(x.status)}</span>
+    <span class="q-st">${qpill(x.status)}</span>
     <span class="frac q-ch" title="${esc(x.changed ? "Status changed " + x.changed : "")}">${x.changed ? esc(relTime(x.changed)) : ""}</span></div>`;
 }
 function renderQueue() {
   if (!QD) { qShown = []; return `<div class="empty">No queue data. The page reads queue.data.js next to status.data.js.</div>`; }
   qShown = qVisible();
   if (!qShown.length) return `<div class="empty">${QD.items.length ? "No queue item matches the filter." : "The queue is empty."}</div>`;
-  if (state.qmode === "board") return `<div class="kb qkb">${qCols().map(([st, list]) => `<section class="kb-col"><div class="kb-head">${sicon(st)}<span>${esc(st[0].toUpperCase() + st.slice(1))}</span><span class="frac">${list.length}</span></div>
-    <div class="kb-list" data-sk="qkb-${SK[st]}">${list.map(qCard).join("") || `<div class="empty" style="padding:16px">Nothing here</div>`}</div></section>`).join("")}</div>`;
+  if (state.qmode === "board") return `<div class="kb qkb">${qCols().map(([st, list]) => `<section class="kb-col"><div class="kb-head">${qsicon(st)}<span>${esc(st[0].toUpperCase() + st.slice(1))}</span><span class="frac">${list.length}</span></div>
+    <div class="kb-list" data-sk="qkb-${qcls(st)}">${list.map(qCard).join("") || `<div class="empty" style="padding:16px">Nothing here</div>`}</div></section>`).join("")}</div>`;
   let h = "", grp = null, grpOpen = false;
   for (const x of qShown) {
     if (sortOf().key === "status" && x.status !== grp) {
       grp = x.status;
-      h += `${grpOpen ? "</section>" : ""}<section class="qsec"><div class="qgrp">${sicon(grp)}${esc(grp)}<span class="frac">${qShown.filter((y) => y.status === grp).length}</span></div>`;
+      h += `${grpOpen ? "</section>" : ""}<section class="qsec"><div class="qgrp">${qsicon(grp)}${esc(grp)}<span class="frac">${qShown.filter((y) => y.status === grp).length}</span></div>`;
       grpOpen = true;
     }
     h += qRow(x);
@@ -1131,8 +1166,8 @@ function renderQueue() {
 // Board columns: the filtered statuses in list order, each keeping the sorted order of qShown.
 const qCols = () => (state.qstatus.length ? QSTATUSES.filter((s) => state.qstatus.includes(s)) : QSTATUSES).map((st) => [st, qShown.filter((x) => x.status === st)]);
 function qCard(x) {
-  return `<div class="tc qcard b-${SK[x.status] || "qo"}${isSel("q:" + x.id)}${state.qcur === x.id ? " cur" : ""}" data-pick="q:${esc(x.id)}" title="${esc(x.id + ". " + x.title)}">
-    <div class="tc-top"><span class="num">${esc(x.id)}</span><span class="tags">${x.decision ? `<span class="tag dec">${esc(x.decision)}</span>` : ""}</span></div>
+  return `<div class="tc qcard b-${qcls(x.status) || "qo"}${isSel("q:" + x.id)}${state.qcur === x.id ? " cur" : ""}" data-pick="q:${esc(x.id)}" title="${esc(x.id + ". " + x.title)}">
+    <div class="tc-top"><span class="num">${esc(x.id)}</span><span class="tags">${x.decision ? `<span class="tag dec">${esc(x.decision)}</span>` : ""}${qWho(x)}</span></div>
     <div class="tc-title">${esc(x.title)}</div>
     ${x.changed ? `<span class="frac q-ch" title="${esc("Status changed " + x.changed)}">${esc(relTime(x.changed))}</span>` : ""}</div>`;
 }
@@ -1207,8 +1242,10 @@ function queuePanel(x) {
   let h = `<div class="p-top"><div class="crumbs"><span class="cur">${esc(QD.release || "")} queue${pos >= 0 ? ` · ${pos + 1} of ${qShown.length}` : ""}</span></div>
     <button class="ibtn sm" data-close aria-label="Close" data-tip="Close (Esc)" data-tip-end>${icon("x")}</button></div>
     <div class="p-kind">${KIND_LABEL.q} ${esc(x.id)}</div><h2>${esc(x.title)}</h2>
-    <div class="p-row">${pill(x.status)}${x.decision ? `<span class="tag dec">${esc(x.decision)}</span>` : ""}${picked ? `<span class="tag pick">${icon("check")}option ${esc(picked)} picked</span>` : ""}</div>
+    <div class="p-row">${qpill(x.status)}${x.decision ? `<span class="tag dec">${esc(x.decision)}</span>` : ""}${qWho(x)}${picked ? `<span class="tag pick">${icon("check")}option ${esc(picked)} picked</span>` : ""}</div>
     <div class="p-sec"><dl class="kv"><dt>Decision</dt><dd>${x.decision ? `<code>${esc(x.decision)}</code>${picked ? `, option ${esc(picked)}` : ""}` : `<span class="frac">none</span>`}</dd>
+      ${x.decider ? `<dt>Decider</dt><dd>${esc(x.decider)}</dd>` : ""}
+      ${(x.depends_on || []).length ? `<dt>Depends on</dt><dd>${esc(x.depends_on.join(", "))}${x.status === "blocked" && waitsFor(x).length ? `; waits for ${esc(waitsFor(x).join(", "))}` : ""}</dd>` : ""}
       ${x.changed ? `<dt>Changed</dt><dd>${esc(x.changed)}</dd>` : ""}</dl></div>`;
   h += qsec("Item file", x.file ? `<div class="lnk"><code class="path">${esc(x.file)}</code>${abs ? `<a class="fbtn" href="${esc(vscodeUrl(abs))}" title="${esc(abs)}">VS Code</a><a class="fbtn" href="${esc(fileUrl(abs))}" target="_blank" title="${esc(abs)}">Browser</a>` : ""}</div>` : "", "No file.");
   h += qsec("Notes", x.notes ? `<div class="md">${md(x.notes)}</div>` : "", "No notes.");
@@ -1350,13 +1387,13 @@ function syncControls() {
   $("#tdone").hidden = isQ;
   $("#qmode").hidden = !isQ;
   document.querySelectorAll("#qmode [data-qmode]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.qmode === state.qmode));
-  const qo = $("#qopen"), nOpen = QD ? QD.items.filter((x) => x.status === "open").length : 0;
+  const qo = $("#qopen"), nOpen = QD ? QD.items.filter((x) => QOPEN.includes(x.status)).length : 0;
   qo.hidden = !isQ || !QD;
   qo.textContent = `${nOpen} open`;
   qo.title = QD ? `${nOpen} of ${QD.items.length} queue items open` : "";
   $("#filter-label").textContent = !fsel.length ? "All statuses" : fsel.length === 1 ? fsel[0][0].toUpperCase() + fsel[0].slice(1) : `${fsel.length} statuses`;
-  $("#filter-ic").setAttribute("class", "i" + (fsel.length === 1 ? " c-" + SK[fsel[0]] : ""));
-  $("#filter-ic use").setAttribute("href", fsel.length === 1 ? "#ic-" + SICON[fsel[0]] : "#ic-filter");
+  $("#filter-ic").setAttribute("class", "i" + (fsel.length === 1 ? " c-" + (isQ ? qcls(fsel[0]) : SK[fsel[0]]) : ""));
+  $("#filter-ic use").setAttribute("href", fsel.length === 1 ? "#ic-" + ((isQ && QSICON[fsel[0]]) || SICON[fsel[0]]) : "#ic-filter");
   fb.setAttribute("aria-pressed", fsel.length > 0);
   if (!$("#filter-pop").hidden) renderFilterPop();
   const lanesView = LANE_VIEWS.has(state.view);
@@ -1578,7 +1615,7 @@ function renderFilterPop() {
   const n = (st) => items.filter((t) => t.status === st).length;
   const row = (st, ic, name, count, on) => `<button class="frow" role="menuitemcheckbox" aria-checked="${on}" data-fs="${esc(st)}" tabindex="-1"><span class="cbx">${on ? icon("check") : ""}</span>${ic}<span>${esc(name)}</span><span class="n">${count}</span></button>`;
   pop.innerHTML = row("all", icon("filter", "c-ns"), "All statuses", items.length, !sel.length) + `<div class="fsep"></div>`
-    + fList().map((st) => row(st, sicon(st), st[0].toUpperCase() + st.slice(1), n(st), sel.includes(st))).join("");
+    + fList().map((st) => row(st, state.view === "queue" ? qsicon(st) : sicon(st), st[0].toUpperCase() + st.slice(1), n(st), sel.includes(st))).join("");
   if (focused) pop.querySelector(`[data-fs="${CSS.escape(focused)}"]`)?.focus();
 }
 function openFilter(open) {

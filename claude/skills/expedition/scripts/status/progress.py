@@ -14,7 +14,11 @@ line, its tasks done of total with skipped tasks left out of both, and
 "(<task number> blocked: <reason>)" for a blocked task. With nothing unfinished: the last epic's
 line, then "Nothing running." and the unticked Decided cards of queue.md as
 "Ready for an epic: **Q<n>**, ...". In a release of format 2.1 (item files, lib/queue.py) the
-same line lists the decided items whose decision is in the To do lane of decisions.md.
+same line lists the decided items whose decision is in the To do lane of decisions.md. In a
+release of format 2.2 the block comes from status/data/status.json alone: the grid rows are those
+of lib/ownership.py grid (one per milestone with a sprint), status/sprints.md is not read, a
+milestone stopped by a decision is one stored as archived, and "Ready for an epic" lists the done
+items whose decision is in the To do lane.
 
 Sources, for each milestone whose grid cell is not "[x]":
 - the grid cell of status/sprints.md ("[ ]" running, "[~]" waiting, "·" not started, "[!]"
@@ -140,8 +144,13 @@ def own_waiting(inner):
 
 def print_progress(root, folder, plan, own, bd, q_text):
     """The owner's progress reply on stdout, the disagreements on stderr."""
-    sprints = folder / C.SPRINTS_MD
-    head, data = C.table_rows(C.read(sprints), "Milestone") if sprints.is_file() else (None, [])
+    st = C.load("lib/status")
+    if st.new_form(folder):
+        # format 2.2: the grid rows come from the status file; there is no grid file
+        head, data = True, [[label, *cells] for label, cells in own.grid(folder)[1]]
+    else:
+        sprints = folder / C.SPRINTS_MD
+        head, data = C.table_rows(C.read(sprints), "Milestone") if sprints.is_file() else (None, [])
     epics = collections.defaultdict(lambda: collections.defaultdict(list))
     for r in data if head else []:
         m = GRID_ROW_RE.match(r[0]) if r else None
@@ -153,7 +162,6 @@ def print_progress(root, folder, plan, own, bd, q_text):
     blocks = own.new_collect(folder, plan)["blocks"]
     trackers = {(num, b["name"]): b["tracker"] for num, bl in blocks.items() for b in bl}
     by_name = {(num, b["name"]): b for num, bl in blocks.items() for b in bl}
-    st = C.load("lib/status")
     stored_m, stored_t = st.entries(folder) if st.active(folder) else (None, {})
     stored_s = {s["id"]: s["status"] for s in (st.load(folder) or {}).get("specs", [])}
     KIND = {"not started": "planned", "in progress": "running", "blocked": "waiting",
@@ -244,7 +252,8 @@ def print_progress(root, folder, plan, own, bd, q_text):
     if Q.item_form(folder):
         # a decided item whose decision is still in To do: the unticked Decided card of a board
         lanes = bd.decision_tags(own, folder)
-        ready = [f"**Q{it['file_num']}**" for it in Q.items(folder) if it["status"] == "decided"
+        closed_word = "done" if Q.status_form(folder) else "decided"
+        ready = [f"**Q{it['file_num']}**" for it in Q.items(folder) if it["status"] == closed_word
                  and (m := re.match(r"^D(\d+)$", it["decision"]))
                  and lanes.get(int(m.group(1)), {}).get("lane") == "To do"]
     else:

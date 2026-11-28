@@ -41,7 +41,10 @@ each cited card moves to Autofix; the refresh chain (lib/grid.py refresh, which 
 status.json) and the page data run; everything written is committed, never pushed. Prints one
 line naming the spec, the milestone, its sprint and its tracker. In a release of format 2.1
 (item files, lib/queue.py) a Q id is checked against the item files, and each cited item gets
-"status: autofix" (losing a "decision" and "option" line) and queue.md is written again.
+"status: autofix" (losing a "decision" and "option" line) and queue.md is written again. In a
+release of format 2.2 each cited item is closed as done by an agent ("status: done" and "decider:
+agent", losing a "decision" and "option" line); the blocked check then runs, so an item that waited
+for it becomes to-do. The words come from lib/queue.py, as queue/item.py --move Autofix writes them.
 """
 import argparse
 import contextlib
@@ -321,9 +324,13 @@ def run(a, own, root, folder, ids, decision, want_epic, lock):
                 p.write_text(t, encoding="utf-8")
         own.print_errors(comp["errors"], "the milestone does not schedule; nothing written")
     if ids and items:
+        new = Q.status_form(folder)
+        word = Q.move_status("Autofix", new)  # a fix closes the item as done by an agent
         for i in ids:
             it = Q.find(folder, int(i[1:]))
-            Q.write_item(it["path"], Q.set_front(it["text"], status="autofix", decision=None, option=None))
+            Q.write_item(it["path"], Q.set_front(it["text"], status=word, decision=None, option=None,
+                                                 decider=Q.CLOSERS[word][0] if new else None))
+        Q.settle(folder)  # format 2.2: an item that waited for a cited item; nothing below 2.2
         Q.write_list(folder)
     elif ids:
         q_text = own.read(queue)
