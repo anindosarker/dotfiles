@@ -57,6 +57,14 @@
 # seconds: EXPEDITION_SEND_READY (default 40) for the input box, EXPEDITION_SEND_WAIT (default
 # 20) for the transcript after each typing; the reasons are at the two values below.
 #
+# Voice (D26): a session cannot load the skill caveman:ultracave by itself, a typed slash command
+# sets it. start, fork, and a resume that starts a dead session open the window without a prompt,
+# wait until it takes input (as send --confirm does), type the voice line, then type the start
+# prompt and check that it is in the transcript (typed once more when it is not). The voice line is
+# EXPEDITION_VOICE, default /caveman:ultracave; set it empty and the prompt goes on the claude
+# command line as before, nothing typed. A session without the caveman plugin answers the voice line
+# with an unknown-command reply and takes the prompt. A live window never gets the voice line.
+#
 # Registry: ~/.claude/expedition-runners.json, one entry per runner name
 # (name, uuid, tmux target, pane, cwd, release, started, state); every write takes a lock and
 # replaces the file by rename. A put that would give a session uuid to a second entry that is not
@@ -421,7 +429,8 @@ cmd_start() {
   else
     cmd+=(--session-id "$uuid")
   fi
-  cmd+=("$prompt")
+  local typed
+  typed="$(start_prompt "$prompt")" || cmd+=("$prompt")
 
   local line
   line="export EXPEDITION_RUNNER=$(printf '%q' "${name// /-}"); cd $(printf '%q' "$cwd") && exec$(printf ' %q' "${cmd[@]}")"
@@ -432,12 +441,14 @@ cmd_start() {
     exit 0
   fi
 
+  [ -z "$typed" ] || check_waits
   local session
   session="$(tmux display-message -p '#{session_name}')"
   local pane
   read -r target pane < <(tmux new-window -d -P -F '#{session_name}:#{window_id} #{pane_id}' -t "$session:" -n "$name" -c "$cwd" "$line")
   printf 'busy' > "$(file_of "$name").status"
   reg put "$name" "$(python3 -I -c 'import json,sys,datetime; print(json.dumps({"name": sys.argv[1], "kind": "runner", "uuid": sys.argv[2], "tmux": sys.argv[3], "pane": sys.argv[6], "cwd": sys.argv[4], "release": sys.argv[5], "started": datetime.datetime.now().isoformat(timespec="seconds"), "state": "running"}))' "$name" "$uuid" "$target" "$cwd" "$release" "$pane")"
+  [ -z "$typed" ] || type_start "$name" "$typed"
   if [ "$resume" = 1 ]; then
     echo "$name resumed in $target (session $uuid)"
   else
@@ -538,11 +549,13 @@ cmd_fork() {
   local -a cmd
   if [ "$resume" = 1 ]; then
     cmd=("$CLAUDE_BIN" --resume "$uuid" -n "$name" --dangerously-skip-permissions --model "$model"
-         --settings "$SETTINGS" "$prompt")
+         --settings "$SETTINGS")
   else
     cmd=("$CLAUDE_BIN" --resume "$parent" --fork-session --session-id "$uuid" -n "$name"
-         --dangerously-skip-permissions --model "$model" --settings "$SETTINGS" "$prompt")
+         --dangerously-skip-permissions --model "$model" --settings "$SETTINGS")
   fi
+  local typed
+  typed="$(start_prompt "$prompt")" || cmd+=("$prompt")
   local line
   line="cd $(printf '%q' "$cwd") && exec$(printf ' %q' "${cmd[@]}")"
   if [ -z "${TMUX:-}" ]; then
@@ -550,9 +563,11 @@ cmd_fork() {
     echo "$line"
     exit 0
   fi
+  [ -z "$typed" ] || check_waits
   local pane
   read -r target pane < <(tmux new-window -d -P -F '#{session_name}:#{window_id} #{pane_id}' -t "$(tmux display-message -p '#{session_name}'):" -n "$name" -c "$cwd" "$line")
   reg put "$name" "$(python3 -I -c 'import json,sys,datetime; print(json.dumps({"name": sys.argv[1], "kind": "fork", "uuid": sys.argv[6], "parent": sys.argv[2], "tmux": sys.argv[3], "pane": sys.argv[7], "cwd": sys.argv[4], "release": sys.argv[5], "started": datetime.datetime.now().isoformat(timespec="seconds"), "state": "running"}))' "$name" "$parent" "$target" "$cwd" "$release" "$uuid" "$pane")"
+  [ -z "$typed" ] || type_start "$name" "$typed"
   if [ "$resume" = 1 ]; then
     echo "$name resumed in $target (session $uuid, model $model)"
   else
@@ -563,9 +578,9 @@ cmd_fork() {
 # resume <release | "<window name>">: a live window gets the word "resume" typed in (the runner
 # with the ultracode prefix, a fork without); a dead runner is started again (start resumes it);
 # a dead fork whose session transcript exists is resumed the same way, in a new window of the
-# lead's tmux session with its name ("claude --resume <uuid>"); otherwise (entry stopped, no
-# transcript, not inside tmux) its claude --resume line is printed with the reason. Never stop a
-# window on a usage limit.
+# lead's tmux session with its name ("claude --resume <uuid>", the voice line typed first, Voice
+# above); otherwise (entry stopped, no transcript, not inside tmux) its claude --resume line is
+# printed with the reason. Never stop a window on a usage limit.
 cmd_resume() {
   [ $# -eq 1 ] || usage
   local name target uuid state line
@@ -584,19 +599,24 @@ cmd_resume() {
     local cwd why="" pane
     cwd="$(reg field "$name" cwd)"
     local -a cmd=("$CLAUDE_BIN" --resume "$uuid" -n "$name" --dangerously-skip-permissions
-                  --model "${EXPEDITION_FORK_MODEL:-fable}" --settings "$SETTINGS" "resume")
+                  --model "${EXPEDITION_FORK_MODEL:-fable}" --settings "$SETTINGS")
+    local typed=""
     if [ "$state" = stopped ]; then why="the entry is stopped"
     elif ! transcript_exists "$uuid"; then why="no transcript $uuid.jsonl under $PROJECTS"
     elif [ -z "${TMUX:-}" ]; then why="not inside tmux"
     elif [ ! -d "$cwd" ]; then why="its folder $cwd is gone"
     fi
     if [ -n "$why" ]; then
+      cmd+=("resume")
       echo "$name window is gone and is not reopened ($why). Resume it in a terminal of its own:"
       echo "cd $(printf '%q' "$cwd") && exec$(printf ' %q' "${cmd[@]}")"
       return 0
     fi
+    typed="$(start_prompt "resume")" || cmd+=("resume")
+    [ -z "$typed" ] || check_waits
     read -r target pane < <(tmux new-window -d -P -F '#{session_name}:#{window_id} #{pane_id}' -t "$(tmux display-message -p '#{session_name}'):" -n "$name" -c "$cwd" "cd $(printf '%q' "$cwd") && exec$(printf ' %q' "${cmd[@]}")")
     reg put "$name" "$(python3 -I -c 'import json,sys; print(json.dumps({"tmux": sys.argv[1], "pane": sys.argv[2], "state": "running"}))' "$target" "$pane")"
+    [ -z "$typed" ] || type_start "$name" "$typed"
     echo "$name resumed in $target (session $uuid)"
   fi
 }
@@ -684,14 +704,14 @@ box_shown() {
   [ "$(tmux capture-pane -p -t "$1" 2>/dev/null | grep -c '^[[:space:]]*─')" -ge 2 ]
 }
 
-# wait_ready <name>: wait up to SEND_READY seconds until the entry's pane runs claude and shows
-# the input box; fail with one line, nothing typed.
+# wait_ready <name> [<what to do>]: wait up to SEND_READY seconds until the entry's pane runs claude
+# and shows the input box; fail with one line, nothing typed, that ends with <what to do>.
 wait_ready() {
   local pane end=$((SECONDS + SEND_READY))
   while :; do
     pane="$(entry_pane "$1")"
     if [ -n "$pane" ] && pane_typable "$pane" && box_shown "$pane"; then return 0; fi
-    [ "$SECONDS" -lt "$end" ] || die "$1: the window takes no input after $SEND_READY s; nothing typed. Look at its window, then send again"
+    [ "$SECONDS" -lt "$end" ] || die "$1: the window takes no input after $SEND_READY s; nothing typed. ${2:-Look at its window, then send again}"
     sleep "$SEND_POLL"
   done
 }
@@ -763,6 +783,42 @@ confirm_line() {
   done
 }
 
+# check_waits: the two waits are whole numbers of seconds, else stop before anything is typed.
+check_waits() {
+  [[ "$SEND_READY" =~ ^[1-9][0-9]*$ ]] || die "EXPEDITION_SEND_READY='$SEND_READY' is not a whole number of seconds; unset it or set it like 40"
+  [[ "$SEND_WAIT" =~ ^[1-9][0-9]*$ ]] || die "EXPEDITION_SEND_WAIT='$SEND_WAIT' is not a whole number of seconds; unset it or set it like 20"
+}
+
+# The voice line typed first into a new or resumed runner or spec writer window (D26). Unset: the
+# default; set empty: no voice line, and the start prompt goes on the claude command line.
+VOICE="${EXPEDITION_VOICE-/caveman:ultracave}"
+
+# start_prompt <prompt>: print the prompt and succeed when it is to be typed after the voice line
+# (inside tmux, a voice line set); fail when it goes on the claude command line.
+start_prompt() {
+  [ -n "${TMUX:-}" ] && [ -n "$VOICE" ] || return 1
+  printf '%s' "$1"
+}
+
+# type_start <name> <prompt>: wait until the new window takes input, type the voice line, then type
+# the start prompt and wait until it is in the transcript; not there: type it once more; still not
+# there: stop with one line. The voice line is not checked: a session without the caveman plugin
+# writes nothing for it.
+type_start() {
+  local uuid offset since try
+  uuid="$(reg field "$1" uuid)"
+  offset="$(transcript_size "$uuid")"
+  since="$(python3 -I -c 'import datetime; print(datetime.datetime.now(datetime.timezone.utc).isoformat())')"
+  wait_ready "$1" "Look at its window, then type $VOICE and the start prompt there: $2"
+  type_line "$1" "$VOICE"
+  for try in 1 2; do
+    wait_ready "$1" "Look at its window, then type the start prompt there: $2"
+    type_line "$1" "$2"
+    confirm_line "$1" "$uuid" "$offset" "$since" "$2" && return 0
+  done
+  die "$1: the start prompt is not in the transcript after 2 tries. Look at its window, then type the prompt there: $2"
+}
+
 cmd_send() {
   local from="" confirm=0
   while [ $# -gt 0 ]; do
@@ -773,10 +829,7 @@ cmd_send() {
     esac
   done
   [ $# -eq 2 ] || usage
-  if [ "$confirm" = 1 ]; then
-    [[ "$SEND_READY" =~ ^[1-9][0-9]*$ ]] || die "EXPEDITION_SEND_READY='$SEND_READY' is not a whole number of seconds; unset it or set it like 40"
-    [[ "$SEND_WAIT" =~ ^[1-9][0-9]*$ ]] || die "EXPEDITION_SEND_WAIT='$SEND_WAIT' is not a whole number of seconds; unset it or set it like 20"
-  fi
+  [ "$confirm" = 0 ] || check_waits
   local name line="ultracode $2" target i
   # The lead name: --from, else the "from <name>" that ends a RUN or HELLO line, else the name
   # of a "LEAD <name>" line.
