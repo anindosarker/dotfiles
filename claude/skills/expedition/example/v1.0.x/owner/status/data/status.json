@@ -1,7 +1,7 @@
 {
   "release": "v1.0.x",
   "format": "2.2",
-  "updated": "2026-11-28 12:04",
+  "updated": "2026-11-28 13:15",
   "statuses": [
     "to-do",
     "in progress",
@@ -221,5 +221,19 @@
       "file": "plan/specs/27-sidebar/tasks/06-menu-keeps-blur.md",
       "decider": "you"
     }
-  ]
+  ],
+  "decisions": {
+    "D57": {
+      "round": 1
+    },
+    "D58": {
+      "round": 1
+    },
+    "D61": {
+      "round": 2
+    },
+    "D62": {
+      "round": 2
+    }
+  }
 }
