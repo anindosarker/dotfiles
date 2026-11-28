@@ -14,7 +14,7 @@ Expedition runs work that does not fit one session as a release: decisions are m
 
 Requires: tmux, the `claude` command, python3.
 
-Voice: at its start, every session of a release (lead, runner, spec writer) loads the skill `caveman:ultracave` when it is listed, and keeps that voice in chat for the whole session, also after a roll over. Plan files, commits and the lines typed to another session stay in plain prose.
+Voice: every session of a release (lead, runner, spec writer) speaks in the `caveman:ultracave` voice in chat from its first turn, and keeps that voice for the whole session, also after a roll over. A session cannot load that skill by itself; a typed `/caveman:ultracave` sets it. `run/runner.sh start`, `fork` and `resume` type it into each new or resumed runner and spec writer window, and the lead's starter prompt in a handoff begins with it ([reference/formats.md](reference/formats.md), Handoff). Plan files, commits and the lines typed to another session stay in plain prose.
 
 How the owner works in a release is in its `process.md`: a change to it is a `process.md` update, and every agent follows it.
 

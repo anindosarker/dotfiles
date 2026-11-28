@@ -221,6 +221,7 @@ The runner then files a queue item and continues with work that does not depend 
 - Before the roll over, the session runs `status/sync.py <release>` (Status and tasks, Commits), so the handoff starts from a clean release folder.
 - A runner never stops a Workflow to roll over. After the clear a stopped run cannot be resumed with `resumeFromRunId`, only launched again.
 - Lead, on `roll over <runner name>`: `run/runner.sh send "<runner name>" "roll over"` types the word into that runner's window.
+- Voice after a roll over: the `roll-over` skill types only the first line of `## Starter prompt`, so the two starter prompts above stay one line, with no voice line. The caveman plugin sets its default mode again when the cleared session starts, so the voice holds where that default is ultracave. A runner that `run/runner.sh start` or `resume` starts again gets the voice line `/caveman:ultracave` typed again ([../SKILL.md](../SKILL.md), Voice).
 
 ## Handoff and end of run
 
