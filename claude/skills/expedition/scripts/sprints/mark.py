@@ -105,7 +105,9 @@ def mark_status(a, st, root, folder, key, num, name):
         made = st.finish(root, folder, paths, f"docs(plan): {a.release} {key} {a.action}",
                          sync=a.action == "merge", done_before=done_before)
         fcntl.flock(lock, fcntl.LOCK_UN)
-    print(f"{key}: {stored} ({num} {name}); " + ("committed" if made or not st.deferred(folder) else "written, not committed (status/sync.py)"))
+    # The line says committed only when a commit was made: in format 2.2 launch, wait, resume and
+    # stop make none, and their line is the same line without "; committed".
+    print(f"{key}: {stored} ({num} {name})" + ("; committed" if made or not st.deferred(folder) else ""))
 
 
 def main():
