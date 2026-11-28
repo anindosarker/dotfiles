@@ -20,7 +20,7 @@ The three aims to weigh, and what to do when they pull against each other: [SKIL
 
 - A milestone is one branch, one worktree, one tracker and one merge, and it sits in one sprint column. The guidelines call it a named group of tasks; under expedition it is also the run unit.
 - `lib/ownership.py` reads the `### Milestone: <name>` blocks and computes the dependency edges and the run order. An edge exists for a listed dependency or a shared file, the lower spec number first. Milestones without such a reason run at the same time.
-- A file shared by two milestones of one sprint column is a script error, fixed in the spec. The full rules: [files.md](../files.md), Ownership.
+- A file shared by two milestones of one sprint column is a script error, fixed in the spec. The full rules: [files.md](../files.md), Ownership; the rules of the grid file: [format-2.1.md](format-2.1.md), The grid file.
 - `- Depends on:` takes exact milestone names, spec numbers (`03` or `spec 03`), or `none`.
 - Each task names its checks per base where the repository has bases.
 

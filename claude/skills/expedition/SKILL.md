@@ -1,6 +1,6 @@
 ---
 name: expedition
-description: Runs long, multi-part work as a release of four stages (discuss, plan, run, triage) in a versioned release folder, in epics of decisions run by a separate runner session, with a decisions file, one queue file for every item not yet decided, spec folders with modules, task files and milestones, and one status file. Use when the user runs /expedition. Not for small or single-session tasks.
+description: Runs long, multi-part work as a release of four stages (discuss, plan, run, triage) in a versioned release folder, in epics of decisions run by a separate runner session, with a decisions file, one item file per queue item, spec folders with modules, task files and milestones, and one status file. Use when the user runs /expedition. Not for small or single-session tasks.
 argument-hint: "<discuss|plan|run|triage> [release, e.g. v0.5.x]"
 disable-model-invocation: true
 metadata:
@@ -21,14 +21,14 @@ How the owner works in a release is in its `process.md`: a change to it is a `pr
 ## The model
 
 - A release is one folder, the release folder `.ai/plans/v0.<n>.x/<owner>/`, and one version:
-  - `plan/` (specs, epics), `queue.md` (the list of every item raised, written by the scripts), `queue/` (one item file per item, `queue/Q<n>-<slug>.md`), `run/` (trackers, handoffs), `status/` (generated, never edited by hand: `data/status.json` is the store of every status and is committed, `sprints.md` is drawn from it, `index.html` (in a release of format 2.0 or 2.1 the task board) and the other files of `data/` are renders, git-ignored).
+  - `plan/` (specs, epics), `queue.md` (the list of every item raised, written by the scripts), `queue/` (one item file per item, `queue/Q<n>-<slug>.md`), `run/` (trackers, handoffs), `status/` (generated, never edited by hand: `data/status.json` is the store of every status and is committed; `index.html` (the dashboard page; the task board in a release of format 2.1 or 2.0), its scripts in `src/` and the other files of `data/` are renders, git-ignored).
 - `<owner>` is the folder name earlier releases use.
 - A release has specs, one folder each (`plan/specs/NN-<slug>/NN-<slug>.md`, with `tasks/` for its task files): a spec is one planned unit of work.
 - A spec has modules (section 1.6: what is wanted, each with its decision cite) and tasks (one file each: the work, with its Verification list).
-- A spec has milestones: a schedulable chunk with one branch, one worktree, one tracker, one merge; the rows of `status/sprints.md`.
+- A spec has milestones: a schedulable chunk with one branch, one worktree, one tracker, one merge; the rows of the grid.
 - A milestone has tasks: the task files that are built and merged together.
 - An epic (`E<n>`) is the decisions planned and run together, named by the owner; it may span sprints.
-- A sprint (`S<n>`) is the milestones that run together, computed by `lib/ownership.py`; the columns of `status/sprints.md`.
+- A sprint (`S<n>`) is the milestones that run together, computed by `lib/ownership.py` and stored in the status file; the columns of the grid.
 - Each stage below writes fixed files and ends at a fixed point.
 
 ## Terms
@@ -41,13 +41,16 @@ One word per thing, in every file of this skill:
 - **builder**: the agent that builds a milestone.
 - **sprint**: the milestones that run together; one column of the grid.
 - **tick**: one wake of the runner's loop.
-- **status file**: `status/data/status.json`. **task board**: the page `status/index.html`.
+- **status file**: `status/data/status.json`. **dashboard page**: the page `status/index.html`, with six views (Dashboard, Queue, Epics, Milestones, Tasks, Sprints); it reads `status/data/dashboard.data.js` and `status/data/status.data.js`. **task board**: the page `status/index.html` of a release of format 2.1 or 2.0 (Format 2.1 releases, below).
+- **status words**: `to-do`, `in progress`, `blocked`, `done`, `backlog`, `archived`. A queue item has every word but `in progress`; an epic, a spec, a milestone and a task have every word but `backlog`. `blocked` is never set on a queue item by hand: the scripts set it from its `depends_on` line. A decision is not one of these kinds: it keeps the three lanes of `decisions.md`.
+- **decider**: who closed a queue item, `you` (the owner), `lead` or `agent` (a run agent); the `decider` line of its item file.
+- **grid**: the table of milestones by sprint, with one mark per cell (`·` to-do, `[ ]` in progress, `[~]` blocked, `[x]` done, `[!]` archived); `sprints/grid.py <release>` prints it from the status file.
 - **Verification**: the checklist of a task file. **Checks**: the section of a spec that holds for the whole spec.
 
 ## Owner input
 
 - Owner words: `record it`, `accepted`, `k`, `compose`, `hold D<n>`, `delegate`, `compose delegate`, `iterate`, `roll over`; `set up` and `keep` for the First run question only. Old names that mean the same: `epic` for `compose`, `go` for `delegate`, `epic go` and `epic delegate` for `compose delegate`. A letter of a `Say:` block is the word beside it.
-- **Explicit word.** No plan-file write until the owner's explicit word. The point of this rule: while the owner is still talking an item through, nothing about it goes into plan files, its item file included. Write once the owner is done with it: they say so, or they move to another item. The item file gets its `## Details` and `## Options:` when the item settles, by the rule of [reference/discuss.md](reference/discuss.md), Item format; that write records no decision. When unsure whether they are done, keep discussing. A question mark anywhere in the owner's message, also alone on the last line, is a hint that they are still discussing: answer, DO NOT GO TO THE RECORD STEP, and write nothing to plan files. A plan-file write is a new D item, a sentence added to or changed in an existing D item, or a change of an item's `status` (later, dropped, decided). The words: "record it" or "accepted" writes the decision; "later" sets the item's `status` to `later`; "drop it" sets it to `dropped`; "iterate" writes the decision and starts the item at once ([reference/discuss.md](reference/discuss.md), Epics). "k" is a yes to what the agent just asked. Asked to record (the complete item ending with its `Say:` block): it records. Asked for go: it is the go. Agent asked nothing: "k" does nothing. A picked option, a comment, specifics, a correction, "fix it", "makes sense", or any message with a question is discussion: answer the question and fold it into the item. A reply that changes the item: the whole item is posted again, with the changed lines in it, and every other line word for word. A reply that changes nothing in the item: no repost; the lead answers, and names the open item in one line. Then wait. Not covered: an item that never reaches the owner (an item that is not a real choice, which the lead settles or closes by Lead-side close; an item the run sends to Autofix). Once the owner comments on such an item, the rule applies to it.
+- **Explicit word.** No plan-file write until the owner's explicit word. The point of this rule: while the owner is still talking an item through, nothing about it goes into plan files, its item file included. Write once the owner is done with it: they say so, or they move to another item. The item file gets its `## Details` and `## Options:` when the item settles, by the rule of [reference/discuss.md](reference/discuss.md), Item format; that write records no decision. When unsure whether they are done, keep discussing. A question mark anywhere in the owner's message, also alone on the last line, is a hint that they are still discussing: answer, DO NOT GO TO THE RECORD STEP, and write nothing to plan files. A plan-file write is a new D item, a sentence added to or changed in an existing D item, or a change of an item's `status` (backlog, archived, done). The words: "record it" or "accepted" writes the decision and sets the item to `done`; "later" sets the item's `status` to `backlog`; "drop it" sets it to `archived`; "iterate" writes the decision and starts the item at once ([reference/discuss.md](reference/discuss.md), Epics). "k" is a yes to what the agent just asked. Asked to record (the complete item ending with its `Say:` block): it records. Asked for go: it is the go. Agent asked nothing: "k" does nothing. A picked option, a comment, specifics, a correction, "fix it", "makes sense", or any message with a question is discussion: answer the question and fold it into the item. A reply that changes the item: the whole item is posted again, with the changed lines in it, and every other line word for word. A reply that changes nothing in the item: no repost; the lead answers, and names the open item in one line. Then wait. Not covered: an item that never reaches the owner (an item that is not a real choice, which the lead settles or closes by Lead-side close; an item the run sends to Autofix). Once the owner comments on such an item, the rule applies to it.
 - On `progress` (or "status") the session, lead or runner, runs `status/progress.py <release>`. No warning and nothing the session knows to be wrong: it replies with the output unchanged and nothing else. A report on epic work is that same block: no commit id, sprint number, file path or script leftover. The other cases and the example: [reference/formats.md](reference/formats.md), Progress reply and reports.
 - `resume` (or "resume E<n>", "resume the runner"): send the one word `resume` to every live window `run/runner.sh list` shows (`run/runner.sh resume <release>` for the runner, `run/runner.sh resume "<release> specs E<n>"` for each fork), in one turn, then post the next item.
   - No picking a window, no status checks, no pane reading or report of a session's state, no audits; the lead does its own work only when the owner says so.
@@ -62,7 +65,7 @@ One word per thing, in every file of this skill:
   - A no is an answer the lead is not sure of, a change that is costly to undo (a public API, data, a default users rely on), or a change against what a decision meant.
   - The owner does not read spec files.
   - Never an item for the owner: a build, memory, heap, timeout, port, Docker, flaky test or CI problem; a tool setting; anything the run can fix itself.
-  - The run fixes the cause, or the lead records a short decision, and the item's `status` becomes `autofix` or `decided` without being posted.
+  - The run fixes the cause, or the lead records a short decision, and the item's `status` becomes `done` without being posted: with `decider: agent` when the run fixed it, `decider: lead` when the lead recorded the decision.
 - A recorded decision changes per Changing a decision ([reference/discuss.md](reference/discuss.md)): in place until built, superseded after.
 - A run agent follows accepted decisions. A decision that no longer fits becomes a queue item, never a silent change.
 - A side-agent note the owner pastes ("Heads up ...") is feedback too: explain the trade-off, give the options with a lean, the owner picks.
@@ -122,7 +125,7 @@ Arguments: `$ARGUMENTS`. Stage missing: run `python3 -I ${CLAUDE_SKILL_DIR}/scri
 Unattended, in the runner session (`run/runner.sh start`, brief `templates/runner-brief.md`). The lead never runs this stage. The runner's rules: [reference/run.md](reference/run.md); the steps of one tick: [reference/tick.md](reference/tick.md). What the lead does:
 
 - On go it types `RUN E<n> <release folder> epic <epic file> from <lead>` into the runner window with `run/runner.sh send` (typed text opts the turn in to `ultracode`; a `SendMessage` does not).
-- It reads `DONE` or `BLOCKED` back by `SendMessage` ([reference/discuss.md](reference/discuss.md), Epics, On `DONE` or `BLOCKED`).
+- It reads `DONE` or `BLOCKED` back by `SendMessage` ([reference/discuss.md](reference/discuss.md), Epics, On `DONE` or `BLOCKED`), and reads the grid with `sprints/grid.py <release>`.
 - A task that waits for the owner's look (`status/status.py <release> list --status blocked`): on the owner's word the lead ticks its `Owner:` box and runs `status/status.py <release> set <task> done`.
 - `HOLD <target>` and `RESUME <target>`, typed the same way, hold and resume an epic, a spec or one milestone. These and every other line between lead and runner: [reference/run.md](reference/run.md), Epics.
 - A dead runner: `run/runner.sh start` resumes it.
@@ -131,8 +134,8 @@ Unattended, in the runner session (`run/runner.sh start`, brief `templates/runne
 
 Folded into stage 1: the run's items are queue items and come up through `queue/next.py` like any other. Rules: [reference/triage.md](reference/triage.md). Short form:
 
-- First pass, no owner: the screen ([reference/discuss.md](reference/discuss.md), Screen) on every item; every item that is not a real choice (see Owner input) gets its decision written at once with `--source Q<n>` and its follow-up routed, or the Lead-side close. Then the settled list, then the real choices, one per message, among the other items.
-- For a real choice, the explicit word sets the item's `status` (Explicit word): `decided` through `queue/item.py D --source Q<n> --option <n>`, `later` or `dropped` through `queue/item.py --move`.
+- First pass, no owner: the screen ([reference/discuss.md](reference/discuss.md), Screen) on every item; every item that is not a real choice (see Owner input) gets its decision written at once with `--source Q<n> --decider lead` and its follow-up routed, or the Lead-side close. Then the settled list, then the real choices, one per message, among the other items.
+- For a real choice, the explicit word sets the item's `status` (Explicit word): `done` through `queue/item.py D --source Q<n> --option <n> --decider you`, `backlog` through `queue/item.py --move Q<n> Later`, `archived` through `queue/item.py --move Q<n> Dropped --decider you`.
 - Minor follow-up: a new module, task and milestone in the spec it follows while that spec is not done, `plan/milestone.py add <release> <spec> "<Name>" --decision D<n>`; a done spec takes nothing, so its follow-up is a new spec. A fix with no decision during a run: the same command without `--decision`; on a done spec it makes the follow-up spec `NN.M`. Major follow-up: a new release folder.
 - Handoff: only when the owner asks.
 
@@ -144,16 +147,29 @@ Folded into stage 1: the run's items are queue items and come up through `queue/
 - Arguments, what each script writes and what it refuses: [reference/scripts.md](reference/scripts.md).
 
 - A release: `plan/new_release.py`. A spec: `plan/new_spec.py`. Work in a spec: `plan/milestone.py add`, `plan/task.py add`.
-- Queue items and decisions: `queue/item.py`, `queue/next.py`, `queue/list.py`, `decisions/close.py`, `decisions/supersede.py`.
-- Epics: `epics/new.py`, `epics/overlap.py`, `epics/table.py`, `run/go.py`, `sprints/check.py`, `sprints/refresh.py`.
+- Queue items and decisions: `queue/item.py` (`--decider` on each call that closes an item, `--depends` for an item that waits for others), `queue/next.py`, `queue/list.py`, `decisions/close.py`, `decisions/supersede.py`.
+- Epics: `epics/new.py`, `epics/overlap.py`, `epics/table.py`, `run/go.py`, `sprints/check.py`, `sprints/refresh.py`, `sprints/grid.py` (prints the grid).
 - Statuses: `status/status.py` (set, get, list), `sprints/mark.py` (a milestone, by the run's verbs).
 - State: `status/report.py`, `status/progress.py`.
 - The runner and the spec writer: `run/runner.sh start|list|stop|send|fork|resume|adopt`.
 - A release in an older format: [reference/migrate.md](reference/migrate.md). The skill's version is `metadata.version` in this file's front matter; what each version changed: [CHANGELOG.md](CHANGELOG.md).
 
+## Format 2.1 releases
+
+A release whose status file says `"format": "2.1"` is read as it is; no release is converted by itself. What differs there:
+
+- A queue item has the words `open`, `decided`, `later`, `dropped` and `autofix`: "record it" sets `decided`, "later" `later`, "drop it" `dropped`, and an item the run fixes is `autofix`.
+- An epic, a spec, a milestone and a task have the words `not started`, `in progress`, `blocked`, `done` and `skipped`; a planned epic is `not started`.
+- The epic file has the lines `decisions:` and `specs:` beside `status:` and `starts:`.
+- The grid is the committed file `status/sprints.md`, written by `sprints/refresh.py` and `sprints/mark.py`; the lead and the runner read that file where this skill says `sprints/grid.py`.
+- No item has a decider or waits for others: `queue/item.py --decider` is accepted and not stored, and `queue/item.py --depends` is refused.
+- `status/index.html` is the task board, with the Queue view reading `status/data/queue.data.js`.
+- The forms in full: [reference/old-form/format-2.1.md](reference/old-form/format-2.1.md).
+- To move the release to format 2.2: [scripts/migrate/v2.1-v2.2/README.md](scripts/migrate/v2.1-v2.2/README.md).
+
 ## Format 2.0 releases
 
-A release whose status file says `"format": "2.0"` is read as it is; no release is converted by itself. What differs there:
+A release whose status file says `"format": "2.0"` is read as it is; no release is converted by itself. Everything of Format 2.1 releases, above, holds there too, apart from the queue. What differs there:
 
 - The queue is a kanban board, `queue.md`, and an item is a card on it: a title and facts, in five lanes (Open, Decided, Later, Dropped, Autofix). There is no `queue/` folder and no item file; the scripts read and write the board, with the same commands, except one flag: a decision is recorded with `queue/item.py <release> D "<title>" --source Q<n>` and no `--option`, because the script refuses `--option` on a board.
 - The options of an item are only in chat, in the form of [templates/item.md](templates/item.md) (filled: [example/item-examples.md](example/item-examples.md)); nothing of them is written to a file.
@@ -165,7 +181,7 @@ A release whose status file says `"format": "2.0"` is read as it is; no release 
 A release with no status file is in format 1.0 and is read as it is; no release is converted by itself. What differs there:
 
 - A spec is one flat file `plan/specs/NN-<slug>.md` with `### Milestone: <name>` blocks and `- Task N: ... Checks: ...` lines; `- Files owned:` is required in each block.
-- A milestone's status is its grid mark and the `Status:` line of its tracker ([reference/formats.md](reference/formats.md), Milestone status); there is no status file and no task status.
+- A milestone's status is its grid mark and the `Status:` line of its tracker ([reference/old-form/format-2.1.md](reference/old-form/format-2.1.md), The grid file); there is no status file and no task status.
 - `plan/new_spec.py` writes the flat file there, from [templates/spec-flat.md](templates/spec-flat.md), and `plan/new_fix.py` adds a fix. How to write such a plan file: [reference/old-form/planning-guidelines.md](reference/old-form/planning-guidelines.md) and [reference/old-form/specs.md](reference/old-form/specs.md); an example plan: [reference/old-form/example-plan.md](reference/old-form/example-plan.md).
 - The status page is the swimlane page.
 - The queue is the kanban board of Format 2.0 releases, above.

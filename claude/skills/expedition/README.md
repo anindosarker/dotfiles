@@ -33,7 +33,7 @@ scripts/          the commands that do the mechanical steps
   lib/            the code the scripts share
   plan/           new release, new spec, new milestone, new task
   epics/          start an epic, tag its specs, show its table
-  sprints/        the sprint grid and the milestone marks
+  sprints/        the sprints, the grid and the milestone statuses
   status/         the status command, the report, the progress reply
   queue/          queue items and decisions
   decisions/      close or replace a decision
@@ -48,19 +48,27 @@ scripts/          the commands that do the mechanical steps
   <release>-plan.md       goals, and one row per spec
   decisions.md            the decisions, as a board
   queue.md                the list of every item raised, written by the scripts
-  queue/Q<n>-<slug>.md    one item: its status, notes, details and options
+  queue/Q<n>-<slug>.md    one item: its status, who closed it, what it waits for, notes, details and options
   process.md              the facts of this project
-  plan/epics/E<n>.md      one epic: its decisions and specs
+  plan/epics/E<n>.md      one epic: its status, its start sprint, and a table of its decisions and specs
   plan/specs/NN-<slug>/   one spec, with its task files in tasks/
   run/trackers/           the run notes of each milestone
   run/handoffs/           notes for the next session
-  status/sprints.md       the sprint grid, drawn from the status file
-  status/data/status.json the status of everything
+  status/data/status.json the status of everything, and the sprint of each milestone
+  status/index.html       the dashboard page, generated
 ```
 
 ## The status words
 
-Every epic, spec, milestone and task has one of five statuses: not started, in progress, blocked, done, skipped. A blocked or skipped item has a short reason. The statuses are kept in one file and set by one command, so no file has to be edited to change one.
+There are six status words: to-do, in progress, blocked, done, backlog, archived.
+
+- Every epic, spec, milestone and task has one of five of them: to-do, in progress, blocked, done, archived. A blocked or archived one has a short reason. These statuses are kept in one file and set by one command, so no file has to be edited to change one.
+- A queue item has one of five of them: to-do, blocked, done, backlog, archived. Backlog is for a queue item only, and a queue item is never in progress. A closed item also says who made the call: you (the owner), the lead or an agent. An item that waits for other items is blocked until they are done; the scripts set that.
+- An epic whose specs are ready is blocked until the owner says `delegate`.
+- A decision keeps its three lanes in `decisions.md`: To do, In progress, Done.
+- `scripts/sprints/grid.py <release>` prints the grid: the milestones by sprint, with one mark for each status.
+
+A release in format 2.1 or lower keeps the five words of that format (not started and skipped, and open, decided, later, dropped, autofix for a queue item) and the grid file `status/sprints.md`.
 
 ## Starting in a new project
 
@@ -74,4 +82,6 @@ A release in format 2.0 keeps its queue as a kanban board of cards in `queue.md`
 
 ## The status board data
 
-A release in format 2.0 or 2.1 has the task board at `status/index.html`: open that file in a browser. It shows the epics, sprints, milestones and tasks with their statuses and reloads its data every 30 seconds. Its data is `status/data/status.data.js`, written from `status/data/status.json` on every status change. In format 2.1 its Queue view shows every queue item with its notes, details and options, from `status/data/queue.data.js`. `reference/formats.md`, section Status, lists what the file holds.
+A release in format 2.2 has the dashboard page at `status/index.html`: open that file in a browser. It has six views: Dashboard, Queue, Epics, Milestones, Tasks and Sprints. Dashboard shows what waits for whom; Queue shows every queue item with its notes, details and options. Its scripts are in `status/src/`. Its data is in `status/data/`, written from the item files, `decisions.md` and `status/data/status.json` on every change: `status.data.js` for the four plan views, and `dashboard.data.js` for Dashboard and Queue. `dashboard.json` holds the same rows for an agent to read. `reference/formats.md`, section Status, lists what the files hold.
+
+A release in format 2.0 or 2.1 has the task board at `status/index.html`. It shows the epics, sprints, milestones and tasks with their statuses and reloads its data every 30 seconds. Its data is `status/data/status.data.js`. In format 2.1 its Queue view shows every queue item with its notes, details and options, from `status/data/queue.data.js`.
