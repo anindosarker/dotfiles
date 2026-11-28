@@ -52,7 +52,9 @@ title, status, decision, option, file, changed, notes, details and options (key,
 recommended). Format 2.2 adds decider ("" when none) and depends_on (a list of ids, [] when
 none) after file. changed is the time of the last commit that changed the "status:" line of the
 file, left out while the file is not committed. It is a render, git-ignored with the rest of
-status/data/, written only for a release of format 2.1 and higher.
+status/data/, written only for a release of format 2.1 and higher. In a release of format 2.2
+write_data() also writes status/data/dashboard.data.js and status/data/dashboard.json, the data
+of the dashboard page (lib/dashboard.py, D14).
 
 The callers hold the .ids.lock lock (lib/common.py lock_file) around every write, as the board
 writes are.
@@ -488,8 +490,9 @@ def data(folder):
 
 def write_data(folder):
     """status/data/queue.data.js of a release in the item form; nothing for a lower format.
-    Format 2.2: first the blocked check (settle) and queue.md when it is not in step. Returns the
-    path written, or None."""
+    Format 2.2: first the blocked check (settle) and queue.md when it is not in step, and after
+    queue.data.js the dashboard data (lib/dashboard.py write). Returns the path of queue.data.js,
+    or None."""
     if not item_form(folder):
         return None
     if status_form(folder):
@@ -498,4 +501,5 @@ def write_data(folder):
             write_list(folder)
     p = Path(folder) / DATA
     C.load("lib/status").write_json(p, f"window.QUEUE_DATA = {json.dumps(data(folder), ensure_ascii=False)};\n")
+    C.load("lib/dashboard").write(folder)
     return p
