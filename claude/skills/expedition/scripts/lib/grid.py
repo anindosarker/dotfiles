@@ -33,7 +33,7 @@ decisions.md moved to the lanes of the Done rule (lib/decisions.py sync), so a m
 the board; then the Decided cards of queue.md synced with those lanes (lib/board.py sync: the
 tick and the #E<n> tag; nothing in a release of format 2.1, whose decided items hold their
 decision id only, lib/queue.py). sprints/refresh.py,
-sprints/mark.py, run/go.py (through sprints/refresh.py), plan/milestone.py and migrate/pre-v1.0/fixes.py use
+sprints/mark.py, run/go.py (through sprints/refresh.py) and plan/milestone.py use
 refresh(); the swimlane data (sprints/swimlanes.py) follows it. set_mark() sets one run cell for
 sprints/mark.py, the only writer of the marks; resume_mark() is the cell a resume sets.
 """

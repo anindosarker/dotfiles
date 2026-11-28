@@ -211,10 +211,9 @@ def render_ignores(folder, top, page_src=False):
 
 def ensure_gitignore(folder, page_src=False):
     """Append the status render ignores (and PAGE_SRC_IGNORE with page_src) to the repo's
-    .gitignore when missing. plan/new_release.py and migrate/pre-v1.0/layout.py run it before
-    ignore_renders, which then finds nothing missing; the two differ in the blank line they leave
-    before the lines and in what they print, so each keeps its own behaviour. Returns the path of
-    the .gitignore, or None when the folder is in no git repo."""
+    .gitignore when missing. plan/new_release.py runs it before ignore_renders, which then finds
+    nothing missing. Returns the path of the .gitignore, or None when the folder is in no git
+    repo."""
     try:
         root = subprocess.run(["git", "-C", str(folder), "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True).stdout.strip()
     except Exception:

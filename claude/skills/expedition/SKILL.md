@@ -88,7 +88,6 @@ Each stage has one file. Read it whole when the stage starts, and again after a 
 - **Stage 3, run.** The runner reads [reference/run.md](reference/run.md) and [reference/tick.md](reference/tick.md). What the lead does is below.
 - **Stage 4, triage.** The lead reads [reference/triage.md](reference/triage.md) when the run's queue items come back. The short form is below.
 - File layout and conventions: [reference/files.md](reference/files.md). File formats (decisions, queue, epic file, tracker, status, handoff): [reference/formats.md](reference/formats.md). The shape of each authored file: [templates/](templates/). One small release with every kind of file filled in, to read before writing a file of that kind: [example/](example/README.md).
-- Two files hold no rule, only the place their content moved to: [reference/specs.md](reference/specs.md) (now [reference/plan.md](reference/plan.md), Lines the spec writer adds) and [reference/example-plan.md](reference/example-plan.md) (now [example/](example/README.md)). The format 1.0 form of both is under Format 1.0 releases, below.
 
 ## Process notes
 
