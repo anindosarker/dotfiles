@@ -37,8 +37,8 @@ task is "<spec>-<number>" ("27-03"), a spec its number, an epic "E11".
 
 set_status changes one milestone or task, then runs the chain: the roll-up of a task into its
 milestone, the JSON file, the grid (lib/grid.py refresh, which draws status/sprints.md from this
-file below format 2.2, writes no grid file in format 2.2, and ends in sync), status.data.js (and, for a release of format 2.1, queue.data.js, the
-queue data of the page, lib/queue.py), and the "status:" front matter line of every task, spec
+file below format 2.2, writes no grid file in format 2.2, and ends in sync), status.data.js (and, for a release of format 2.1 and higher, queue.data.js, the
+queue data of the page, lib/queue.py; for format 2.2 also the dashboard data, lib/dashboard.py), and the "status:" front matter line of every task, spec
 and epic file (mirror). Nobody writes a status by hand.
 - A task set to done with an open "Owner:" box in its Verification list becomes blocked with
   the reason OWNER_REASON; with any other open box the change is refused.
@@ -406,7 +406,9 @@ def save(folder, data):
 
 def write_page_data(folder, data=None):
     """status.data.js, the data of the page status/index.html: the stored file plus "root". For a
-    release of format 2.1 also queue.data.js, the data of its Queue view (lib/queue.py)."""
+    release of format 2.1 also queue.data.js, the data of its Queue view (lib/queue.py); for a
+    release of format 2.2 also dashboard.data.js and dashboard.json, which lib/queue.py write_data
+    writes through lib/dashboard.py, so they are written with status.data.js in every step."""
     data = stored(data or load(folder))
     page = {k: v for k, v in data.items() if k in ("release", "format", "updated")}
     page.update(root=str(folder), **{k: v for k, v in data.items() if k not in page})
