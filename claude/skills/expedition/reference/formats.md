@@ -7,6 +7,7 @@
 - Item file
 - Settled list
 - Progress reply and reports
+- Waits for you line
 - decisions.md
 - Decision file
 - Epic file
@@ -137,7 +138,7 @@ Name one to reopen it.
 
 ## Progress reply and reports
 
-- On `progress` (or "status") the session, lead or runner, runs `status/progress.py <release>`. No warning and nothing the session knows to be wrong: it replies with the output unchanged and nothing else. Otherwise it checks, corrects the source (`status/status.py` or `sprints/mark.py`; in a format 1.0 release, `sprints/mark.py` for a mark and the tracker `Status:` line for waiting), runs the script again and replies with that output. Only when no file field can hold the truth does it correct the block text itself, in the same format. The owner sees one block, no added line. When the block says a milestone waits on the lead, the lead does that work in the same turn, after the block. Example output:
+- On `progress` (or "status") the session, lead or runner, runs `status/progress.py <release>`. No warning and nothing the session knows to be wrong: it replies with the output unchanged and nothing else. Otherwise it checks, corrects the source (`status/status.py` or `sprints/mark.py`; in a format 1.0 release, `sprints/mark.py` for a mark and the tracker `Status:` line for waiting), runs the script again and replies with that output. Only when no file field can hold the truth does it correct the block text itself, in the same format. The owner sees one block, no added line, apart from the Waits for you line under it in a release of format 2.2 (Waits for you line). When the block says a milestone waits on the lead, the lead does that work in the same turn, after the block. Example output:
 
   ```
   **E12** · Specs 6/12
@@ -149,6 +150,41 @@ Name one to reopen it.
 
   `Running` lists each spec with a milestone running, including a spec that is being retried or fixed. `Blocked` lists only work that has stopped, with the run's own reason and who it waits on (`waits on the owner: ...` or `waits on the lead: ...`).
 - Reporting on epic work (after a regroup, an added fix, a note to the runner, a release check): the default report is that same progress block, followed by the settled list (Settled list, above) when run items were settled. Add a plain sentence only when the block cannot show what was done or what the owner has to do. No commit id, sprint number, file path or script leftover; a leftover is fixed, or filed as a queue item when it needs a decision. A reply to a skill-update prompt keeps the form that prompt asks for.
+
+## Waits for you line
+
+In a release of format 2.2, the last line of every message of the lead to the owner: `status/waits.py <release>` prints it from the rows of the dashboard data, built at each call, so it is never older than the files. When the lead calls it and when it pushes: [discuss.md](discuss.md), Discussing items, Waits for you line, and Epics, Push. A release of format 2.1 or lower has no line.
+
+```
+Waits for you: E3 planned: delegate · D14 ready: compose · 05-04: your look · Held: D9
+```
+
+- The line is `Waits for you: `, then one entry per row that waits, joined by ` · `: epics, decisions, tasks, milestones, queue items, and inside a kind in the order of the numbers.
+
+  | Row | Entry |
+  |---|---|
+  | epic, `blocked`, turn `you` (planned, waits for `delegate`) | `E3 planned: delegate` |
+  | decision, ready, no hold | `D14 ready: compose` |
+  | decision, ready, a hold that is over | `D14: hold over, ready: compose` |
+  | task, turn `you` (waits for the owner's look) | `05-04: your look` |
+  | milestone, turn `you`, and none of its tasks has an entry | `<label>: <the reason>`, without a leading `owner: ` |
+  | queue item, turn `you` (its options are written, it waits for the owner's word) | `Q18: record it` |
+
+- Ready: the decision is `to-do`, has no `epic` line and no row in the table of an epic file, and has no hold or a hold that is over ([../board/README.md](../board/README.md), the field `ready`).
+- The last part is `Held: D9, D14`: each decision with a hold that is not over, ids only, in the order of the numbers. Absent when no decision is held. A held decision has no entry of its own.
+- No entry and nothing held: the command prints nothing, and the message has no line.
+- `--skip Q19` leaves out the entries of that id: the item the same message posts.
+- `--new` prints the line, then one line `new: <entry>` for each entry that was not in the line of the call before. A held decision is never a `new:` line. The keys of what each call printed are in `status/data/waits.json` (git-ignored); an entry that leaves the line loses its key, so a thing that waits a second time is new again.
+- A hold is the entry of the decision in the status file (Status): `hold` is `yes`, or `until <id>` (a queue item, a decision or an epic), and `hold_reason` holds the owner's reason in words, with `hold: yes` only. A hold `until <id>` is over when `<id>` is `done` or `archived`; every other hold ends only on the owner's word. `decisions/hold.py` writes both keys; `epics/new.py` removes them from each decision it takes into an epic, and the refresh chain removes them from a decision that is no longer `to-do` or `blocked`.
+
+The held block, `status/waits.py <release> --held`: one line per held decision, its id, its title, and after a colon `until <id>` or the reason in words when there is one. A hold that is over is not in it. Nothing held: nothing printed.
+
+```
+Held:
+- D9 Decision: six status words and decider: first the trial of the page
+- D14 The skill's own scripts build the dashboard data: until Q8
+- D21 The report names the migration folder
+```
 
 ## decisions.md
 
@@ -353,6 +389,7 @@ For a release with `status/data/status.json`. These are the words of format 2.2;
 - Copies, written on every change and never read back as the truth: the `status:` front matter line of the task, spec and epic file; the page data. `status/report.py` flags a `status:` line that differs from the JSON file. The grid is printed from the store (The grid).
 - Ids: a task is `<spec>-<number>` (`27-03`), a milestone its tracker file name without `-tracker.md` (`27-collapse-shortcut`), a spec its number, an epic `E11`. `status/status.py <release> list --status blocked` lists what waits. A stored status is never thrown away: when a milestone or task with a status is renamed or removed, or a spec loses its Deliverables link, every script stops and names the entries until the spec is restored or each entry is removed with `status/status.py <release> drop <id>`. A set that changes nothing writes nothing.
 - The file is also the data of the dashboard page: `release`, `format` (the skill version whose form the release has, written by `plan/new_release.py` and by a migration; a release with no status file is format `1.0`), `updated`, `statuses` (the six words, in the order above), `sprints`, `epics`, `specs`, `milestones`, `tasks`. An epic entry holds `reason` and `decider`; a milestone entry holds `number` (its position in its spec), `section` (`2.2.<number>`) and `ref` (`<spec>.<number>`, for example `27.1`) after its name, and `sprint`, `launched` and `decider`. A filled file: [../example/v1.0.x/owner/status/data/status.json](../example/v1.0.x/owner/status/data/status.json).
+- `decisions`: one entry per decision, `D<n>`, with `round` (Decision file), `files` (the files the lead gave with `epics/overlap.py <release> D<n> --files`, kept while no spec cites the decision), and `hold` and `hold_reason` while the owner holds it (Waits for you line).
 - The page is the dashboard page, `status/index.html`, a copy of `board/dashboard.html`, with its scripts in `status/src/` (copies of `board/src/`). It has six views: Dashboard, Queue, Epics, Milestones, Tasks and Sprints. Its data, all in `status/data/`, git-ignored and written by the scripts:
   - `status.data.js` (`window.STATUS_DATA`): the status file plus `root`, the release folder on this machine, after `updated`; read by Epics, Milestones, Tasks and Sprints, and reloaded every 30 seconds. A machine path is never committed.
   - `dashboard.data.js` (`window.DASHBOARD_DATA`): one row for every queue item, decision, epic, milestone and task, with `release`, `updated`, `roots`, `sources` and `rows`; read by Dashboard and Queue. A decision row takes its status and its decider from its decision file; a `blocked` decision has the reason `Waits for E11, same file`. With a decision board the row takes its status from the lane and has no decider.

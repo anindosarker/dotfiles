@@ -43,8 +43,10 @@ For any session that is about to run a command of the skill: how to run them, th
 - `decisions/close.py <release> D<n> [--backlog]`: a decision with nothing to run; with `--backlog`, a decision that moves to another release.
 - `decisions/supersede.py <release> D<old> D<new>`: supersede a built decision.
 - `decisions/decider.py <release> D<n> you|lead|agent [--change]`: the decider of a decision file that has none; `--change` replaces an existing one.
+- `decisions/hold.py <release> D<n> [--until <id> | --reason "<text>" | --off]`: the owner's hold of a decision, in the status file.
 - `status/report.py <release>`: state and gaps.
 - `status/progress.py <release>`: the progress reply for the owner (formats.md, Progress reply and reports).
+- `status/waits.py <release> [--new] [--skip <id>]`, `--held`: the Waits for you line under each message of the lead, and the held block.
 - The runner's own: `run/runs.py` (the run id record) and `run/check.py` (the wake check).
 
 ## Each script
@@ -97,9 +99,10 @@ For any session that is about to run a command of the skill: how to run them, th
 ### run/go.py
 
 - Command: `python3 -I <skill>/scripts/run/go.py v0.<n>.x E<n> --from <lead>`
-- Does: runs every go step ([discuss.md](discuss.md), Epics, On `go`) in order: tag, commit, grid (`sprints/refresh.py`), epic file (the final table, committed), close the spec writer's window, start the runner when `run/runner.sh list` shows none and send the RUN line, the next epic's stub. It fails at the tag step when a decision of the epic's table is cited by no spec of the epic.
+- Does: runs every go step ([discuss.md](discuss.md), Epics, On `go`) in order: tag, commit, grid (`sprints/refresh.py`), epic file (the final table, committed), close the spec writer's window, start the runner when `run/runner.sh list` shows none and send the RUN line with `run/runner.sh send --confirm`, the next epic's stub. It fails at the tag step when a decision of the epic's table is cited by no spec of the epic.
 - Each step is skipped when already done; the grid step and the two `run/runner.sh` steps are recorded in `status/data/go.log` for that. The grid step is done when every milestone of the epic's specs has a `sprint` in the status file and `go.log` records the step.
 - Below format 2.2 the epic file step also writes the `Specs:` line and commits `status/sprints.md`, and the grid step is done when every milestone has a row in that file.
+- The run step: the go waits until the runner's window takes input, types the RUN line, and writes "RUN sent" and the `go.log` line only when the line is in the runner's transcript. When it is not, the go stops with `go E<n> stopped at step 6 (run): <reason>`, and the next call does the step again.
 - Stops at the first failure with one line `go E<n> stopped at step <i> (<name>): <reason>`, exit 1; prints one summary line on success.
 - The commits of steps 2 and 4 name `queue.md`, and in a format 2.1 release also the item files in `queue/`.
 - `EXPEDITION_RUNNER_SH` overrides the path of `run/runner.sh` (tests point it at a stub)
@@ -181,6 +184,7 @@ For any session that is about to run a command of the skill: how to run them, th
   - `list [<release>]`: entries with busy or idle, release and kind; with a release, the entries of that release only.
   - `stop`: closes the window, marks the entry stopped.
   - `send <release> "<line>"`: types `ultracode <line>` into the runner window and submits it (the RUN line `RUN E<n> <release folder> epic <epic file> from <lead>`; a runner by full window name, for example `send "v0.9.x runner2" "LEAD <name>"`).
+  - `send --confirm [--from <lead>] <release> "<line>"` (the two flags in either order): waits until the runner's window takes input (its pane runs claude and shows the input box), types the line, and exits 0 only when the line is in the runner's transcript, written after the call started: a user message of an idle runner, or a queued entry of a busy one. A line that is not there is typed once more; still not there, or no input box: exit 1 with one line that ends `Look at its window, then send again`. The waits are `EXPEDITION_SEND_READY` (default 40 s) for the input box and `EXPEDITION_SEND_WAIT` (default 20 s) for the transcript after each typing. `send` with no flag is unchanged: it types and submits, and does not wait.
   - `fork <release> E<n> "<D ids>" --from <lead>`: opens window `<release> specs E<n>` running the spec writer, a forked session of the lead (`--resume $CLAUDE_CODE_SESSION_ID --fork-session`, model fable unless `--model`), that fills the epic table's Files column, writes the epic's specs, completes the table with `epics/table.py` and replies `SPECS E<n> <spec numbers>`, with its own `--session-id` in the registry.
     - A spec writer whose window died is resumed by the same `fork` call, never forked again.
     - `stop "<release> specs E<n>"` closes it.
@@ -197,8 +201,8 @@ For any session that is about to run a command of the skill: how to run them, th
 - Command: `<skill>/scripts/run/runner.sh watch start|stop|status`, `<skill>/scripts/run/nudge-watch.sh`
 - `start`, `send` and `fork` run inside tmux record the calling window as registry key `lead` (`{"tmux": "<session>:<window id>", "session": $CLAUDE_CODE_SESSION_ID, "name": --from, the line's "from <name>" or the name of a `LEAD <name>` line}`), except when called from a runner window (`EXPEDITION_RUNNER` set).
 - `start` also starts the watcher (pid `~/.claude/expedition-runners/nudge-watch.pid`); `stop` stops it once no runner or spec writer window is live.
-- The watcher polls the You Should Know store every 5 s and types `NUDGE <source>: <text>` into the lead window for each note shown to a runner, a fork or an unknown session, never one shown to the lead; state `nudge-watch.state` (no replay on restart), log `nudge-watch.log`; exits when `lead` is missing or its window is gone.
-- Every minute it also runs `run/check.py` for each live runner's release and types `ultracode resume` into a runner that owns a `silent`, `finished` or `no run` row while its own transcript has been quiet for 20 minutes, at most once per 20 minutes per runner, logged; a failing `check.py` is logged and skipped.
+- The watcher polls the You Should Know store every 5 s and types `NUDGE <source>: <text>` into the lead window for each note shown to a runner, a fork or an unknown session, never one shown to the lead. A new note is found by the session it was shown to: a session whose last shown line changed since the last poll, so a note still reaches the lead after the store holds 50 notes. State `nudge-watch.state` keeps the last shown line of each session (no replay on restart), log `nudge-watch.log`; exits when `lead` is missing or its window is gone.
+- Every minute it also runs `run/check.py` for each live runner's release (an entry whose folder is gone is skipped) and types `ultracode resume` into a runner that owns a `silent`, `finished` or `no run` row while its own transcript has been quiet for 20 minutes, at most once per 20 minutes per runner, logged; a failing `check.py` is logged and skipped.
 - Env overrides for tests: `NUDGE_STORE`, `NUDGE_STATE`, `NUDGE_LOG`, `NUDGE_REGISTRY`, `NUDGE_INTERVAL`, `NUDGE_RESUME_EVERY`, `NUDGE_STALE_MINUTES`, `NUDGE_RESUME_STATE`, `EXPEDITION_PROJECTS`, `EXPEDITION_TMUX_SOCKET`
 - When: automatic with `start`; `watch` for manual control
 
@@ -328,6 +332,13 @@ For any session that is about to run a command of the skill: how to run them, th
 - Refuses, writing nothing: a word that is not `you`, `lead` or `agent`, an id with no file, without `--change`, a file that has a `decider` line (`D<n> has decider <word>: nothing changed`); with `--change`, a file whose `decider` line holds the word already (`D<n> has decider <word> already: nothing changed`); and a decision board, with one line that names `scripts/migrate/v2.1-v2.2`.
 - When: `status/report.py` counts decision files with no decider, and the lead knows who made the call; with `--change`, when a recorded decider is wrong
 
+### decisions/hold.py
+
+- Command: `python3 -I <skill>/scripts/decisions/hold.py v0.<n>.x D<n> [--until <id> | --reason "<text>"]`, `... D<n> --off`
+- Does: under the `.ids.lock` lock, stores the owner's hold in the entry of the decision in the status file: `hold: yes` with no flag; `hold: until <id>` with `--until` (a queue item, a decision or an epic; the hold is over when `<id>` is `done` or `archived`); `hold: yes` and `hold_reason` with `--reason`. A second call replaces both keys; `--off` removes both. No other key of the entry and no line of the decision file changes. Then the status rule, one commit of the status file, and the page data. Prints `D14: held`, `D14: held until Q8`, `D9: held, <text>` or `D14: hold off`; `--off` on a decision with no hold prints `D14: hold off` and changes nothing.
+- Refuses, with one line and nothing written: a release whose decisions are not files (below format 2.2, or format 2.2 with the board; the line names `scripts/migrate/v2.1-v2.2`), an id with no decision file, a hold on a decision that is not `to-do` or `blocked`, an `--until` id that no queue item, decision or epic has, `--until` with the decision's own id, `--until` and `--reason` in one call, an empty `--reason`, `--off` with `--until` or `--reason`.
+- When: the owner's `hold D<n>`, `hold D<n> until <id>`, and the owner's word that lifts a hold ([discuss.md](discuss.md), Epics, Hold)
+
 ### plan/find_rules.py
 
 - Command: `python3 -I <skill>/scripts/plan/find_rules.py [repo]`
@@ -410,6 +421,13 @@ For any session that is about to run a command of the skill: how to run them, th
 - Format 2.1 and 2.0: the same block from the status file, with the words of that format; Ready for an epic lists the `decided` items (format 2.0: the unticked Decided cards). Format 1.0: per milestone the grid cell and the most advanced copy of its tracker (planned < running < waiting < done or stopped) among the main checkout and the worktree on the branch its `Branch` line names; each disagreement with the grid goes to stderr as one `warning:` line.
 - The reply rule: [formats.md](formats.md), Progress reply and reports.
 - When: on `progress`
+
+### status/waits.py
+
+- Command: `python3 -I <skill>/scripts/status/waits.py v0.<n>.x [--skip <id>]`, `... --new [--skip <id>]`, `... --held`
+- Does: builds the rows of the dashboard data at each call and prints the Waits for you line, or nothing when nothing waits and nothing is held ([formats.md](formats.md), Waits for you line). `--skip <id>` leaves out the entries of one id. `--new` adds one line `new: <entry>` for each entry the call before did not print. The first two forms record the keys of what they printed in `status/data/waits.json` (git-ignored). `--held` prints the held block and reads and writes no key.
+- A release below format 2.2: every form prints nothing, writes nothing and exits 0. Refuses `--held` with `--skip`.
+- When: once for each message of the lead to the owner, with no flag in a turn the owner started and with `--new` in every other turn; `--held` in the first message of a session and in the message that reports `DONE E<n>` ([discuss.md](discuss.md), Discussing items, Waits for you line)
 
 ### run/guard.py
 

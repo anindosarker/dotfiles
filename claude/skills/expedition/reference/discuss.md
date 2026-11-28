@@ -14,6 +14,7 @@ Interactive. You research and propose; the owner gives feedback and accepts.
 
 - Read the last handoff in full and run `queue/next.py <release>` before saying anything. Something the work needs is not in them: `/recall` (transcript grep, ctx_search, ask the prior session named in the handoff), never re-derive it from the code.
 - A lead that starts fresh on a release with a live runner (`run/runner.sh list`) first sends `run/runner.sh send <release> "HELLO from <lead>"`, before anything else.
+- In a release of format 2.2, the first message of a session to the owner holds the held block: the output of `status/waits.py <release> --held`, unchanged ([formats.md](formats.md), Waits for you line). Nothing printed: no block.
 - The details and the options of an item are written in chat while it is discussed, and go into its item file when it settles (Item format, Storing).
 - Each accepted decision is a decision file, `decisions/D<n>-<slug>.md` ([formats.md](formats.md), Decision file): its front matter holds its status, its decider and where it came from, and its body says what was decided. `decisions.md` is the list of every decision file, written by the scripts ([formats.md](formats.md), decisions.md). The scripts set every status of a decision; nobody edits the front matter or the list. A number is never reused or renumbered. A release that keeps its decisions on a board (format 2.1 or lower, or format 2.2 before its decisions moved to files): [old-form/format-2.1.md](old-form/format-2.1.md), Decision board.
 - Each item filed in the release is one item file, `queue/Q<n>-<slug>.md` ([formats.md](formats.md), Item file), and `queue.md` is the list of every item file, written by the scripts ([formats.md](formats.md), queue.md). The item's `status` is its state: `to-do`, `blocked`, `done`, `backlog` or `archived`. The `to-do` items are the queue; a `blocked` item waits for other items (below); the others are the history. The owner sees the queue in the Queue view of the dashboard page. A release of format 2.1 keeps the five words of that format and shows the queue on its task board: [old-form/format-2.1.md](old-form/format-2.1.md). A release of format 2.0 or 1.0 keeps its queue as a kanban board: [old-form/queue-board.md](old-form/queue-board.md).
@@ -47,6 +48,22 @@ Interactive. You research and propose; the owner gives feedback and accepts.
 - What the lead settled or closed reaches the owner in the settled list ([formats.md](formats.md), Settled list).
 - Both sessions may discuss and record decisions, under the shared-file rules in [formats.md](formats.md).
 - A finished lookup agent stays idle, not stopped: it costs nothing idle, and a follow-up on the same area goes to it by name (`SendMessage`) so its context is reused. Stop agents only when the owner says so.
+- **Waits for you line.** In a release of format 2.2, every message of the lead to the owner ends with one line that names each thing that waits for the owner and each decision the owner holds ([formats.md](formats.md), Waits for you line). The steps:
+  1. After the last plan write of the turn, make one call of `status/waits.py <release>`: with no flag in a turn the owner started, with `--new` in every other turn (Epics, Push). With an item in the same message, add `--skip Q<n>` for that item.
+  2. Put the first line it prints, unchanged, as the last line of the message, after the `Say:` block. The `new:` lines of `--new` are for the push, not for the message. Nothing printed: no line.
+  3. Never edit the line, and never write one without the command. Never make two calls for one message: each call records what it printed, so a second call loses the `new:` lines.
+
+  An entry stays in the line until the owner's answer changes the fact behind it:
+
+  | Entry | Leaves on |
+  |---|---|
+  | `E3 planned: delegate` | `delegate` |
+  | `D14 ready: compose` | `compose`, `iterate D14`, or `hold D14` (it moves to `Held:`) |
+  | `D14: hold over, ready: compose` | `compose`, `iterate D14`, or a new `hold D14` |
+  | `05-04: your look` | the owner's word on the look: the lead ticks the `Owner:` box and runs `status/status.py <release> set 05-04 done` |
+  | `Q18: record it` | "record it", "iterate", "later" or "drop it" on that item |
+
+  A release of format 2.1 or lower has no line: [old-form/format-2.1.md](old-form/format-2.1.md), What differs.
 
 ## Item format
 
@@ -61,7 +78,7 @@ Item format, one item per message, the next item only after the explicit word on
   - What the owner needs to finish the item is in it.
   - ASD-STE100 words, short lines.
   - Option 2 is a different idea. If there is none: one option.
-- The `Say:` block is the last part of an item and of an epic message. A letter alone is the command. In an item with several options the owner gives the option number with it ("2, A"); no number means the recommended option.
+- The `Say:` block is the last part of an item and of an epic message. In a release of format 2.2 the Waits for you line follows it as the last line of the message (Discussing items, Waits for you line). A letter alone is the command. In an item with several options the owner gives the option number with it ("2, A"); no number means the recommended option.
 - **Repost.** During a discussion the lead answers in chat. The whole item comes again only when the talk on it ended and the proposal changed, or on the owner's word `restate`. The talk on an item ended when the owner's reply to it holds no question, asks for no change, and is no explicit word (SKILL.md, Explicit word). Then, if the proposal changed since the last post, the lead posts the whole item one time, with every agreed change in it and the `Say:` block, and waits. If the proposal did not change: no post. `restate` posts the item as it stands and records nothing.
 - A repost is the whole item. It keeps every line word for word; only the lines the owner asked to change are changed. No rephrasing. It shows the title, all bullets and all options: no "unchanged" line, no part left out.
 
@@ -76,10 +93,22 @@ No question at the end: the item ends with its `Say:` block, and the options are
   - The lines under `Blocked:` are its block `Blocked`, word for word. The lead does not work the block out by itself, and the block is absent when the command prints no `Blocked:` line.
   - A blocked decision never waits for a word: it is `to-do` again by itself when the epic it waits for has merged, and the next hint lists it as ready. `compose delegate with D<n>` puts a blocked decision into this epic.
   - A decision never waits for others to fill an epic, and an epic of one decision is normal.
-  - Post it once per set, and not again until another decision becomes ready. The next item is posted in the same message; discussion never waits for `compose`. The owner says `compose` when they choose, or names items to add (`compose with D<n>`) or hold. Nothing else triggers it.
+  - Post it when a decision becomes ready. After that the Waits for you line carries the entry `D<n> ready: compose` in every message until the owner answers (Discussing items, Waits for you line); the message is not posted again for the same decisions. A held decision is not in it. The next item is posted in the same message; discussion never waits for `compose`. The owner says `compose` when they choose, or names items to add (`compose with D<n>`) or hold. Nothing else triggers it.
   - In a release with a decision board the lead works the list and the block out by itself: [old-form/format-2.1.md](old-form/format-2.1.md), Decision board.
 - The files of a new decision: when the lead records a decision that no spec cites and knows the files it changes, it gives them in the same turn, `epics/overlap.py <release> D<n> --files "<files>"` (paths as the project writes them, separated by `, `; `""` removes them). The scripts then set the decision `blocked` while a running epic owns one of those files. The files are dropped once a spec cites the decision.
-- `hold D<n>`: the item leaves this epic and waits for the next hint. Only the owner holds. The lead never holds an item on its own judgment; a decision that does not exist yet is not a dependency.
+- **Hold.** Only the owner holds. The lead never holds a decision on its own judgment; a decision that does not exist yet is not a dependency. The hold is stored in the status file by `decisions/hold.py`, and a held decision is not in the `Epic ready` message:
+
+  | Owner | Lead |
+  |---|---|
+  | `hold D14` | `decisions/hold.py <release> D14` |
+  | `hold D14 until Q8` | `decisions/hold.py <release> D14 --until Q8` (a queue item, a decision or an epic) |
+  | `hold D9`, with a reason in words | `decisions/hold.py <release> D9 --reason "<the owner's words>"` |
+  | `compose with D14`, `iterate D14` | the regular steps; `epics/new.py` removes the hold |
+  | the reason is gone (Q8 is closed) | nothing to run: the line says `D14: hold over, ready: compose`, and the lead says that sentence one time, in the message where it first shows |
+
+  - A hold with a reason in words, or with none, ends only on the owner's word: `decisions/hold.py <release> D<n> --off` when the owner lifts it. Only a hold `until <id>` ends by itself, when `<id>` is `done` or `archived`.
+  - The held block (`status/waits.py <release> --held`) is posted in the first message of a session (Discussing items) and in the message that reports `DONE E<n>`.
+  - A release with a decision board stores no hold: [old-form/format-2.1.md](old-form/format-2.1.md), What differs.
 - Epic file `plan/epics/E<n>.md` (formats.md, Epic file): started by `epics/new.py` on `compose`; run/go.py writes the next epic's stub the moment the RUN is sent. A Notes line, with `epics/new.py <release> E<n> --note "<text>"`, only when discussion yields what the specs cannot hold: a rule change since the last epic, an owner tried-and-rejected, a wish with no decision, a cross-epic order, a SKIP, HOLD or RESUME during the run.
 - A note for the running epic is typed into the runner (`run/runner.sh send <release> "NOTE E<n>: <note>"`) only once its item is closed; an urgent note (`Urgent:` first) at once, re-typed every runner tick until its ack lands. A note without ack is re-typed at the next RUN or DONE (`status/report.py` lists them).
 - A committed change to how the runner works (a P bullet, run.md, tick.md, the brief, this skill): in the same turn, unasked, an urgent note in the running epic's file and the line `RULES: <files>, <one line why>` typed into the runner; it replies `ACK RULES <the first words of that line>`, so two RULES lines sent close together are told apart.
@@ -90,17 +119,31 @@ No question at the end: the item ends with its `Say:` block, and the options are
   - No spec in progress fits (a spec that is done takes nothing): an epic of this one decision, by the steps of `compose delegate`: `epics/new.py`, the spec writer, the SPECS check, then `run/go.py` at once.
   - The item replaces work that is built or runs: Changing a decision, in the same turn.
   - The plan files and the line to the runner hold what the runner needs to choose the moment: the files the item changes and the work it replaces. The runner decides when it starts ([run.md](run.md), Orchestration).
-- On the `SPECS E<n> <spec numbers>` message: compare each spec with its decisions and fix inline. Check the plan by judgment, reading the epic file only and running no script for it: the same file under two specs, or a long run of different sprints, is a question, not an error. Send the spec writer back (type into its window) when a clearly better cut exists. The lead reports nothing it fixed; a choice for the owner found in the check is posted as an item, and the epic waits for it. Then post the `Epic planned: E<n>` message ([../templates/epic-messages.md](../templates/epic-messages.md)): the specs, one plain line each.
+- On the `SPECS E<n> <spec numbers>` message: compare each spec with its decisions and fix inline. Check the plan by judgment, reading the epic file only and running no script for it: the same file under two specs, or a long run of different sprints, is a question, not an error. Send the spec writer back (type into its window) when a clearly better cut exists. The lead reports nothing it fixed; a choice for the owner found in the check is posted as an item, and the epic waits for it. Then post the `Epic planned: E<n>` message ([../templates/epic-messages.md](../templates/epic-messages.md)): the specs, one plain line each. In a release of format 2.2 the lead makes its one call with `--new` for that message, and sends the push (Push, below).
 - On `delegate` (old name `go`): `run/go.py <release> E<n> --from <lead>` (`<lead>` is this session's name, from `ListAgents`: "This session is <name>"), then post the next item. Its steps, in order:
   1. `epics/tag.py` (tags the specs, writes `epic: E<n>` into the file of each decision, which makes it `in progress`, writes the `starts:` sprint; the item files keep only their decision id, and in a release of format 2.0 it ticks the epic's cards in `queue.md` and tags them `#E<n>`).
   2. Commit specs, tags, plan rows and the queue.
   3. `sprints/refresh.py`.
   4. The final Ownership table of the epic file, with its Sprint column, committed.
   5. `run/runner.sh stop "<release> specs E<n>"` (closes the spec writer's window).
-  6. `run/runner.sh start <release>` when `run/runner.sh list` shows no runner, then the RUN line `run/runner.sh send <release> "RUN E<n> <release folder> epic <release folder>/plan/epics/E<n>.md from <lead>"`.
+  6. `run/runner.sh start <release>` when `run/runner.sh list` shows no runner, then the RUN line `run/runner.sh send --confirm <release> "RUN E<n> <release folder> epic <release folder>/plan/epics/E<n>.md from <lead>"`; the go confirms that the runner has the line: it goes on only when the line is in the runner's transcript.
   7. The next epic's stub.
   A failed step stops it with one line naming the step: fix the cause and run `run/go.py` again. An epic never gains a decision after go, with one exception: a decision for a spec in progress joins that spec's epic (`plan/milestone.py add --decision`).
-- On `DONE` or `BLOCKED` from the runner: read the grid with `sprints/grid.py <release>`, the tracker and `queue/next.py <release>`, and set no status by hand; the run's items are queue items like any other. The lead runs `sprints/refresh.py` only through `run/go.py`, or in Changing a decision.
+- On `DONE` or `BLOCKED` from the runner: read the grid with `sprints/grid.py <release>`, the tracker and `queue/next.py <release>`, and set no status by hand; the run's items are queue items like any other. The lead runs `sprints/refresh.py` only through `run/go.py`, or in Changing a decision. In a release of format 2.2 the message that reports `DONE E<n>` holds the held block (`status/waits.py <release> --held`, unchanged), and the lead makes its one call with `--new` and sends the push (Push).
+- **Push.** In a release of format 2.2, in a turn the owner did not start (a `SPECS`, `DONE`, `BLOCKED` or `NOTE` message of another session, a task notification), the lead makes its one call of `status/waits.py <release> --new` and sends at most one push for the turn, with the tool `PushNotification`:
+
+  | The turn is on | The push names |
+  |---|---|
+  | `DONE E<n>` | `E<n> done`, always, and each `new:` entry |
+  | `BLOCKED E<n>` | `E<n> blocked`, always, and each `new:` entry |
+  | `SPECS`, `NOTE`, a task notification | each `new:` entry; no `new:` line, no push |
+
+  - The message is `<release>: ` and the parts joined by ` · `, for example `v2.1.x: E3 done · 05-04: your look`. It stays under 200 characters: the parts that do not fit are left out, and the message ends with `· more in chat`.
+  - A turn the owner started gets no push: the lead makes its one call with no flag, and the owner sees the line in chat.
+  - A session with no `PushNotification` tool sends no push and says nothing about it.
+  - A "not sent" result of the tool is not tried again.
+  - Each call records what it printed, so no entry is pushed twice.
+  - The runner sends `NOTE <task id>: waits for the owner's look` when a task starts to wait for the owner's look ([run.md](run.md), Epics): the lead's turn on that note sends its push.
 - Release is a spec. The owner decides which epic it joins.
 
 ## Changing a decision

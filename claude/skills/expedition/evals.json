@@ -100,5 +100,29 @@
       "Records nothing for Q70: no queue/item.py call with D, no edit of decisions.md or of a plan file, because \"good\" is no explicit word",
       "After \"makes sense\" on Q73, does not post the item and records nothing"
     ]
+  },
+  {
+    "skills": ["expedition"],
+    "query": "/expedition discuss v0.3.x  (the release is in format 2.2. Epic E12 is planned and waits for the owner's `delegate`; the lead posted the `Epic planned: E12` message earlier in the session. Decision D65 is held until Q80, which is open. Item Q70 is open in chat with its options. The owner writes: \"does option 1 also cover the mobile layout?\")",
+    "expected_behavior": [
+      "Answers the question about the mobile layout in chat",
+      "Runs `status/waits.py <release> --skip Q70` (or `status/waits.py <release>`) one time, with no `--new`, after its last plan write of the turn",
+      "The last line of its message is the first line that command printed, character for character: `Waits for you: E12 planned: delegate · Held: D65`",
+      "Sends no push (no PushNotification call) in that turn",
+      "Does not post the `Epic planned: E12` message again",
+      "Writes nothing to a plan file in that turn, because the message holds a question mark"
+    ]
+  },
+  {
+    "skills": ["expedition"],
+    "query": "/expedition discuss v0.3.x  (the release is in format 2.2. The owner is away. The message `DONE E11 4f2c9a1 queue none` arrives from the runner by SendMessage. Task 27-06 of E11 is blocked, \"waits for the owner's look\", and `status/data/waits.json` has no key for it yet. Decision D65 is held until Q80, which is open.)",
+    "expected_behavior": [
+      "Reads the grid with `sprints/grid.py <release>`, the tracker and `queue/next.py <release>`, and sets no status by hand",
+      "Makes one call of `status/waits.py <release> --new` for its message, and no second call of `status/waits.py` without `--held`",
+      "Sends exactly one push with PushNotification, and its message starts with the release name and names `E11 done` and `27-06: your look`, for example `v0.3.x: E11 done · 27-06: your look`; in a replay session that has no PushNotification tool this line is `not run`, not `fail`",
+      "Its message in chat holds the held block, the output of `status/waits.py <release> --held`, with the line `- D65 <title>: until Q80`",
+      "The last line of its message in chat is the first line the `--new` call printed, character for character, and no `new:` line is in the message",
+      "In a later turn on another message of another session, sends no second push for `E11 done` or `27-06: your look`"
+    ]
   }
 ]
