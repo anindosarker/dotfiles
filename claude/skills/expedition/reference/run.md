@@ -193,7 +193,7 @@ The runner then files a queue card and continues with work that does not depend 
 - `attention`: what needs the owner. `notes`: what a later task, a resume or the owner would otherwise rediscover. Both are usually empty.
 - Sub-agents write the tracker: the builder fills it and sets `Status: running`, the fixer and the verifier update it. They stage owner items in its `## Attention` section.
 - The runner files queue cards at each milestone boundary and when an epic has merged, with `queue/item.py <release> Q "<title>" --bullet "<first fact line>"`.
-  - When it matters who found it, a fact line says so, for example `Found by the run's browser check; not reproduced.` It condenses the trackers' `## Attention` sections and the results, merges duplicates, and files only what passes the bar at filing ([formats.md](formats.md), queue.md).
+  - When it matters who found it, a fact line says so, for example `Found by the run's browser check; not reproduced.` It condenses the trackers' `## Attention` sections and the results, merges duplicates, and files only what passes the bar at filing ([formats.md](formats.md), Item file).
   - One plain line per card, no jargon.
   - Problems found in the code are filed the same way.
   - A fact for an existing card: `queue/item.py <release> --fact Q<n> "<text>"`.

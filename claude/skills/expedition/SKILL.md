@@ -150,6 +150,15 @@ Folded into stage 1: the run's cards are queue cards and come up through `queue/
 - The runner and the spec writer: `run/runner.sh start|list|stop|send|fork|resume|adopt`.
 - A release in an older format: [reference/migrate.md](reference/migrate.md). The skill's version is `metadata.version` in this file's front matter; what each version changed: [CHANGELOG.md](CHANGELOG.md).
 
+## Format 2.0 releases
+
+A release whose status file says `"format": "2.0"` is read as it is; no release is converted by itself. What differs there:
+
+- The queue is a kanban board, `queue.md`, and an item is a card on it: a title and facts, in five lanes (Open, Decided, Later, Dropped, Autofix). There is no `queue/` folder and no item file; the scripts read and write the board, with the same commands.
+- The options of an item are only in chat, in the form of [templates/item.md](templates/item.md) (filled: [example/item-examples.md](example/item-examples.md)); nothing of them is written to a file.
+- The rules of the board (lanes, ticks, tags, facts): [reference/old-form/queue-board.md](reference/old-form/queue-board.md).
+- To move the release to format 2.1: [scripts/migrate/v2.0-v2.1/README.md](scripts/migrate/v2.0-v2.1/README.md).
+
 ## Format 1.0 releases
 
 A release with no status file is in format 1.0 and is read as it is; no release is converted by itself. What differs there:
@@ -158,6 +167,7 @@ A release with no status file is in format 1.0 and is read as it is; no release 
 - A milestone's status is its grid mark and the `Status:` line of its tracker ([reference/formats.md](reference/formats.md), Milestone status); there is no status file and no task status.
 - `plan/new_spec.py` writes the flat file there, from [templates/spec-flat.md](templates/spec-flat.md), and `plan/new_fix.py` adds a fix. How to write such a plan file: [reference/old-form/planning-guidelines.md](reference/old-form/planning-guidelines.md) and [reference/old-form/specs.md](reference/old-form/specs.md); an example plan: [reference/old-form/example-plan.md](reference/old-form/example-plan.md).
 - The status page is the swimlane page.
+- The queue is the kanban board of Format 2.0 releases, above.
 - To move the release to format 2.0: [scripts/migrate/v1.0-v2.0/README.md](scripts/migrate/v1.0-v2.0/README.md).
 
 ## First run

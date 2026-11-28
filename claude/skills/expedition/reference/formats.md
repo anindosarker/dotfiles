@@ -4,6 +4,7 @@
 - Shared rule
 - Shared files
 - queue.md
+- Item file
 - Settled list
 - Progress reply and reports
 - decisions.md
@@ -17,99 +18,96 @@
 
 ## Shared rule
 
-Every item has an ID: the `**Q<n>**` or `**D<n>**` token of its card, a heading elsewhere. Its first bullet is required and self-explanatory: a reader understands the item from it alone. Everything after it is open-ended, but in bullets. Templates: [../templates/](../templates/).
+Every item has an ID: the `# Q<n>.` title of an item file, the `**D<n>**` token of a `decisions.md` card, a heading elsewhere. Its first bullet is required and self-explanatory: a reader understands the item from it alone. Everything after it is open-ended, but in bullets. Templates: [../templates/](../templates/).
 
 ## Shared files
 
-`decisions.md`, `queue.md` and the epic files are written by both sessions, lead and runner.
+`decisions.md`, the queue (`queue.md` and the item files in `queue/`) and the epic files are written by both sessions, lead and runner.
 
 - The lane, tick and tags of a `decisions.md` card are written by the scripts only: `queue/item.py` (a new card in To do), `epics/tag.py` through `run/go.py` (`#E<n>`, In progress), the sync in `sprints/refresh.py`, `sprints/mark.py`, `status/status.py`, `plan/milestone.py` and every `queue/item.py` call (the lanes of the Done rule), `decisions/close.py` (Done, nothing to run) and `decisions/supersede.py`. A session writes only a decision's bullets.
 - Re-read the file right before every write, make a targeted edit, commit at once. No held edits.
 - The next D or Q number is read from the file at write time, never from memory.
-- Ids come only from `python3 -I <skill>/scripts/queue/item.py <release> D|Q "<title>"`, never typed. It locks, appends the card, commits and prints the id; the session then writes a decision's bullets under its card, each indented with one tab.
+- Ids come only from `python3 -I <skill>/scripts/queue/item.py <release> D|Q "<title>"`, never typed. It locks, appends the decision card or writes the item file, commits and prints the id; the session then writes a decision's bullets under its card, each indented with one tab.
 - No id is mentioned in chat or a tracker before it is allocated: refer to the item by its title.
 - An id never changes after allocation.
-- A duplicate filed twice keeps both ids. The later card gets the fact `Same as Q<n>.` and moves to Dropped.
+- A duplicate filed twice keeps both ids. The later item gets the fact `Same as Q<n>.` and its `status` becomes `dropped`.
 - Fallback rule: a session that finds its own id taken renumbers its own item only, never the other's. With `queue/item.py` this no longer happens.
 - Agents on milestone branches never edit `decisions.md`.
 
 ## queue.md
 
-One file per release, in the release folder root, template [../templates/queue.md](../templates/queue.md): a kanban board in the obsidian-kanban Markdown format, which the owner may view and drag in the VS Code extension Unified Kanban. It holds every card filed in the release: every owner remark, and every other item that passes the bar at filing, filed in the turn it is raised. The Open lane is the queue; the other lanes are the history.
+One file per release, in the release folder root, template [../templates/queue-list.md](../templates/queue-list.md): the list of every item filed in the release, one line per item file. Every owner remark, and every other item that passes the bar at filing (Item file), is filed in the turn it is raised. A release of format 2.0 or 1.0 keeps its queue as a kanban board: [old-form/queue-board.md](old-form/queue-board.md).
+
+```md
+# Queue, v1.0.x
+
+- [Q41](queue/Q41-the-side-menu-inside-the-settings-pages-is-confusing-the.md): The side menu inside the settings pages is confusing; the pages belong in the sidebar
+- [Q42](queue/Q42-the-sidebar-has-no-shortcut-to-open-and-close-it.md): The sidebar has no shortcut to open and close it
+```
+
+- One line per item file, in the order of the numbers, linked to the file. No status, no decision, no tag: those are in the item file.
+- The scripts write the whole file again after each change of an item (`queue/item.py`, `plan/milestone.py`). Nobody edits it by hand; `status/report.py` flags a `queue.md` out of step with the item files.
+- The owner sees the queue in the Queue view of the task board (Status).
+
+## Item file
+
+`queue/Q<n>-<slug>.md`, one per item, in the folder `queue/` of the release folder, template [../templates/queue-item.md](../templates/queue-item.md). A filled one, shown below: [../example/v1.0.x/owner/queue/Q49-a-select-menu-in-the-sidebar-turns-translucent-after-a.md](../example/v1.0.x/owner/queue/Q49-a-select-menu-in-the-sidebar-turns-translucent-after-a.md).
 
 ```md
 ---
-kanban-plugin: basic
+status: decided
+decision: D62
+option: 1
 ---
+# Q49. A select menu in the sidebar turns translucent after a short scroll
 
-## Open
+## Notes
 
-- [ ] **Q30** Home title is too technical
-- [ ] **Q31** Sidebar link does not match the theme
-	- `components/sidebar.tsx:88`: the link uses the default colour, not the muted one.
+- `styles/menu.css:1447`: the blur is inside the scroll container.
 
-## Decided
+## Details
 
-- [ ] **Q21** Change the button color #D85
-- [ ] **Q23** Example intros in the short style #D83
-	- One or two plain sentences per example, no option names.
-- [x] **Q15** Comparison page moves to the end of Getting Started #D71 #E12
-- [x] **Q5** Process file audited #D40
+- To see it: open the layout menu in the sidebar and scroll down.
+- Likely cause: `styles/menu.css:1447` puts the blur inside the scroll container.
 
-## Later
+## Options:
 
-- [ ] **Q7** Row pinning drops hand-pinned rows on unselect all
-	- `features/stRowPinning.ts:42`.
-
-## Dropped
-
-## Autofix
-
-- [x] **Q9** Typo in the pinning guide
-
-%% kanban:settings
-{"kanban-plugin":"basic","lane-width":300,"date-format":"YYYY-MM-DD","time-format":"HH:mm","tag-action":"kanban"}
-%%
+1. Recommended: fix the blur in the app's own styles
+   - A translucent menu opened from the sidebar keeps its blur while its content scrolls.
+   - `components/ui/` stays unchanged.
+2. Fix the blur in `components/ui/`
+   - The change is in `components/ui/`, not in the app's own styles.
 ```
 
-- Sessions change the file only through the scripts: `queue/item.py` (`Q`, `D --source`, `--move`, `--fact`), `plan/milestone.py` (a cited card to Autofix), and the tag sync in `epics/tag.py` and `sprints/refresh.py`. They re-read it inside the lock, find a card by its `**Q<n>**` token and its lane by the `## ` heading above it, and leave every other byte as found, the `%% kanban:settings` block included. The extension may drop the frontmatter when it saves its settings; the next script write puts it back.
-- Five lanes, always all present, in this order. The lane is the card's state:
+| Part | Written by | Notes |
+|---|---|---|
+| front matter `status` | scripts only | `open`, `decided`, `later`, `dropped` or `autofix` |
+| front matter `decision` | scripts only | `D<n>`; the line is absent while the item is not decided |
+| front matter `option` | scripts only | the number of the picked option; absent when none was given |
+| `# Q<n>. <title>` | script at filing | one plain sentence naming the problem or idea; the number is never reused |
+| `## Notes` | script (`--bullet`, `--fact`) | the owner's remark and the first findings, raw, one bullet each; nested bullets allowed; not shown in chat |
+| `## Details` | the lead, by a targeted edit | the facts the decision needs; absent until the lead writes the item out |
+| `## Options:` | the lead, by a targeted edit | numbered, `Recommended:` on the first; absent until the lead writes the item out |
 
-  | Lane | Meaning |
+- The five status words are the item's state:
+
+  | `status` | Meaning |
   |---|---|
-  | Open | Waiting to be discussed |
-  | Decided | Decided; `#D<n>` names the decision |
-  | Later | Parked; reopened by moving it back to Open |
-  | Dropped | Will not be done |
-  | Autofix | Fixed without a decision |
+  | `open` | Waiting to be discussed |
+  | `decided` | Decided; `decision` names the decision |
+  | `later` | Parked; reopened by moving it back to `open` |
+  | `dropped` | Will not be done |
+  | `autofix` | Fixed without a decision |
 
-- A card is one top-level list item: `- [ ] **Q<n>** <title>`, then its tags. The title is a plain sentence naming the problem or idea. Two tags exist, at the end of the title line, space separated, decision before epic:
-
-  | Tag | Meaning |
-  |---|---|
-  | `#D<n>` | The decision that settled the card |
-  | `#E<n>` | The epic that decision is in |
-
-  An open card usually has no tag. No other tag is written, and never a sub-bullet that holds only tags.
-- **Bar at filing.** A card's first fact line says what goes wrong for a user of the library or a reader of the docs if the card is ignored. A raiser (the lead, a lookup, the runner, a builder, a verifier) that cannot say it files no card: it writes the point in its tracker's `## Notes`, or leaves it out when it has no tracker. The owner's remarks are exempt: every one is filed.
-- The checkbox:
-
-  | Lane | Box | Meaning |
-  |---|---|---|
-  | Open, Later | `[ ]` | Not decided |
-  | Decided | `[ ]` | Ready for an epic: the decision is in To do |
-  | Decided | `[x]` with `#E<n>` | In an epic: the decision is In progress |
-  | Decided | `[x]`, no `#E` tag | Closed: the decision is Done (merged, nothing to run, superseded or deferred) |
-  | Dropped, Autofix | `[x]` | Closed |
-
-  `decisions.md` is the record. The tick and `#E<n>` of a Decided card mirror the lane of its decision; `epics/tag.py`, `sprints/refresh.py` and every `queue/item.py` call sync them, and `status/report.py` flags a card that disagrees.
-- Facts are sub-bullets indented with one tab: path:line, measurement, lookup result. Every sub-bullet is a fact. Options are never written in the file. A `#word` that is not a tag is written in backticks, so the extension shows no tag badge.
-- New cards go to the end of Open. A moved card goes, with its facts, to the end of its lane. Decided only through `queue/item.py <release> D "<title>" --source Q<n>`, which adds `#D<n>` to the title and leaves the card unticked; a card already in Decided keeps the highest decision number. A card leaving Decided loses its `#D` and `#E` tags.
-- `plan/milestone.py add` moves each card it cites (`--cites`) to Autofix, ticked and without tags; the fix is traced through its module heading and its tracker's first line, for example `(Q9)`.
-- A lookup agent adds its facts to the card it was given with `queue/item.py <release> --fact Q<n> "<text>"`.
-- Citations elsewhere: `(Q3)` in specs and trackers; a decision that came from a card ends with `- Source: Q3`; a fix's tracker cites `(Q3, Q4)` on its first line.
-- The run reports; it does not solve. Do not research solutions for a run card.
-- Not a queue card: a point that fails the bar at filing, spec text that lags shipped code, a tracker gap, a process lesson, a tooling fact with one right answer. Those go to the tracker Notes, a decision or the spec file directly (`process.md` holds project facts only); the owner sees choices only.
+- The status changes only through the scripts: `queue/item.py <release> D "<title>" --source Q<n> [--option <n>]` sets `decided`, `decision` and `option` (it refuses an option number the item does not have); `queue/item.py <release> --move Q<n> Open|Later|Dropped|Autofix` sets the same word in lower case; `plan/milestone.py add --cites` sets `autofix` on each item it cites and drops its `decision` and `option` lines. The fix is traced through its module heading and its tracker's first line, for example `(Q9)`.
+- `decisions.md` is the record. A decided item holds its decision id only: the lane and the epic of that decision are read from `decisions.md`, and nothing is synced into the item file. `status/report.py` flags a decided item whose decision is not in `decisions.md`.
+- `<slug>` is made from the title at filing, as a task file's slug is, and never changes after. A new file has the front matter, the title and `## Notes`.
+- **Bar at filing.** An item's first `## Notes` bullet says what goes wrong for a user of the library or a reader of the docs if the item is ignored. A raiser (the lead, a lookup, the runner, a builder, a verifier) that cannot say it files no item: it writes the point in its tracker's `## Notes`, or leaves it out when it has no tracker. The owner's remarks are exempt: every one is filed.
+- `## Notes` bullets are facts and remarks as found: path:line, measurement, lookup result, what the owner said. A lookup agent adds its facts to the item it was given with `queue/item.py <release> --fact Q<n> "<text>"`.
+- `## Details` and `## Options:` hold the item as the owner reads it in chat, word for word; the lead writes them when the item settles ([discuss.md](discuss.md), Item format, Storing).
+- Citations elsewhere: `(Q3)` in specs and trackers; a decision that came from an item ends with `- Source: Q3`; a fix's tracker cites `(Q3, Q4)` on its first line.
+- The run reports; it does not solve. Do not research solutions for a run item.
+- Not a queue item: a point that fails the bar at filing, spec text that lags shipped code, a tracker gap, a process lesson, a tooling fact with one right answer. Those go to the tracker Notes, a decision or the spec file directly (`process.md` holds project facts only); the owner sees choices only.
 
 ## Settled list
 
@@ -123,9 +121,9 @@ Settled without you:
 Name one to reopen it.
 ```
 
-- Posted before the first real item of a round, and with every report of run cards that settled something. Each item is listed once.
+- Posted before the first real item of a round, and with every report of run items that settled something. Each item is listed once.
 - One line per item, never a grouped sentence ("seven kept as built (D133 to D139)").
-- The owner naming a line reopens it as a normal item: a dropped card goes back with `queue/item.py <release> --move Q<n> Open`; a settled decision is discussed as a re-decided decision (discuss.md, Changing a decision).
+- The owner naming a line reopens it as a normal item: a dropped item goes back with `queue/item.py <release> --move Q<n> Open`; a settled decision is discussed as a re-decided decision (discuss.md, Changing a decision).
 
 ## Progress reply and reports
 
@@ -140,11 +138,11 @@ Name one to reopen it.
   ```
 
   `Running` lists each spec with a milestone running, including a spec that is being retried or fixed. `Blocked` lists only work that has stopped, with the run's own reason and who it waits on (`waits on the owner: ...` or `waits on the lead: ...`).
-- Reporting on epic work (after a regroup, an added fix, a note to the runner, a release check): the default report is that same progress block, followed by the settled list (Settled list, above) when run cards were settled. Add a plain sentence only when the block cannot show what was done or what the owner has to do. No commit id, sprint number, file path or script leftover; a leftover is fixed, or filed as a queue card when it needs a decision. A reply to a skill-update prompt keeps the form that prompt asks for.
+- Reporting on epic work (after a regroup, an added fix, a note to the runner, a release check): the default report is that same progress block, followed by the settled list (Settled list, above) when run cards were settled. Add a plain sentence only when the block cannot show what was done or what the owner has to do. No commit id, sprint number, file path or script leftover; a leftover is fixed, or filed as a queue item when it needs a decision. A reply to a skill-update prompt keeps the form that prompt asks for.
 
 ## decisions.md
 
-One file per release, template [../templates/decisions.md](../templates/decisions.md): a kanban board in the card grammar of `queue.md`. Triage decisions continue the numbering.
+One file per release, template [../templates/decisions.md](../templates/decisions.md): a kanban board in the card grammar of the queue board of format 2.0 ([old-form/queue-board.md](old-form/queue-board.md)). Triage decisions continue the numbering.
 
 ```md
 ---
@@ -197,7 +195,7 @@ kanban-plugin: basic
 - Built: a milestone citing the decision has a `[ ]`, `[~]` or `[x]` cell in `status/sprints.md`; a `[~]` row never launched does not count (Milestone status). Before that, a change is an edit of its bullets, same id; from then on, a supersede.
 - Supersede: `decisions/supersede.py <release> D7 D15` marks both sides: D7 gets `(superseded by D15)` at the end of its title and `#superseded`, and moves to Done; D15's first bullet is `- Supersedes D7.` The mark is the only edit an old decision ever gets.
 - Deferred to another release: add the bullet `- Deferred to v0.5.x`; the sync adds `#deferred` and moves the card to Done. That release's specs cite it as `(v0.4.x D9)`.
-- A decision that came from a card ends with `- Source: Q<n>`, the last bullet.
+- A decision that came from a queue item ends with `- Source: Q<n>`, the last bullet.
 - Specs cite a decision as `(D7)`.
 
 ## Epic file
@@ -251,7 +249,7 @@ Columns are the sprints `S1`, `S2`, ... that `lib/ownership.py` computes. Rows a
 
 ## Milestone status
 
-This section is for a format 1.0 release; a format 2.0 release, which has the status file, follows Status below. A milestone has one of five statuses. The grid cell, the tracker `Status:` line and the swimlane page use the same set.
+This section is for a format 1.0 release; a format 2.0 or 2.1 release, which has the status file, follows Status below. A milestone has one of five statuses. The grid cell, the tracker `Status:` line and the swimlane page use the same set.
 
 | Status | Grid cell | Tracker `Status:` | Page color | Meaning |
 |---|---|---|---|---|
@@ -284,7 +282,7 @@ Checks:
 
 ## Attention
 
-- Staging for queue.md, one bullet per item, self-explanatory first line.
+- Staging for the queue, one bullet per item, self-explanatory first line.
 
 ## Notes
 
@@ -293,16 +291,16 @@ Checks:
 
 - `Status:` is one of the five of Milestone status, its detail in brackets. `stopped (D<n>)` is a SKIP, `D<n>` the superseding decision. `waiting` is a milestone that is built and stopped until the lead or the owner acts, `<what>` in a few words (`waiting (lead: comparison table check)`); the scripts count it as running for a decision's state, and the progress reply lists it under Blocked. Whoever stops the milestone writes it, in the tracker copy it already writes: the builder or the verifier in the milestone worktree, or the runner; the runner writes a hold on a milestone that has not started in the main checkout's copy ([run.md](run.md), Milestones and sprints).
 - Required: the header lines. A tracker of an old-form spec keeps its lines `- Task 1 <name>: done (<commit>, <workflow run id>)`; in a release with `status.json` the tracker holds no status and no task list (Status). While the milestone runs, its run id is in `status/data/runs.json`, written at launch by `run/runs.py` (git-ignored, in the main checkout, the newest id wins), not in the tracker.
-- A fix's tracker cites its queue cards on its first line, for example `# 41: Range field blur (Q3, Q4), tracker`.
+- A fix's tracker cites its queue items on its first line, for example `# 41: Range field blur (Q3, Q4), tracker`.
 - `Checks:` is followed by one bullet per check: command, commit, result. The integration milestone's suite run on the staging branch gets its own bullet.
 - `## Attention` and `## Notes` are optional. Empty is the normal case. Do not spend tokens on notes.
 - Never: review-round narration, check output, commit lists.
 - Writers: `plan/milestone.py add` creates the milestone's tracker, `run/trackers/NN-<name slug>-tracker.md`, for every milestone, the first of a spec included; `plan/new_spec.py` creates no tracker. In a format 1.0 release the tracker starts with `Status: planned`, `plan/new_spec.py` creates the tracker of the spec's first milestone (`NN-<spec slug>-tracker.md`) and the spec writer creates every further one from the template. In the run, the builder fills it, the fixer and the verifier update it. One worktree per milestone, so no conflicts. In a format 1.0 release the merger sets `done (<commit>)` in the main checkout, whose copy stays `planned` until the merge, apart from a hold before launch; `status/progress.py` reads the most advanced copy across the worktrees.
-- The runner writes handoffs. Both sessions write `decisions.md` and `queue.md` (Shared files).
+- The runner writes handoffs. Both sessions write `decisions.md` and the queue (Shared files).
 
 ## Status
 
-For a release with `status/data/status.json` (format 2.0).
+For a release with `status/data/status.json` (format 2.0 or 2.1).
 
 - Five words everywhere: `not started`, `in progress`, `blocked`, `done`, `skipped`. `blocked` and `skipped` carry a short reason; its full text is in the milestone's tracker under `## Attention`.
 - `status/data/status.json` is the only store, for every epic, spec, milestone and task, and it is committed. Writers: `status/status.py <release> set <id> "<status>" [--reason "<text>"]` for a task or a milestone, and `sprints/mark.py` for a milestone by the run's verbs: `launch` in progress, `resume` (a blocked milestone only) in progress when it was launched before and not started when it never was, `merge --commit <sha>` done, `wait --reason` and `stop --reason` blocked, `stop --reason "D<n> ..."` skipped. Nobody edits a status by hand.
@@ -312,6 +310,7 @@ For a release with `status/data/status.json` (format 2.0).
 - Copies, written on every change and never read back as the truth: the `status:` front matter line of the task, spec and epic file; the grid `status/sprints.md` (`·` not started, `[ ]` in progress, `[~]` blocked, `[x]` done, `[!]` skipped); the page data. `status/report.py` flags a `status:` line that differs from the JSON file.
 - Ids: a task is `<spec>-<number>` (`27-03`), a milestone its tracker file name without `-tracker.md` (`27-collapse-shortcut`), a spec its number, an epic `E11`. `status/status.py <release> list --status blocked` lists what waits. A stored status is never thrown away: when a milestone or task with a status is renamed or removed, or a spec loses its Deliverables link, every script stops and names the entries until the spec is restored or each entry is removed with `status/status.py <release> drop <id>`. A set that changes nothing writes nothing.
 - The file is also the data of the status board: `release`, `format` (the skill version whose form the release has, written by `plan/new_release.py` and by a migration; a release with no status file is format `1.0`), `updated`, `statuses`, `sprints`, `epics`, `specs`, `milestones`, `tasks`. A milestone entry holds `number` (its position in its spec), `section` (`2.2.<number>`) and `ref` (`<spec>.<number>`, for example `27.1`) after its name. The page is the task board, `status/index.html`, copied from `board/task-board.html`; it reads `status/data/status.data.js` (`window.STATUS_DATA`, git-ignored) and reloads it every 30 seconds. That file is the same data plus `root`, the release folder on this machine, after `updated`: a machine path is never committed. A filled file: [../example/v1.0.x/owner/status/data/status.json](../example/v1.0.x/owner/status/data/status.json).
+- In a release of format 2.1 the task board also has a Queue view: every item with its status, notes, details and options. It reads `status/data/queue.data.js` (`window.QUEUE_DATA`, git-ignored, never committed), written from the item files by `queue/item.py` and by the refresh chain of `sprints/refresh.py` and `status/status.py`; it holds `root` like `status.data.js`. A release of a lower format has no queue data.
 - The tracker of a milestone has no `Status:` line and no task list: branch, Checks, `## Attention`, `## Notes` ([../templates/tracker.md](../templates/tracker.md)).
 - The process file has `updated:` in its front matter, the time its facts were last checked or changed. No other file has a timestamp.
 
