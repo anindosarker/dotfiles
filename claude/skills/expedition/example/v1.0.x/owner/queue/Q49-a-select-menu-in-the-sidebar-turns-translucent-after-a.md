@@ -1,5 +1,5 @@
 ---
-status: decided
+status: done
 decision: D62
 option: 1
 ---
