@@ -18,8 +18,8 @@ blocked has no word in format 2.1. A command takes the words of both formats and
 of the release's format (move_status(), select()). A 2.2 file with no status line counts as to-do.
 A closed item of format 2.2 (done or archived) also has "decider: you|lead|agent", the one who
 made the call (DECIDERS); it is removed when the item is opened again. A done item closed by a
-decision has the decision line and decider you or lead (or agent); a done item with no decision
-has decider agent; an archived item has you or lead (CLOSERS).
+decision has the decision line and decider you or lead (DECISION_DECIDERS); a done item with no
+decision has decider agent; an archived item has you or lead (CLOSERS).
 
 "depends_on: Q14, Q15" (format 2.2) names the items an item waits for; the line is absent when
 there are none. blocked is never set by hand: the blocked check (settle()) makes an item that is
@@ -93,6 +93,7 @@ LANES = ("Open", "Decided", "Later", "Dropped", "Autofix")  # the lane words of 
 FRONT_KEYS = ("status", "decision", "option", "decider", "depends_on")
 DECIDERS = ("you", "lead", "agent")
 CLOSERS = {"archived": ("you", "lead"), "done": ("agent",)}  # the deciders of a --move to that status
+DECISION_DECIDERS = ("you", "lead")  # the deciders of D --source: a decided item (D8)
 ID_RE = re.compile(r"^Q([1-9]\d*)$")  # no leading zero: waits_for() compares the text
 FILE_RE = re.compile(r"^Q(\d+)-.*\.md$")
 TITLE_RE = re.compile(r"^# Q(\d+)\.\s+(.*?)\s*$")

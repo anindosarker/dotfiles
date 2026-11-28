@@ -61,7 +61,8 @@ item needs --decider and is refused without it, before anything is written:
 - --move Dropped (archived): --decider you or lead; --move Autofix (done): --decider agent. The
   item gets "decider: <word>". Every --move removes "decision", "option" and "decider" first;
   Open and Later need no --decider and write none.
-- D --source: --decider you, lead or agent; the item gets "decider" with "status: done",
+- D --source: --decider you or lead (agent is refused: a decided item is closed by you or
+  lead); the item gets "decider" with "status: done",
   "decision" and "option". The decision card is the same as in format 2.1: nothing about the
   decider goes into decisions.md. D with no --source needs no --decider.
 
@@ -256,7 +257,9 @@ def items(a, root, folder, Q, dc, target, card_op, title, fact):
             die(f"--decider {a.decider} cannot close {a.move[0]} as {closes}: "
                 f"{'an archived item is closed by you or lead' if closes == 'archived' else 'a done item with no decision is closed by agent'}")
     if new22 and a.source and a.decider is None:
-        die(f"D --source {a.source} needs --decider you, lead or agent in a release of format 2.2")
+        die(f"D --source {a.source} needs --decider you or lead in a release of format 2.2")
+    if new22 and a.source and a.decider not in Q.DECISION_DECIDERS:
+        die(f"--decider {a.decider} cannot close {a.source} with a decision: a decided item is closed by you or lead")
     deps = Q.split_ids(a.depends[1]) if a.depends else []
     with open(C.lock_file(folder), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
