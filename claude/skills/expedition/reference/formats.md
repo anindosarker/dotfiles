@@ -36,13 +36,13 @@ Every item has an ID: the `# Q<n>.` title of an item file, the `**D<n>**` token 
 
 ## queue.md
 
-One file per release, in the release folder root, template [../templates/queue-list.md](../templates/queue-list.md): the list of every item filed in the release, one line per item file. Every owner remark, and every other item that passes the bar at filing (Item file), is filed in the turn it is raised. A release of format 2.0 or 1.0 keeps its queue as a kanban board: [old-form/queue-board.md](old-form/queue-board.md).
+One file per release, in the release folder root, template [../templates/queue-list.md](../templates/queue-list.md), filled in [../example/v1.0.x/owner/queue.md](../example/v1.0.x/owner/queue.md): the list of every item filed in the release, one line per item file. Every owner remark, and every other item that passes the bar at filing (Item file), is filed in the turn it is raised. A release of format 2.0 or 1.0 keeps its queue as a kanban board: [old-form/queue-board.md](old-form/queue-board.md).
 
 ```md
-# Queue, v1.0.x
+# Queue, <release>
 
-- [Q41](queue/Q41-the-side-menu-inside-the-settings-pages-is-confusing-the.md): The side menu inside the settings pages is confusing; the pages belong in the sidebar
-- [Q42](queue/Q42-the-sidebar-has-no-shortcut-to-open-and-close-it.md): The sidebar has no shortcut to open and close it
+- [Q1](queue/Q1-<slug>.md): <title>
+- [Q2](queue/Q2-<slug>.md): <title>
 ```
 
 - One line per item file, in the order of the numbers, linked to the file. No status, no decision, no tag: those are in the item file.
