@@ -5,6 +5,7 @@ on one checkout never pick the same number.
 Usage: python3 -I queue/item.py <release> D|Q "<title>" [--source Q<n>] [--option <n>]
        [--bullet "<text>"] [--new-round] [--owner X] [--root PATH]
        python3 -I queue/item.py <release> --move Q<n> Open|Later|Dropped|Autofix|to-do|backlog|archived|done
+       [--decider you|lead|agent]
        python3 -I queue/item.py <release> --fact Q<n> "<text>"
 
 Under an exclusive lock on <release folder>/status/data/.ids.lock, re-reading the files right before the
@@ -53,7 +54,17 @@ Open, backlog is Later, archived is Dropped, done is Autofix. It stores the word
 format (lib/queue.py move_status); on a board the word moves the card to that lane.
 
 A release of format 2.2 and higher (lib/queue.py status_form) stores the words of format 2.2: Q
-writes "status: to-do"; --move writes to-do, backlog, archived or done.
+writes "status: to-do"; --move writes to-do, backlog, archived or done. A call that closes an
+item needs --decider and is refused without it, before anything is written:
+
+- --move Dropped (archived): --decider you or lead; --move Autofix (done): --decider agent. The
+  item gets "decider: <word>". Every --move removes "decision", "option" and "decider" first;
+  Open and Later need no --decider and write none.
+- D --source: --decider you, lead or agent; the item gets "decider" with "status: done",
+  "decision" and "option". The decision card is the same as in format 2.1: nothing about the
+  decider goes into decisions.md. D with no --source needs no --decider.
+
+Below format 2.2 --decider is accepted and not stored.
 """
 import argparse
 import fcntl
@@ -88,8 +99,8 @@ class _Once(argparse.Action):
 
 def main():
     ap = argparse.ArgumentParser(
-        usage='queue/item.py <release> D|Q "<title>" [--source Q<n>] [--option <n>] [--bullet "<text>"] [--new-round] | '
-              '<release> --move Q<n> Open|Later|Dropped|Autofix|to-do|backlog|archived|done | <release> --fact Q<n> "<text>" '
+        usage='queue/item.py <release> D|Q "<title>" [--source Q<n>] [--option <n>] [--decider W] [--bullet "<text>"] [--new-round] | '
+              '<release> --move Q<n> Open|Later|Dropped|Autofix|to-do|backlog|archived|done [--decider W] | <release> --fact Q<n> "<text>" '
               '[--owner X] [--root PATH]'
     )
     ap.add_argument("release")
@@ -99,6 +110,7 @@ def main():
     ap.add_argument("--root", help="repository root (default: found from the cwd)")
     ap.add_argument("--source")
     ap.add_argument("--option", help="2.1: the number of the option the owner picked (D --source)")
+    ap.add_argument("--decider", help="2.2: you, lead or agent, who closed the item (--move Dropped|Autofix, D --source)")
     ap.add_argument("--bullet", action=_Once)
     ap.add_argument("--move", nargs=2, metavar=("Q<n>", "LANE"))
     ap.add_argument("--fact", nargs=2, metavar=("Q<n>", "TEXT"))
@@ -130,6 +142,8 @@ def main():
             die("empty title")
         if a.source and not SOURCE_RE.match(a.source):
             die(f"bad source '{a.source}', expected like Q3")
+    if a.decider is not None and a.decider not in C.load("lib/queue").DECIDERS:
+        die(f"bad decider '{a.decider}': you, lead or agent")
     title = (a.title or "").strip()
     fact = a.fact[1] if a.fact else ""
     for label, val in (("title", title), ("bullet", a.bullet or ""), ("fact", fact)):
@@ -221,6 +235,18 @@ def items(a, root, folder, Q, dc, target, card_op, title, fact):
     """The commands on a release of format 2.1 and higher (item files, lib/queue.py)."""
     bd = C.load("lib/board")
     new22 = Q.status_form(folder)
+    closes = None  # format 2.2: the status a --move closes the item with, which needs --decider
+    if new22 and a.move:
+        word = Q.move_status(a.move[1], True)
+        closes = word if word in Q.CLOSERS else None
+        want = Q.CLOSERS.get(closes, ())
+        if closes and a.decider is None:
+            die(f"--move {a.move[0]} {a.move[1]} needs --decider {' or --decider '.join(want)}")
+        if closes and a.decider not in want:
+            die(f"--decider {a.decider} cannot close {a.move[0]} as {closes}: "
+                f"{'an archived item is closed by you or lead' if closes == 'archived' else 'a done item with no decision is closed by agent'}")
+    if new22 and a.source and a.decider is None:
+        die(f"D --source {a.source} needs --decider you, lead or agent in a release of format 2.2")
     with open(C.lock_file(folder), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         written = []
@@ -231,7 +257,8 @@ def items(a, root, folder, Q, dc, target, card_op, title, fact):
                 die(f"{ident} is not in {folder / Q.QUEUE_DIR}")
             if a.move:
                 word = Q.move_status(a.move[1], new22)
-                new = Q.set_front(item["text"], status=word, decision=None, option=None)
+                new = Q.set_front(item["text"], status=word, decision=None, option=None,
+                                  decider=a.decider if closes else None)
                 subject = f"{ident} to {a.move[1]}"
             else:
                 new = Q.add_note(item["text"], fact)
@@ -270,11 +297,13 @@ def items(a, root, folder, Q, dc, target, card_op, title, fact):
                 closed = "done" if new22 else "decided"
                 m = re.match(r"^D(\d+)$", item["decision"]) if item["status"] == closed else None
                 old = int(m.group(1)) if m else None
+                who = {"decider": item["decider"] or a.decider} if new22 else {}
                 if old and old > int(ident[1:]):
                     print(f"{a.source} keeps D{old}", file=sys.stderr)
-                    new = Q.set_front(item["text"], status=closed)
+                    new = Q.set_front(item["text"], status=closed, **who)
                 else:
-                    new = Q.set_front(item["text"], status=closed, decision=ident, option=a.option)
+                    new = Q.set_front(item["text"], status=closed, decision=ident, option=a.option,
+                                      **({"decider": a.decider} if new22 else {}))
                 if new != item["text"]:
                     Q.write_item(item["path"], new)
                     written.append(item["path"])

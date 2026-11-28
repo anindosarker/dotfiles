@@ -16,6 +16,10 @@ line: to-do, blocked, done, backlog or archived (STATUSES_22). The map: open is 
 done with a decision line, autofix is done with none, later is backlog, dropped is archived;
 blocked has no word in format 2.1. A command takes the words of both formats and stores the word
 of the release's format (move_status(), select()). A 2.2 file with no status line counts as to-do.
+A closed item of format 2.2 (done or archived) also has "decider: you|lead|agent", the one who
+made the call (DECIDERS); it is removed when the item is opened again. A done item closed by a
+decision has the decision line and decider you or lead (or agent); a done item with no decision
+has decider agent; an archived item has you or lead (CLOSERS).
     # Q<n>. <title>
 
     ## Notes
@@ -38,7 +42,7 @@ change of an item; nobody edits it by hand.
 status/data/queue.data.js, "window.QUEUE_DATA = {...};", is the data of the Queue view of the
 task board (board/task-board.html): release, format, updated, root, and items with id, number,
 title, status, decision, option, file, changed, notes, details and options (key, title, body,
-recommended). changed is the time of the last commit that changed the "status:" line of the
+recommended). Format 2.2 adds decider ("" when none) after option. changed is the time of the last commit that changed the "status:" line of the
 file, left out while the file is not committed. It is a render, git-ignored with the rest of
 status/data/, written only for a release of format 2.1 and higher.
 
@@ -78,7 +82,9 @@ MOVES = {"open": ("open", "to-do"), "to-do": ("open", "to-do"), "later": ("later
 # The words queue/list.py takes besides LANES: the six status words; in progress is no queue status.
 WORDS_22 = ("to-do", "in progress", "blocked", "done", "backlog", "archived")
 LANES = ("Open", "Decided", "Later", "Dropped", "Autofix")  # the lane words of the commands, in this order
-FRONT_KEYS = ("status", "decision", "option")
+FRONT_KEYS = ("status", "decision", "option", "decider")
+DECIDERS = ("you", "lead", "agent")
+CLOSERS = {"archived": ("you", "lead"), "done": ("agent",)}  # the deciders of a --move to that status
 FILE_RE = re.compile(r"^Q(\d+)-.*\.md$")
 TITLE_RE = re.compile(r"^# Q(\d+)\.\s+(.*?)\s*$")
 LIST_RE = re.compile(r"^- \[Q(\d+)\]\(")
@@ -175,7 +181,7 @@ def body(text):
 
 
 def front_text(fields):
-    """The front matter block: status, decision and option first in that order, then any other key."""
+    """The front matter block: the keys of FRONT_KEYS first in that order, then any other key."""
     keys = [k for k in FRONT_KEYS if fields.get(k)] + [k for k in fields if k not in FRONT_KEYS and fields[k] != ""]
     return "---\n" + "".join(f"{k}: {fields[k]}\n" for k in keys) + "---\n"
 
@@ -236,14 +242,14 @@ def options(text):
 
 
 def read_item(path):
-    """{num, title, status, decision, option, path, text} of an item file; num and title from its
-    "# Q<n>." line (None when it has none)."""
+    """{num, title, status, decision, option, decider, path, text} of an item file; num and title
+    from its "# Q<n>." line (None when it has none)."""
     text = C.read(path)
     head = next((TITLE_RE.match(l) for l in body(text).split("\n") if TITLE_RE.match(l)), None)
     f = front(text)
     return {"num": int(head.group(1)) if head else None, "title": head.group(2) if head else "",
             "status": f.get("status", ""), "decision": f.get("decision", ""), "option": f.get("option", ""),
-            "path": Path(path), "text": text}
+            "decider": f.get("decider", ""), "path": Path(path), "text": text}
 
 
 def new_item(num, title, bullet=None, new=False):
@@ -382,6 +388,8 @@ def data(folder):
         e = {"id": f"Q{it['file_num']}", "number": it["file_num"], "title": it["title"],
              "status": status_of(it, new), "decision": it["decision"], "option": it["option"],
              "file": it["path"].relative_to(folder).as_posix()}
+        if new:
+            e["decider"] = it["decider"]
         when = changed(folder, it["path"])
         if when:
             e["changed"] = when
