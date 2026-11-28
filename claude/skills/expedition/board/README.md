@@ -1,4 +1,4 @@
-# Dashboard page (v2.1)
+# Dashboard page
 
 The task board with a Dashboard view: one page that opens from disk (`file://`), no framework, no build step. The expedition skill keeps this README; it is not copied into releases.
 
@@ -50,9 +50,9 @@ Scripts are classic `<script src>` files that share one global scope, loaded in 
 }
 ```
 
-The skill's Python scripts write both files from this section (v2.1.x D14), in the step that writes `status.data.js`. The Queue view reads its rows (`kind: queue`) from the same file, so the page needs no `queue.data.js`. Every item of every kind is one row. The builder maps no status word: it copies the stored one. It never reads `status/sprints.md` (D13). The writer is `scripts/lib/dashboard.py`; `scripts/lib/status.py` writes `status.data.js`. `scripts/sprints/refresh.py` writes both again after a hand edit.
+The skill's Python scripts write both files from this section, in the step that writes `status.data.js`. The Queue view reads its rows (`kind: queue`) from the same file, so the page needs no `queue.data.js`. Every item of every kind is one row. The builder maps no status word: it copies the stored one. It never reads `status/sprints.md`. The writer is `scripts/lib/dashboard.py`; `scripts/lib/status.py` writes `status.data.js`. `scripts/sprints/refresh.py` writes both again after a hand edit.
 
-A decision row copies the `status` line and the `decider` line of its decision file `decisions/D<n>-<slug>.md` (D9, D16); a file with no `decider` line gives `decider: ""` (a decision moved from a board has none until `scripts/decisions/decider.py` sets it). The rows are in the order of the numbers, and `sources` names the folder `decisions/`.
+A decision row copies the `status` line and the `decider` line of its decision file `decisions/D<n>-<slug>.md`; a file with no `decider` line gives `decider: ""` (a decision moved from a board has none until `scripts/decisions/decider.py` sets it). The rows are in the order of the numbers, and `sources` names the folder `decisions/`.
 
 Format 2.2 releases with the board: a release whose `decisions.md` is still a board (not yet moved by `scripts/migrate/v2.1-v2.2/`) takes a decision row's `status` from the lane of its card (To do `to-do`, In progress `in progress`, Done `done`; Done with the tag `#deferred` `backlog`, with `#superseded` `archived`). Such a row is never `blocked`, has `decider: ""`, and its file is `decisions.md`. It has no `hold` field (a hold needs decision files); `ready` is `true` for a decision that is `to-do` with no epic tag, and its `turn` is `lead` while it is `to-do`.
 
@@ -75,14 +75,14 @@ Fields of every row. A text field with no value is `""`; `ready` is always `true
 | `reason` | stored or worked out | a `blocked` item's reason, the muted line on the card (Reason, below); on a decision that is not `blocked`, the id of its epic (`E<n>`) |
 | `progress` | worked out | epics only: `{ done, total }`, the epic's tasks; `done` counts `done` and `archived`. Shown as "8/16 done" |
 | `root`, `file` | worked out | key into `roots` (`plan` or `status`) and the path relative to it, for the VS Code / Browser buttons; `file: ""` for no file |
-| `notes` | stored | queue rows only: the text under `## Notes` of the item file, as it is (D21) |
+| `notes` | stored | queue rows only: the text under `## Notes` of the item file, as it is |
 | `details` | stored | optional Markdown for the side panel; on a queue row the text under `## Details` of the item file |
-| `options` | stored | queue rows only: the text under `## Options:` of the item file, as it is, numbers and nested bullets kept (D21) |
-| `option_list` | stored | queue rows only: the same options as option cards, `[{ number, title, recommended, picked, body }]`, one per top-level `<n>.` line of `## Options:` (Q30). `title` without the `Recommended:` prefix; `recommended` is `true` when the line had it; `picked` is `true` on the option whose number is the `option` line of the item file; `body` the indented lines below, as Markdown. `[]` when the section has no option |
+| `options` | stored | queue rows only: the text under `## Options:` of the item file, as it is, numbers and nested bullets kept |
+| `option_list` | stored | queue rows only: the same options as option cards, `[{ number, title, recommended, picked, body }]`, one per top-level `<n>.` line of `## Options:`. `title` without the `Recommended:` prefix; `recommended` is `true` when the line had it; `picked` is `true` on the option whose number is the `option` line of the item file; `body` the indented lines below, as Markdown. `[]` when the section has no option |
 
 The side panel of a queue card, in the Queue view and in the Dashboard view, shows `notes`, `details` and the options in that order. Notes and Details are Markdown under their own heading. The options are the option cards of `option_list` under the heading Options (n): each card shows its number, its title, the tag recommended and, on the picked option, the mark picked; the other cards are faded when one is picked. When `option_list` is `[]` and `options` is not `""`, the panel shows `options` as Markdown under the heading Options. A part with no text gets no heading. The panel of every other kind shows `details` only.
 
-Status: one list for every kind (D8, D9, D11). The stored word is copied.
+Status: one list for every kind. The stored word is copied.
 
 | Kind | `to-do` | `in progress` | `blocked` | `done` | `backlog` | `archived` |
 |---|---|---|---|---|---|---|
@@ -94,8 +94,8 @@ Status: one list for every kind (D8, D9, D11). The stored word is copied.
 Rules that are worked out, in this order:
 
 1. Queue item, `blocked`: an item that is `to-do` and has a `depends_on` id that is not `done` is `blocked`, with `reason: "Waits for <the ids that are not done>"`. An id that is not in the queue counts as not done. When every id is `done` the item is `to-do` again. (In the new format the script `scripts/queue/item.py --depends` stores this status; the builder then only copies it and writes the reason.)
-2. Epic, `blocked` (a planned epic): the epic's stored status is `to-do`, its file `plan/epics/E<n>.md` has an Ownership table with at least one row, every row has a value in the Spec column and in the Milestone column ("the specs are ready"), and the front matter has no `starts:` value (the owner has not said `delegate`). Then `status: blocked`. In a release of format 2.2 the status file stores this status with the reason `waits for delegate`, and the row copies that reason. The lines `decisions:` and `specs:` of the front matter are not read (D12).
-3. Decision, `blocked`: stored in the `status` line of the decision file by the status rule of `scripts/lib/decisions.py`, which every refresh runs. `reason` is "Waits for E<n>, same file" (`blocked_reason` of `scripts/lib/decisions.py`), the words `scripts/epics/overlap.py` prints for it and the `Blocked:` block of the `Epic ready` message (D10).
+2. Epic, `blocked` (a planned epic): the epic's stored status is `to-do`, its file `plan/epics/E<n>.md` has an Ownership table with at least one row, every row has a value in the Spec column ("the specs are ready"), and the front matter has no `starts:` value (the owner has not said `delegate`). Then `status: blocked`. In a release of format 2.2 the status file stores this status with the reason `waits for delegate`, and the row copies that reason. The lines `decisions:` and `specs:` of the front matter are not read.
+3. Decision, `blocked`: stored in the `status` line of the decision file by the status rule of `scripts/lib/decisions.py`, which every refresh runs. `reason` is "Waits for E<n>, same file" (`blocked_reason` of `scripts/lib/decisions.py`), the words `scripts/epics/overlap.py` prints for it and the `Blocked:` block of the `Epic ready` message.
 
 Turn. An item that is `done`, `archived` or `backlog` has `turn: ""`. For every other item, the first rule that fits:
 
