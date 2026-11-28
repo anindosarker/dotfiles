@@ -22,7 +22,7 @@ A release whose `status/data/status.json` says `"format": "2.0"`. A release in f
 
 ## Before you start
 
-- `queue.md` has no uncommitted change.
+- `queue.md` and `status/data/status.json` have no uncommitted change.
 - The release has no `queue/` folder.
 
 ## The commands
@@ -36,7 +36,7 @@ python3 -I <skill>/scripts/migrate/v2.0-v2.1/format.py <release>
 
 The first line, on stderr, tells the session to read the skill again. `--check` prints one line per item file and the counts, and writes nothing. The run writes the item files, the list, `"format": "2.1"` in `status/data/status.json`, the page data, and makes one commit: `docs(plan): <release> queue moved to item files`.
 
-The command refuses, and writes nothing, when the release is not in format 2.0, when `queue.md` has uncommitted changes, when `queue/` exists (a second run), or when a line of `queue.md` is in no card. Move such a line into a card or remove it, commit, and run again.
+The command refuses, and writes nothing, when the release is not in format 2.0, when `queue.md` or `status/data/status.json` has uncommitted changes, when `queue/` exists (a second run), or when a line of `queue.md` is in no card. Move such a line into a card or remove it, commit, and run again.
 
 ## How to check it worked
 

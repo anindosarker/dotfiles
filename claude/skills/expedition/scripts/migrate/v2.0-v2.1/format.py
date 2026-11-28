@@ -28,7 +28,7 @@ bullets written. A difference stops it before the commit. --check prints the sam
 nothing.
 
 Refuses, writing nothing: a release that is not in format 2.0 (for 1.0 it names
-migrate/v1.0-v2.0); a queue.md with uncommitted changes; a queue/ folder that already exists (a
+migrate/v1.0-v2.0); a queue.md or status.json with uncommitted changes; a queue/ folder that already exists (a
 second run); a queue.md that is no board, or that holds a line no card holds, a card in a lane
 that is not one of the five, or two cards with one number.
 """
@@ -174,11 +174,12 @@ def main():
         C.die(f"{folder / q.QUEUE_DIR} exists already: nothing written; remove it, or revert the migration commit")
     real = folder.resolve()
     git = lambda *args: subprocess.run(["git", "-C", str(real), *args], capture_output=True, text=True)
-    r = git("status", "--porcelain", "--", C.QUEUE_MD)
-    if r.returncode:
-        C.die(f"{folder} is not in a git repository: {(r.stderr or r.stdout).strip()}")
-    if r.stdout.strip():
-        C.die(f"{folder / C.QUEUE_MD} has uncommitted changes: commit them first")
+    for name in (C.QUEUE_MD, st.FILE):
+        r = git("status", "--porcelain", "--", name)
+        if r.returncode:
+            C.die(f"{folder} is not in a git repository: {(r.stderr or r.stdout).strip()}")
+        if r.stdout.strip():
+            C.die(f"{folder / name} has uncommitted changes: commit them first")
 
     lock = None if a.check else open(C.lock_file(folder), "a")
     if lock:
