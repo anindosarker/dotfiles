@@ -20,7 +20,9 @@ progress is ticked and gets "#E<n>". A release of format 2.1 keeps its queue in 
 
 Refuses a superseded decision (heading "(superseded by D<n>)", or named by a later
 "- Supersedes D<n>." bullet): a named spec that cites one, or a named D id that is one.
-Commits nothing.
+Commits nothing. In a release of format 2.2 the status chain runs at the end (epics/table.py
+chain): with its "starts:" value the epic is counted from its specs, no longer "waits for
+delegate".
 """
 import argparse
 import fcntl
@@ -157,6 +159,7 @@ def main():
     root = C.repo_root(a.root, a.release)
     folder = C.release_folder(root, C.detect_owner(root, a.owner), a.release)
     tag_epic(folder, a.epic, items)
+    C.load("epics/table").chain(folder, a.release)
 
 
 if __name__ == "__main__":

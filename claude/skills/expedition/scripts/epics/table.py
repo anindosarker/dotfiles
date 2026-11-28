@@ -21,9 +21,17 @@ Then it prints the facts: the sprints the epic spans, its critical path, every p
 epic's specs owning the same file, each Files path that does not exist yet ("new or missing":
 a new file and a typo look the same), and a row file no milestone of its spec owns. No verdict.
 Commits nothing. Exit 1 only for an ownership error (sprints/check.py) or an unreadable table.
+
+In a release of format 2.2 the status chain runs after the write (lib/status.py sync): the epic
+shows blocked, "waits for delegate", as soon as every row of its table has a Spec cell.
+status.json and the "status:" lines it writes are committed by the next command that commits
+them (run/go.py step 4, status/status.py, sprints/mark.py).
 """
 import argparse
+import contextlib
+import fcntl
 import importlib.util
+import io
 import re
 import sys
 from pathlib import Path
@@ -61,6 +69,20 @@ def main():
     if not m or not all(own.SPEC_NUM_RE.match(n) for n in nums):
         own.die("takes E<n> and optional spec numbers, e.g. E6 09 10")
     own.fill_epic(folder, int(m.group(1)), nums or None)
+    chain(folder, a.release)
+
+
+def chain(folder, release):
+    """A release of format 2.2: the status chain after an epic file write (lib/status.py sync),
+    under the .ids.lock lock; prints nothing. Nothing in a lower format."""
+    st = C.load("lib/status")
+    if not st.new_form(folder):
+        return
+    with open(C.lock_file(folder), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        with contextlib.redirect_stdout(io.StringIO()):
+            st.sync(folder, release)
+        fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 if __name__ == "__main__":

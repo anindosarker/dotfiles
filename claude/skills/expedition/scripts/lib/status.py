@@ -13,7 +13,10 @@ lines and in every output; its key "statuses" is STATUSES_22. The code keeps the
 STATUSES: load gives them, dump and say turn them into the words of the release's format, and
 canon takes either set from a command, in every format. This is the one place that maps them. Stored: the status, reason, changed time and merge commit
 of each milestone, and the status, reason and changed time of each task. Counted on every
-write (rollup): the status of a spec, an epic and a sprint, from the milestones inside.
+write (rollup): the status of a spec, an epic and a sprint, from the milestones inside. In a
+release of format 2.2 an epic is counted so only once it has gone (a "starts:" value); before
+that it is to-do, and blocked with the reason DELEGATE_REASON while every row of its Ownership
+table has a Spec cell (epic_state). Its entry has "reason" there.
 Everything else in the file is rebuilt from the specs on every write (build), in the shape of
 the status board: release, updated, root, statuses, sprints, epics, specs, milestones, tasks.
 
@@ -59,6 +62,7 @@ CLOSED = ("done", "skipped")
 MARKS = {"not started": "·", "in progress": "[ ]", "blocked": "[~]", "done": "[x]", "skipped": "[!]"}
 OWNER_REASON = "waits for the owner's look"
 NEW_FORMAT = (2, 2)
+DELEGATE_REASON = "waits for delegate"
 # Format 2.2 (spec 04, D11): the stored and printed words. The code keeps the words of STATUSES.
 WORDS_22 = {"not started": "to-do", "skipped": "archived"}
 ALIASES = {new: old for old, new in WORDS_22.items()}
@@ -307,14 +311,40 @@ def build(folder, release, stored=None):
         epics.append({"id": f"E{n}", "name": head.group(1) if head else (mine[0]["title"] if mine else ""),
                       "status": rollup(s["status"] for s in mine),
                       "specs": [s["id"] for s in mine]})
+    fmt = (load(folder) or {}).get("format") or C.skill_version()
+    if version(fmt) >= NEW_FORMAT:
+        for e in epics:
+            word, why = epic_state(o, folder, int(e["id"][1:]), e["status"], milestones, tasks)
+            specs_ = e.pop("specs")
+            e.update(status=word, reason=why, specs=specs_)
     sprints = []
     for c in sorted({int(m["sprint"][1:]) for m in milestones if m["sprint"]}):
         inside = [m["status"] for m in milestones if m["sprint"] == f"S{c}"]
         sprints.append({"id": f"S{c}", "status": rollup(inside),
                         "done": sum(1 for w in inside if w in CLOSED), "total": len(inside)})
-    return {"release": release, "format": (load(folder) or {}).get("format") or C.skill_version(),
+    return {"release": release, "format": fmt,
             "updated": now(), "statuses": list(STATUSES),
             "sprints": sprints, "epics": epics, "specs": specs, "milestones": milestones, "tasks": tasks}
+
+
+def epic_state(o, folder, n, counted, milestones, tasks):
+    """(status, reason) of epic n in a release of format 2.2, from its file: with a "starts:"
+    value (the owner said delegate) the status counted from its specs, blocked with the reason
+    of its first blocked milestone (else task); without one, blocked with DELEGATE_REASON when
+    its Ownership table has a row and every row has a Spec cell (the specs are ready), else not
+    started (the specs are being written)."""
+    if o.SPRINT_VALUE_RE.match(o.epic_starts(folder).get(n) or ""):
+        if counted != "blocked":
+            return counted, ""
+        mine = [m for m in milestones if m["epic"] == f"E{n}"]
+        ids = {m["id"] for m in mine}
+        held = [m for m in mine if m["status"] == "blocked"]
+        held += [t for t in tasks if t["milestone"] in ids and t["status"] == "blocked"]
+        return counted, next((x["reason"] for x in held if x["reason"]), "")
+    rows, _ = o.read_table(C.read(o.epic_path(folder, n)))
+    if rows and all(r["spec"] for r in rows):
+        return "blocked", DELEGATE_REASON
+    return STATUSES[0], ""
 
 
 def save(folder, data):
