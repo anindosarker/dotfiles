@@ -4,7 +4,7 @@ description: Runs long, multi-part work as a release of four stages (discuss, pl
 argument-hint: "<discuss|plan|run|triage> [release, e.g. v0.5.x]"
 disable-model-invocation: true
 metadata:
-  version: "2.0"
+  version: "2.1"
 allowed-tools: Bash(python3 -I ${CLAUDE_SKILL_DIR}/scripts/plan/process.py *)
 ---
 
