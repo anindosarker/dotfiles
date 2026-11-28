@@ -44,7 +44,7 @@ def main():
     folder = C.release_folder(root, C.detect_owner(root, a.owner), a.release)
     Q = C.load("lib/queue")
     if Q.item_form(folder):
-        item = next((it for it in Q.items(folder) if it["status"] == "open"), None)
+        item = next((it for it in Q.items(folder) if Q.status_of(it) == "open"), None)
         print(f"{item['path']}\n{item['text'].rstrip()}" if item else "none")
         return
     queue = folder / C.QUEUE_MD

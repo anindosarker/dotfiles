@@ -64,9 +64,9 @@ def print_items(Q, its, lane, facts):
     """The item form: the items of one lane word, or the count of each lane word (lane None)."""
     if lane is None:
         for n in Q.LANES:
-            print(f"{n} {sum(1 for it in its if it['status'] == n.lower())}")
+            print(f"{n} {sum(1 for it in its if Q.status_of(it) == n.lower())}")
         return
-    mine = [it for it in its if it["status"] == lane.lower()]
+    mine = [it for it in its if Q.status_of(it) == lane.lower()]
     if not mine:
         print("none")
     for it in mine:

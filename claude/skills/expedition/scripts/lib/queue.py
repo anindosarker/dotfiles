@@ -69,7 +69,7 @@ FILE_RE = re.compile(r"^Q(\d+)-.*\.md$")
 TITLE_RE = re.compile(r"^# Q(\d+)\.\s+(.*?)\s*$")
 LIST_RE = re.compile(r"^- \[Q(\d+)\]\(")
 OPTION_RE = re.compile(r"^(\d+)\.\s+(.*)$")
-FRONT_RE = re.compile(r"\A---\n(.*?\n)?---\n", re.S)
+FRONT_RE = re.compile(r"\A---\r?\n(.*?\r?\n)?---\r?\n", re.S)
 
 
 def version(text):
@@ -87,6 +87,12 @@ def commit_paths(folder):
     item form."""
     folder = Path(folder)
     return [folder / C.QUEUE_MD] + ([folder / QUEUE_DIR] if item_form(folder) else [])
+
+
+def status_of(it):
+    """The status an item counts with on the page, in queue/list.py and in queue/next.py: its
+    "status" line, or "open" when the file has none (status/report.py still reports the file)."""
+    return it["status"] or "open"
 
 
 def lane_status(lane):
@@ -318,7 +324,7 @@ def data(folder):
     out = []
     for it in items(folder):
         e = {"id": f"Q{it['file_num']}", "number": it["file_num"], "title": it["title"],
-             "status": it["status"] or "open", "decision": it["decision"], "option": it["option"],
+             "status": status_of(it), "decision": it["decision"], "option": it["option"],
              "file": it["path"].relative_to(folder).as_posix()}
         when = changed(folder, it["path"])
         if when:

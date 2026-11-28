@@ -339,6 +339,8 @@ def run(a, own, root, folder, ids, decision, want_epic, lock):
     paths += [str(folder / own.SPRINTS_MD), str(folder / "decisions.md")] + [str(p) for p in Q.commit_paths(folder)]
     paths += [str(p) for p in sorted((folder / own.EPICS_DIR).glob("E*.md"))]
     st.commit(root, folder, paths, f"docs(plan): {a.release} milestone {num} {a.name}")
+    if ids and items:
+        Q.write_data(folder)  # after the commit: "changed" is read from git
     fcntl.flock(lock, fcntl.LOCK_UN)
     rel = tracker.relative_to(folder).as_posix()
     what = f"follow-up spec {num} of spec {a.spec}: milestone" if follow else f"milestone of spec {num}:"
