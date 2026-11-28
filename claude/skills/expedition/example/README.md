@@ -4,7 +4,7 @@
 
 - `process.md`: the project facts of this release, with its `updated` time.
 - `v1.0.x-plan.md`, `decisions.md`: the release plan and four decisions.
-- `queue.md` and `queue/`: the queue items the four decisions came from. `queue.md` is the list that the scripts write, one line per item file. Each item file `queue/Q<n>-<slug>.md` holds its status, its decision and its `## Notes`; `Q42` and `Q49` also have `## Details` and `## Options:`, and `Q42` has the picked `option`. The release is in format 2.1: `scripts/migrate/v2.0-v2.1/format.py` made the list and the item files from the cards of format 2.0.
+- `queue.md` and `queue/`: the queue items the four decisions came from. `queue.md` is the list that the scripts write, one line per item file. Each item file `queue/Q<n>-<slug>.md` holds its status, its decision and its `## Notes`; `Q42` and `Q49` also have `## Details` and `## Options:` and the picked `option`; `Q41` and `Q48` show an item without them. The release is in format 2.1: `scripts/migrate/v2.0-v2.1/format.py` made the list and the item files from the cards of format 2.0.
 - `plan/epics/E11.md`: the epic that holds the four decisions and spec 27.
 - `plan/specs/27-sidebar/`: the spec (four modules, six task pointers, four milestones) and its six task files in `tasks/`.
 - `run/trackers/`: one tracker per milestone; the blocked one has its reason under `## Attention`.
