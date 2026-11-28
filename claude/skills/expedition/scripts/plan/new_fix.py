@@ -28,7 +28,7 @@ those files plus --depends (so the fix lands after them), "- Review: none", "- S
 (<cites>). Checks: <checks>". The tracker's first line cites the cards, "Status: planned".
 
 Refuses, writing nothing: a D id among --cites (a decision goes through the queue and into an
-epic); a Q id not in queue.md; a spec with no file; a spec with no Epic line (not gone yet: write
+epic); a Q id not in queue.md (in format 2.1, with no item file in queue/); a spec with no file; a spec with no Epic line (not gone yet: write
 the change into the spec); no epic running for a follow-up spec (file a queue card instead);
 several running and no --epic; a milestone name already taken; milestones that no longer
 schedule (sprints/check.py names the error). Then each cited card moves to the end of Autofix,
@@ -189,10 +189,12 @@ def main():
 def run(a, own, bd, root, folder, ids, files, want_epic, lock):
     fcntl.flock(lock, fcntl.LOCK_EX)
     queue = folder / own.QUEUE_MD
-    have = {c["num"] for c in bd.parse(own.read(queue))["cards"]}
+    Q = load("lib/queue")
+    items = Q.item_form(folder)  # a release of format 2.1 has status.json: main() hands it to plan/milestone.py
+    have = set(Q.item_files(folder)) if items else {c["num"] for c in bd.parse(own.read(queue))["cards"]}
     missing = [i for i in ids if int(i[1:]) not in have]
     if missing:
-        die(f"not in {queue.name}: {', '.join(missing)}")
+        die(f"not in {Q.QUEUE_DIR + '/' if items else queue.name}: {', '.join(missing)}")
     specs = dict(own.spec_files(folder))
     if a.spec not in specs:
         die(f"spec {a.spec} has no file in {own.SPECS_DIR}")
@@ -291,18 +293,25 @@ def run(a, own, bd, root, folder, ids, files, want_epic, lock):
             else:
                 p.write_text(t, encoding="utf-8")
         own.print_errors(comp["errors"], "the fix does not schedule; nothing written")
-    q_text = own.read(queue)
-    for i in ids:
-        q_text = bd.move(q_text, int(i[1:]), "Autofix")
-    if ids:
-        bd.write(queue, q_text)
+    if items:
+        for i in ids:
+            it = Q.find(folder, int(i[1:]))
+            Q.write_item(it["path"], Q.set_front(it["text"], status="autofix", decision=None, option=None))
+        if ids:
+            Q.write_list(folder)
+    else:
+        q_text = own.read(queue)
+        for i in ids:
+            q_text = bd.move(q_text, int(i[1:]), "Autofix")
+        if ids:
+            bd.write(queue, q_text)
     fcntl.flock(lock, fcntl.LOCK_UN)
     with contextlib.redirect_stdout(io.StringIO()):
         load("lib/grid").refresh(folder, a.release, quiet=True)
         load("sprints/swimlanes").write(folder, a.release, quiet=True)
     fcntl.flock(lock, fcntl.LOCK_EX)
     paths = [str(p) for p in writes] + [str(folder / own.SPRINTS_MD), str(folder / "decisions.md")]
-    paths += [str(queue)] if ids else []
+    paths += [str(p) for p in Q.commit_paths(folder)] if ids else []
     paths += [str(p) for p in sorted((folder / own.EPICS_DIR).glob("E*.md"))]
     C.commit(root, paths, f"docs(plan): {a.release} fix {num} {a.title}")
     fcntl.flock(lock, fcntl.LOCK_UN)

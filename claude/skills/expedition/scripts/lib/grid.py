@@ -26,7 +26,8 @@ epic that has gone (a Starts value, not every decision in Done), touching only t
 (lib/ownership.py sync_sprint_columns), finished epics' files left alone; then the cards of
 decisions.md moved to the lanes of the Done rule (lib/decisions.py sync), so a merge reaches
 the board; then the Decided cards of queue.md synced with those lanes (lib/board.py sync: the
-tick and the #E<n> tag). sprints/refresh.py,
+tick and the #E<n> tag; nothing in a release of format 2.1, whose decided items hold their
+decision id only, lib/queue.py). sprints/refresh.py,
 sprints/mark.py, run/go.py (through sprints/refresh.py), plan/milestone.py and migrate/pre-v1.0/fixes.py use
 refresh(); the swimlane data (sprints/swimlanes.py) follows it. set_mark() sets one run cell for
 sprints/mark.py, the only writer of the marks; resume_mark() is the cell a resume sets.
@@ -204,7 +205,10 @@ def sync_decisions(folder, locked=False):
 
 def sync_queue(folder, locked=False):
     """The Decided cards of queue.md, from the lanes of decisions.md; prints the cards. Takes
-    the .ids.lock lock unless the caller holds it (locked=True)."""
+    the .ids.lock lock unless the caller holds it (locked=True). Nothing in a release of format
+    2.1 (item files, lib/queue.py): a decided item holds its decision id only."""
+    if C.load("lib/queue").item_form(folder):
+        return
     own, bd = C.load("lib/ownership"), C.load("lib/board")
     lock = None if locked else C.lock_file(folder)
     changed = bd.sync_file(folder / C.QUEUE_MD, bd.decision_tags(own, folder), lock)
