@@ -18,7 +18,7 @@
       "Says in one line where each goes: the blur remark belongs to spec 27, the billing area is a decision for a new spec",
       "Records each decision only after the owner's explicit word",
       "For the blur remark runs plan/milestone.py add <release> 27 \"<Name>\" --decision D<n>, which adds the next module, a task file and a milestone to spec 27, and tells the runner with one NOTE line",
-      "Does not add the billing work to spec 27; it stays a decision in To do until an epic and a delegate",
+      "Does not add the billing work to spec 27; it stays a `to-do` decision until an epic and a delegate",
       "Fills the new module and task file after the script; edits no status by hand"
     ]
   },

@@ -70,7 +70,7 @@ Part 1, what the plan file must carry. A plan written by the bundled guidelines 
 Part 2, what the spec writer adds on top. No planning guidelines need to mention these:
 
 - Hard: `(D7)` on the heading of the module that carries decision D7 (`#### 1.6.2 <title> (D7)`), outside code fences. `epics/tag.py`, `epics/table.py` and `run/go.py` find an epic's specs by these cites; the Done rule and the status file find a decision's milestones through the tasks of that module.
-- `(Q3)` for a queue card, `(v0.4.x D9)` for a decision of another release.
+- `(Q3)` for a queue item, `(v0.4.x D9)` for a decision of another release.
 - `- Review: none | fable` in each milestone block. No script acts on it; the runner reads it when it writes the workflow script.
 - `- Local CI:` in each milestone block (SKILL.md, Process notes).
 - The reference and the judges on the `- Acceptance:` line, when the Acceptance is judged ([run.md](run.md), Milestones and sprints, the Acceptance bullet).
@@ -85,8 +85,8 @@ Project planning rules override the bundled guidelines completely. A project tem
 - Under expedition the root plan file `<release>-plan.md` is an index with two sections only, `## Goals` and `## Deliverables` ([files.md](files.md), `<release>-plan.md` sections).
 - Each spec, `plan/specs/NN-<slug>/NN-<slug>.md`, is one plan file written by the guidelines. Where the guidelines say "plan", read "spec". Its task files are in `tasks/` of the same folder.
 - The plan folder of the guidelines is the release folder `.ai/plans/v0.<n>.x/<owner>/`. `<owner>` is the folder name the scripts find, the most common folder name under `.ai/plans/v*.x/`, or the value of `--owner`; it is not read from `git config`. Its other files and folders belong to expedition: [files.md](files.md), Layout.
-- A scope agreed in discussion is recorded in `decisions.md` before the spec is written. The spec implements the decision and never re-decides it.
-- A question is asked in chat. Once the owner has answered it and said the explicit word, the answer goes to `decisions.md`, never into a spec.
+- A scope agreed in discussion is recorded as a decision before the spec is written. The spec implements the decision and never re-decides it.
+- A question is asked in chat. Once the owner has answered it and said the explicit word, the answer is recorded as a decision, never written into a spec.
 
 ## Modules, tasks, milestones
 
@@ -118,7 +118,7 @@ The three aims to weigh, and what to do when they pull against each other: Writi
 
 These lines are expedition's own. The contract, above, says which of them a script needs.
 
-- Decision cites: `(D7)` on the heading of the module that carries decision D7, outside code fences (the scripts count every cite in the file outside a fence), `(Q3)` for a queue card, `(v0.4.x D9)` for a decision of another release.
+- Decision cites: `(D7)` on the heading of the module that carries decision D7, outside code fences (the scripts count every cite in the file outside a fence), `(Q3)` for a queue item, `(v0.4.x D9)` for a decision of another release.
 - `- Review: none | fable` in each milestone block. `Review: fable` only where the change warrants a review: a public API, shared state, or a change across specs. Every other milestone says `Review: none` and gets its checks only. The runner picks the orchestration.
 - `- Local CI:` in each milestone block: what runs on the merged tree before the merge, beyond the task checks, or `none`. Examples: `pnpm test --changed`, `act pull_request -j <job>`.
 - A judged Acceptance: the `- Acceptance:` line names the reference path and the points the three judges rule on ([run.md](run.md), Milestones and sprints, the Acceptance bullet). A programmatic Acceptance needs no judges.
